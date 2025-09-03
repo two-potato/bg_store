@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend:
+    name: Backend Tests + Coverage
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: shop
+          POSTGRES_USER: shop
+          POSTGRES_PASSWORD: shop
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U shop" --health-interval=10s --health-timeout=5s --health-retries=5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping || exit 1" --health-interval=10s --health-timeout=5s --health-retries=5
+
+    env:
+      # Django / DB env
+      POSTGRES_DB: shop
+      POSTGRES_USER: shop
+      POSTGRES_PASSWORD: shop
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      REDIS_URL: redis://localhost:6379/0
+      DJANGO_SECRET_KEY: test-secret
+      ALLOWED_HOSTS: localhost,127.0.0.1
+      DEBUG: 1
+      TELEGRAM_BOT_TOKEN: test-token
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install backend deps (dev)
+        working-directory: backend
+        run: |
+          uv sync --no-cache
+
+      - name: Run tests with coverage
+        working-directory: backend
+        run: |
+          ./.venv/bin/python -m pytest
+
+      - name: Enforce 100% coverage for views
+        working-directory: backend
+        run: |
+          python ../scripts/check_views_coverage.py coverage.xml
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-xml
+          path: backend/coverage.xml
+
+      - name: Ruff (lint)
+        run: |
+          backend/.venv/bin/python -m ruff check .
+

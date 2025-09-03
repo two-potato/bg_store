@@ -1,6 +1,4 @@
 import pytest
-from django.urls import reverse
-from django.contrib.auth import get_user_model
 from orders.models import Order
 from commerce.models import LegalEntity, LegalEntityMembership, DeliveryAddress, LegalEntityCreationRequest
 
@@ -83,7 +81,7 @@ def test_cancel_legal_request(client_logged, user, db):
 def test_account_orders_page(client_logged, user, db):
     le = LegalEntity.objects.create(name="LE2", inn="5408131553", bik="044525225", checking_account="40702810900000000003")
     addr = DeliveryAddress.objects.create(legal_entity=le, label="Ofc", country="RU", city="Msk", street="Lenina", postcode="101000")
-    o = Order.objects.create(legal_entity=le, placed_by=user, delivery_address=addr)
+    Order.objects.create(legal_entity=le, placed_by=user, delivery_address=addr)
     r = client_logged.get("/account/orders/")
     assert r.status_code == 200
 

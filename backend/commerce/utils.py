@@ -1,7 +1,8 @@
 import os
 from typing import Optional, Dict
 import httpx
-import logging, time
+import logging
+import time
 from django.conf import settings
 
 

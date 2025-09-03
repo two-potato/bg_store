@@ -3,7 +3,10 @@ from rest_framework.response import Response
 from rest_framework import permissions
 from django.contrib.auth import get_user_model
 from .models import UserProfile
-import json, urllib.parse, hmac, hashlib, os
+import json
+import urllib.parse
+import hmac
+import hashlib
 from django.conf import settings
 from rest_framework_simplejwt.tokens import AccessToken
 from core.logging_utils import log_calls

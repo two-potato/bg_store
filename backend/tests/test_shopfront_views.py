@@ -1,9 +1,6 @@
 import pytest
-from django.urls import reverse
-from django.contrib.auth import get_user_model
 from catalog.models import Brand, Category, Product, Series, Tag
 from commerce.models import LegalEntity, LegalEntityMembership, DeliveryAddress
-from orders.models import Order
 
 pytestmark = pytest.mark.django_db
 

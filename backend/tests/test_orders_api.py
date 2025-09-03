@@ -1,5 +1,4 @@
 import pytest
-from django.contrib.auth import get_user_model
 from catalog.models import Brand, Category, Product, Series
 from commerce.models import LegalEntity, LegalEntityMembership, DeliveryAddress
 

@@ -1,5 +1,4 @@
 from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 from django.conf import settings
 from django.views.decorators.http import require_http_methods
@@ -16,7 +15,7 @@ User = get_user_model()
 @log_calls()
 def account_home(request):
     if not request.user.is_authenticated:
-        return redirect(f"/account/login/?next=/account/")
+        return redirect("/account/login/?next=/account/")
     form = ProfileForm(instance=request.user, data=request.POST or None)
     if request.method == "POST" and form.is_valid():
         form.save()
@@ -28,7 +27,7 @@ def account_home(request):
 @log_calls()
 def account_addresses(request):
     if not request.user.is_authenticated:
-        return redirect(f"/account/login/?next=/account/addresses/")
+        return redirect("/account/login/?next=/account/addresses/")
     from commerce.models import DeliveryAddress, LegalEntityMembership
     # Все адреса по юрлицам, в которых состоит пользователь
     entity_ids = list(
@@ -39,7 +38,7 @@ def account_addresses(request):
     # Создание адреса
     if request.method == "POST":
         if form.is_valid():
-            addr = form.save()
+            form.save()
             messages.success(request, "Адрес добавлен")
             # Для HTMX вернём только список адресов
             if request.headers.get("HX-Request"):
@@ -66,7 +65,7 @@ def account_addresses(request):
 @log_calls()
 def account_legal_entities(request):
     if not request.user.is_authenticated:
-        return redirect(f"/account/login/?next=/account/legal/")
+        return redirect("/account/login/?next=/account/legal/")
     from commerce.models import LegalEntity, LegalEntityMembership, LegalEntityCreationRequest
     my_memberships = LegalEntityMembership.objects.select_related("legal_entity").filter(user=request.user)
     form = LegalEntityRequestForm(request.POST or None)
@@ -120,7 +119,7 @@ def cancel_legal_request(request, pk: int):
 @log_calls()
 def account_orders(request):
     if not request.user.is_authenticated:
-        return redirect(f"/account/login/?next=/account/orders/")
+        return redirect("/account/login/?next=/account/orders/")
     from orders.models import Order
     orders = Order.objects.filter(placed_by=request.user).order_by("-id")[:100]
     return render(request, "account/orders.html", {"orders": orders})

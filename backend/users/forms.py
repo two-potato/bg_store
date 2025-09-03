@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib.auth import get_user_model
 from .models import UserProfile
-from commerce.validators import validate_inn, validate_bik, validate_rs_with_bik
+from commerce.validators import validate_inn
 from commerce.models import DeliveryAddress, LegalEntityMembership
 
 User = get_user_model()

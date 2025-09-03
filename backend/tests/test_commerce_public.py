@@ -1,7 +1,5 @@
-import json
 import pytest
-from django.contrib.auth import get_user_model
-from commerce.models import LegalEntity, LegalEntityMembership, DeliveryAddress
+from commerce.models import LegalEntity, LegalEntityMembership
 
 pytestmark = pytest.mark.django_db
 

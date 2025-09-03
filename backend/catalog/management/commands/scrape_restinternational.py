@@ -232,9 +232,14 @@ class Command(BaseCommand):
                     data = parse_product(it["url"]) or {}
                     if not data:
                         continue
-                    p = upsert_product(data, brand_name="1883 Maison Routin", parent_brand_as_category=True,
-                                       subcategory_name=("Сиропы" if cat == "siropy" else "Пюре"),
-                                       stock_qty=it.get("stock"), sku_prefix="1883-")
+                    _ = upsert_product(
+                        data,
+                        brand_name="1883 Maison Routin",
+                        parent_brand_as_category=True,
+                        subcategory_name=("Сиропы" if cat == "siropy" else "Пюре"),
+                        stock_qty=it.get("stock"),
+                        sku_prefix="1883-",
+                    )
                     imported += 1
                     time.sleep(0.5)
                 except Exception as e:

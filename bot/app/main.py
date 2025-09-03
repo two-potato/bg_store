@@ -1,4 +1,7 @@
-import os, hmac, hashlib, aiohttp
+import os
+import hmac
+import hashlib
+import aiohttp
 from fastapi import FastAPI, Response
 from pydantic import BaseModel
 from aiogram import Bot, Dispatcher, types

@@ -1,16 +1,17 @@
-from rest_framework import views, permissions, status, viewsets, mixins
+from rest_framework import views, permissions, viewsets, mixins
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from django.conf import settings
-from .models import LegalEntity, MembershipRequest, LegalEntityCreationRequest, DeliveryAddress, LegalEntityMembership
+from .models import LegalEntity, MembershipRequest, DeliveryAddress, LegalEntityMembership
 from .serializers import (
-    CheckInnResponseSerializer, MembershipRequestCreateSerializer,
-    LegalEntityCreationRequestCreateSerializer, DeliveryAddressSerializer
+    CheckInnResponseSerializer, MembershipRequestCreateSerializer, DeliveryAddressSerializer
 )
-import httpx, asyncio, os, logging, time
+import asyncio
+import logging
+import os
+import httpx
 from django.template import loader
 from django.http import HttpResponse
-import re
 from .utils import reverse_geocode
 from core.logging_utils import LoggedAPIViewMixin, LoggedViewSetMixin, log_calls
 

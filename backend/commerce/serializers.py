@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import LegalEntity, DeliveryAddress, MembershipRequest, LegalEntityCreationRequest
+from .models import DeliveryAddress, MembershipRequest, LegalEntityCreationRequest
 
 class CheckInnResponseSerializer(serializers.Serializer):
     exists = serializers.BooleanField()

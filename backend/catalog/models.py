@@ -3,23 +3,28 @@ from core.models import TimeStampedModel
 
 class Brand(TimeStampedModel):
     name = models.CharField(max_length=120, unique=True)
-    def __str__(self): return self.name
+    def __str__(self):
+        return self.name
 
 class Series(TimeStampedModel):
     brand = models.ForeignKey(Brand, on_delete=models.CASCADE, related_name="series")
     name = models.CharField(max_length=120)
-    class Meta: unique_together = (("brand","name"),)
-    def __str__(self): return f"{self.brand} / {self.name}"
+    class Meta:
+        unique_together = (("brand", "name"),)
+    def __str__(self):
+        return f"{self.brand} / {self.name}"
 
 class Category(TimeStampedModel):
     name = models.CharField(max_length=200)
     parent = models.ForeignKey("self", on_delete=models.CASCADE, null=True, blank=True, related_name="children")
-    def __str__(self): return self.name
+    def __str__(self):
+        return self.name
 
 class Tag(TimeStampedModel):
     name = models.CharField(max_length=64, unique=True)
     slug = models.SlugField(max_length=64, unique=True)
-    def __str__(self): return self.name
+    def __str__(self):
+        return self.name
 
 class Product(TimeStampedModel):
     sku = models.CharField(max_length=64, unique=True)                 # наш артикул
@@ -58,7 +63,8 @@ class Product(TimeStampedModel):
 
     tags = models.ManyToManyField(Tag, blank=True, related_name="products")
 
-    def __str__(self): return f"{self.sku} — {self.name}"
+    def __str__(self):
+        return f"{self.sku} — {self.name}"
 
 class ProductImage(TimeStampedModel):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="images")
@@ -67,4 +73,4 @@ class ProductImage(TimeStampedModel):
     is_primary = models.BooleanField(default=False)
     ordering = models.PositiveIntegerField(default=0)
     class Meta:
-        ordering = ["ordering","id"]
+        ordering = ["ordering", "id"]

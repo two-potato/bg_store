@@ -27,7 +27,8 @@ class LegalEntityMembership(TimeStampedModel):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     legal_entity = models.ForeignKey(LegalEntity, on_delete=models.CASCADE)
     role = models.CharField(max_length=16, choices=Role.choices, default=Role.MANAGER)
-    class Meta: unique_together = (("user","legal_entity"),)
+    class Meta:
+        unique_together = (("user", "legal_entity"),)
     def __str__(self):
         return f"{self.user} → {self.legal_entity} [{self.role}]"
 
@@ -42,7 +43,8 @@ class DeliveryAddress(TimeStampedModel):
     latitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
     is_default = models.BooleanField(default=False)
-    class Meta: unique_together = (("legal_entity","label"),)
+    class Meta:
+        unique_together = (("legal_entity", "label"),)
     def save(self,*a,**kw):
         super().save(*a,**kw)
         if self.is_default:

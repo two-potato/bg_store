@@ -9,3 +9,5 @@ uv.lock
 .idea/
 .vscode/
 .devcontainer/.venv/
+.github_bg_store_key
+.github_bg_store_key.pub

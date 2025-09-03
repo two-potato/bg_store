@@ -1,4 +1,6 @@
-import os, hmac, hashlib
+import os
+import hmac
+import hashlib
 SECRET = os.getenv("ORDER_APPROVE_SECRET","dev")
 
 def sign_approve(order_id:int, admin_tg_id:int)->str:

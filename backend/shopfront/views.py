@@ -170,7 +170,8 @@ def checkout_page(request):
     total = 0
     for pid, item in c.items():
         p = prods.get(int(pid))
-        if not p: continue
+        if not p:
+            continue
         qty = int(item["qty"]) or 1
         row = float(p.price) * qty
         total += row
@@ -247,7 +248,8 @@ def checkout_submit(request):
     items = []
     for pid, item in cart.items():
         p = products.get(int(pid))
-        if not p: continue
+        if not p:
+            continue
         qty = int(item["qty"]) or 1
         items.append(OrderItem(order=order, product=p, name=p.name, price=p.price, qty=qty))
     OrderItem.objects.bulk_create(items)

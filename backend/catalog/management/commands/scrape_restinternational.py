@@ -255,8 +255,14 @@ class Command(BaseCommand):
                     continue
                 # Determine subcategory from URL or kind
                 subcat = "Кордиалы" if "/kordial/" in it["url"] else "Безалкогольные спириты"
-                p = upsert_product(data, brand_name="Tinctura Anima", parent_brand_as_category=True,
-                                   subcategory_name=subcat, stock_qty=it.get("stock"), sku_prefix="TINCT-")
+                _ = upsert_product(
+                    data,
+                    brand_name="Tinctura Anima",
+                    parent_brand_as_category=True,
+                    subcategory_name=subcat,
+                    stock_qty=it.get("stock"),
+                    sku_prefix="TINCT-",
+                )
                 imported += 1
                 kept += 1
                 time.sleep(0.5)

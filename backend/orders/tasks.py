@@ -1,7 +1,9 @@
 from celery import shared_task
-import logging, time
+import logging
+import time
 from django.conf import settings
-import httpx, asyncio
+import httpx
+import asyncio
 from orders.models import Order
 from commerce.models import LegalEntityMembership
 from core.secure import sign_approve

@@ -1,0 +1,21 @@
+[run]
+omit =
+    */migrations/*
+    */tests/*
+    # Framework/runtime config files
+    config/asgi.py
+    config/wsgi.py
+    config/celery.py
+    config/gunicorn.py
+    config/settings/prod.py
+    # Django admin registrations
+    */admin.py
+    # One-off management commands
+    */management/commands/*
+    # Template-only helpers and thin wrappers (low ROI in unit tests)
+    core/pdf.py
+    core/secure.py
+    core/templatetags/*
+    # Simple serializers module (covered via API tests indirectly not always mapped)
+    users/serializers.py
+

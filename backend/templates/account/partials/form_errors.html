@@ -1,0 +1,14 @@
+{% if form.errors %}
+  <div class="alert alert-danger py-2 small mb-0">
+    {% if form.non_field_errors %}
+      <div class="mb-1">{{ form.non_field_errors|striptags }}</div>
+    {% endif %}
+    <ul class="mb-0 ps-3">
+      {% for bf in form %}
+        {% for e in bf.errors %}
+          <li>{{ bf.label }}: {{ e|striptags }}</li>
+        {% endfor %}
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}

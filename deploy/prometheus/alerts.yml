@@ -1,0 +1,38 @@
+groups:
+  - name: infrastructure
+    rules:
+      - alert: InstanceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Instance {{ $labels.instance }} is down"
+          description: "Job {{ $labels.job }} on {{ $labels.instance }} has been down for >1m"
+
+      - alert: NginxHighActiveConnections
+        expr: nginx_connections_active > 500
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High active connections on Nginx"
+          description: "Active connections = {{ $value }}"
+
+      - alert: HighCPUBackend
+        expr: rate(process_cpu_seconds_total{job="backend"}[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on backend"
+          description: ">80% CPU for 5m"
+
+      - alert: LokiDown
+        expr: up{job="loki"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Loki is down"
+          description: "No metrics from Loki for 1m"

@@ -1,0 +1,13 @@
+services:
+  backend:
+    environment:
+      DEBUG: "0"
+    command: ["python", "-m", "gunicorn", "-k", "uvicorn.workers.UvicornWorker", "-c", "python:config.gunicorn", "config.asgi:application"]
+  nginx:
+    depends_on:
+      backend:
+        condition: service_healthy
+  nginx:
+    build:
+      context: ./deploy/nginx
+      dockerfile: Dockerfile

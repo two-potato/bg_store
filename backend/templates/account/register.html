@@ -1,0 +1,43 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-6 col-lg-5">
+    <div class="card">
+      <div class="card-body">
+        <h1 class="h5 mb-3">Регистрация</h1>
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-2">
+            <label class="form-label small">Имя пользователя</label>
+            <input type="text" name="username" class="form-control" required>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">Email</label>
+            <input type="email" name="email" class="form-control">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">Телефон</label>
+            <input type="text" name="phone" class="form-control">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">Пароль</label>
+            <input type="password" name="password1" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Повторите пароль</label>
+            <input type="password" name="password2" class="form-control" required>
+          </div>
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger py-1 small">{{ form.non_field_errors }}</div>
+          {% endif %}
+          <button class="btn btn-dark w-100">Зарегистрироваться</button>
+        </form>
+        <div class="text-center mt-3 small">
+          Уже есть аккаунт? <a href="/account/login/">Войти</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

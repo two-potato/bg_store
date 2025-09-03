@@ -1,0 +1,11 @@
+modules:
+  http_2xx:
+    prober: http
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2"]
+      follow_redirects: true
+      preferred_ip_protocol: "ip4"
+      method: GET
+      fail_if_ssl: false
+      tls_config:
+        insecure_skip_verify: true

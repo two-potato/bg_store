@@ -1,0 +1,117 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<div class="row g-3">
+  <aside class="col-12 col-md-3">
+    <div class="card">
+      <div class="card-body">
+        <form>
+          <div class="mb-2">
+            <label class="form-label small">Категория</label>
+            <select class="form-select form-select-sm" name="category">
+              <option value="">Любая</option>
+              {% for c in cats %}
+                <option value="{{ c.id }}" {% if request.GET.category|default:'' == c.id|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">Бренд</label>
+            <select class="form-select form-select-sm" name="brand">
+              <option value="">Любой</option>
+              {% for b in brands %}
+                <option value="{{ b.id }}" {% if request.GET.brand|default:'' == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">Поиск</label>
+            <input class="form-control form-control-sm" name="q" value="{{ request.GET.q|default:'' }}" placeholder="например: сироп">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">Тег</label>
+            <select class="form-select form-select-sm" name="tag">
+              <option value="">Любой</option>
+              {% for t in tags %}
+                <option value="{{ t.id }}" {% if request.GET.tag|default:'' == t.id|stringformat:"s" %}selected{% endif %}>{{ t.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button class="btn btn-sm btn-dark w-100">Фильтровать</button>
+        </form>
+      </div>
+    </div>
+  </aside>
+  <section class="col-12 col-md-9">
+    <div class="row g-2">
+      {% for p in products %}
+        <div class="col-6 col-lg-4 reveal" data-anim="animate__fadeInUp">
+          <div class="card h-100 border-0 shadow-sm rounded-4 hvr-float-shadow">
+            {% with img=p.images.first %}
+              {% if img %}
+                <img src="{{ img.url }}" class="card-img-top" alt="{{ p.name }}" loading="lazy">
+              {% else %}
+                <img src="https://picsum.photos/seed/p-{{ p.id }}/600/400" class="card-img-top" alt="{{ p.name }}" loading="lazy">
+              {% endif %}
+            {% endwith %}
+            <div class="card-body py-2">
+              <div class="d-flex align-items-center justify-content-between mb-1">
+                <div class="small text-muted text-truncate pe-1">{{ p.brand }}</div>
+                <div class="d-flex gap-1">
+                  {% if p.is_new %}<span class="badge rounded-pill text-bg-success">Новинка</span>{% endif %}
+                  {% if p.is_promo %}<span class="badge rounded-pill text-bg-danger">Акция</span>{% endif %}
+                </div>
+              </div>
+              <div class="fw-semibold text-truncate" title="{{ p.name }}">{{ p.name }}</div>
+              <div class="d-flex justify-content-between mt-1 align-items-end">
+                <div class="fw-bold text-primary" style="font-size:1.1rem">{{ p.price }} ₽</div>
+                <div class="small text-muted">{{ p.pack_qty }} {{ p.unit }}</div>
+              </div>
+              <div class="small {% if p.stock_qty > 0 %}text-success{% else %}text-danger{% endif %} mt-1 d-flex align-items-center gap-1">
+                {% if p.stock_qty > 0 %}
+                  <iconify-icon icon="tabler:circle-check"></iconify-icon> В наличии: {{ p.stock_qty }}
+                {% else %}
+                  <iconify-icon icon="tabler:circle-x"></iconify-icon> Нет в наличии
+                {% endif %}
+              </div>
+              {% if p.tags.all %}
+              <div class="mt-1 d-flex flex-wrap gap-1">
+                {% for t in p.tags.all %}
+                  <a class="chip text-decoration-none hvr-underline-from-center" href="/catalog/?tag={{ t.slug }}"><iconify-icon icon="tabler:tag" class="me-1"></iconify-icon>{{ t.name }}</a>
+                {% endfor %}
+              </div>
+              {% endif %}
+            </div>
+            <div class="card-footer bg-white border-0 pt-0 pb-2 d-grid gap-2">
+              <div class="card-controls" data-pid="{{ p.id }}">
+                <div class="d-flex align-items-center gap-2">
+                  <button class="btn btn-primary btn-sm add-btn"
+                          {% if p.stock_qty <= 0 %}disabled aria-disabled="true"{% endif %}
+                          hx-post="/cart/add/"
+                          hx-vals='{"product_id": "{{ p.id }}", "qty": 1}'
+                          hx-target="#toast-stack" hx-swap="beforeend" hx-select="*"
+                          hx-on::after-request="document.body.dispatchEvent(new Event('cartChanged')); this.classList.add('d-none'); this.closest('.card-controls').querySelector('.qty-stepper').classList.remove('d-none');">
+                    <iconify-icon icon="tabler:shopping-bag"></iconify-icon>
+                    <span class="ms-1">В корзину</span>
+                  </button>
+                  <div class="qty-stepper d-none d-flex align-items-center gap-2">
+                    <form hx-post="/cart/update/" hx-vals='{"product_id":"{{ p.id }}","op":"dec"}' hx-target="#cart-content" hx-swap="innerHTML" hx-on::after-request="document.body.dispatchEvent(new Event('cartChanged'));" onsubmit="const s=this.nextElementSibling; s.textContent=Math.max(1,(parseInt(s.textContent||'1')||1)-1);">
+                      <button class="btn btn-outline-secondary btn-sm" type="submit"><iconify-icon icon="tabler:shopping-cart"></iconify-icon></button>
+                    </form>
+                    <span class="small fw-semibold" style="min-width:2rem; text-align:center">1</span>
+                    <form hx-post="/cart/update/" hx-vals='{"product_id":"{{ p.id }}","op":"inc"}' hx-target="#cart-content" hx-swap="innerHTML" hx-on::after-request="document.body.dispatchEvent(new Event('cartChanged'));" onsubmit="const s=this.previousElementSibling; s.textContent=(parseInt(s.textContent||'1')||1)+1;">
+                      <button class="btn btn-outline-secondary btn-sm" type="submit"><iconify-icon icon="tabler:plus"></iconify-icon></button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+              <a href="/product/{{ p.id }}/" class="btn btn-sm btn-outline-secondary">Подробнее</a>
+            </div>
+          </div>
+        </div>
+      {% empty %}
+        <div class="col"><div class="alert alert-light border">Ничего не найдено</div></div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/">Главная</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Личный кабинет</li>
+  </ol>
+  <a class="small" href="/catalog/">← Вернуться к покупкам</a>
+</nav>
+
+<div class="row g-3">
+  <div class="col-12 col-md-6 col-lg-5 reveal" data-anim="animate__fadeInUp">
+    <div class="card border-0 shadow-sm rounded-4">
+      <div class="card-body">
+        <h1 class="h5 mb-3">Личный кабинет</h1>
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-2">
+            <label class="form-label small">Email</label>
+            <input type="email" name="email" class="form-control" value="{{ form.initial.email|default:request.user.email }}">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">Имя</label>
+            <input type="text" name="first_name" class="form-control" value="{{ request.user.first_name }}">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">Фамилия</label>
+            <input type="text" name="last_name" class="form-control" value="{{ request.user.last_name }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Телефон</label>
+            <input type="text" name="phone" class="form-control" value="{{ form.fields.phone.initial }}">
+          </div>
+          <button class="btn btn-dark hvr-grow">Сохранить</button>
+          <a class="btn btn-outline-secondary ms-2 hvr-grow" href="/account/logout/" title="Выйти"><iconify-icon icon="tabler:logout"></iconify-icon></a>
+        </form>
+        <hr>
+        <div class="small text-muted">Telegram: {% if request.user.profile.telegram_id %}привязан (@{{ request.user.profile.telegram_username }}){% else %}не привязан{% endif %}</div>
+        <div class="small text-muted">Скидка: {{ request.user.profile.discount }}%</div>
+        <hr>
+        <div class="d-flex gap-2">
+          <a class="btn btn-outline-secondary btn-sm hvr-grow" href="/account/addresses/">Адреса</a>
+          <a class="btn btn-outline-secondary btn-sm hvr-grow" href="/account/legal/">Юр лица</a>
+          <a class="btn btn-outline-secondary btn-sm hvr-grow" href="/account/orders/">Мои заказы</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

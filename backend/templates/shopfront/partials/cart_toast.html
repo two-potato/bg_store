@@ -1,0 +1,20 @@
+<div class="toast align-items-center text-bg-dark show position-fixed bottom-0 end-0 m-3" role="alert">
+  <div class="d-flex">
+    <div class="toast-body">Товар добавлен в корзину</div>
+    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+  </div>
+</div>
+<script>
+  (function(){
+    const overlay = document.getElementById('toast-overlay');
+    if (overlay) overlay.classList.add('show');
+    const node = document.querySelector('#toast-stack .toast:last-child') || document.currentScript?.previousElementSibling;
+    const hide = ()=>{
+      if (node && node.remove) node.remove();
+      const hasToasts = !!document.querySelector('#toast-stack .toast');
+      if (!hasToasts && overlay) overlay.classList.remove('show');
+    };
+    if (node) node.querySelector('.btn-close')?.addEventListener('click', hide, { once: true });
+    setTimeout(hide, 2200);
+  })();
+</script>

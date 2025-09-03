@@ -1,0 +1,40 @@
+{% if items %}
+  <ul class="list-group list-group-flush">
+  {% for it in items %}
+    <li class="list-group-item cart-item">
+      <div class="cart-line d-flex align-items-center">
+        {% with img=it.p.images.first %}
+          {% if img %}
+            <img class="cart-thumb me-2" src="{{ img.url }}" alt="{{ it.p.name }}">
+          {% else %}
+            <div class="cart-thumb me-2 d-flex align-items-center justify-content-center"><iconify-icon icon="tabler:photo" class="text-muted"></iconify-icon></div>
+          {% endif %}
+        {% endwith %}
+        <div class="title me-auto">
+          <div class="fw-semibold small text-truncate" title="{{ it.p.name }}">{{ it.p.name }}</div>
+          <div class="text-muted small">{{ it.p.price }} ₽</div>
+        </div>
+        <div class="controls d-flex align-items-center gap-1">
+          <form hx-post="/cart/update/" hx-vals='{"product_id":"{{ it.p.id }}","op":"inc"}' hx-target="#cart-content" hx-swap="innerHTML" hx-on::after-request="document.body.dispatchEvent(new Event('cartChanged'));">
+            <button class="btn btn-sm btn-outline-secondary" type="submit" aria-label="Добавить"><iconify-icon icon="tabler:plus"></iconify-icon></button>
+          </form>
+          <span class="small fw-semibold" style="min-width:2rem; text-align:center">{{ it.qty }}</span>
+          <form hx-post="/cart/remove/" hx-vals='{"product_id":"{{ it.p.id }}"}' hx-target="#cart-content" hx-swap="innerHTML" hx-on::after-request="document.body.dispatchEvent(new Event('cartChanged'));">
+            <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Удалить"><iconify-icon icon="tabler:trash"></iconify-icon></button>
+          </form>
+        </div>
+      </div>
+      <div class="d-flex justify-content-end small text-muted mt-1">Итого: {{ it.row }} ₽</div>
+    </li>
+  {% endfor %}
+  </ul>
+  <div class="mt-3 d-flex justify-content-between">
+    <div class="fw-semibold">Итого</div>
+    <div class="fw-semibold">{{ total }} ₽</div>
+  </div>
+  <div class="mt-3 d-grid gap-2">
+    <a href="/checkout/" class="btn btn-dark w-100">Оформить заказ</a>
+  </div>
+{% else %}
+  <div class="text-muted">Корзина пуста</div>
+{% endif %}

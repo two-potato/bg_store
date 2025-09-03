@@ -1,0 +1,30 @@
+<!doctype html><meta charset="utf-8">{% load math_extras %}
+<style>
+  body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 12px; }
+  h1 { font-size: 16px; }
+  table { width:100%; border-collapse: collapse; }
+  th, td { border:1px solid #ddd; padding:6px; text-align:left; }
+  .right { text-align:right; }
+</style>
+<h1>Счёт № {{ order.id }} от {{ today }}</h1>
+<p><b>Юрлицо:</b> {{ order.legal_entity.name }} (ИНН {{ order.legal_entity.inn }})</p>
+<p><b>Адрес доставки:</b> {{ order.delivery_address.postcode }}, {{ order.delivery_address.city }}, {{ order.delivery_address.street }}</p>
+<table>
+  <thead><tr><th>#</th><th>Товар</th><th class="right">Цена</th><th class="right">Кол-во</th><th class="right">Сумма</th></tr></thead>
+  <tbody>
+  {% for i in order.items.all %}
+    <tr>
+      <td>{{ forloop.counter }}</td>
+      <td>{{ i.name }}</td>
+      <td class="right">{{ i.price }}</td>
+      <td class="right">{{ i.qty }}</td>
+      <td class="right">{{ i.price|mul:i.qty|floatformat:2 }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr><td colspan="4" class="right">Подытог</td><td class="right">{{ order.subtotal }}</td></tr>
+    <tr><td colspan="4" class="right">Скидка</td><td class="right">−{{ order.discount_amount }}</td></tr>
+    <tr><td colspan="4" class="right"><b>Итого к оплате</b></td><td class="right"><b>{{ order.total }}</b></td></tr>
+  </tfoot>
+</table>

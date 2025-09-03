@@ -1,0 +1,47 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-6 col-lg-5">
+    <div class="card">
+      <div class="card-body">
+        <h1 class="h5 mb-3">Вход</h1>
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-2">
+            <label class="form-label small">Email или телефон</label>
+            <input type="text" name="identifier" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Пароль</label>
+            <input type="password" name="password" class="form-control" required>
+          </div>
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger py-1 small">{{ form.non_field_errors }}</div>
+          {% endif %}
+          <button class="btn btn-dark w-100">Войти</button>
+        </form>
+        <hr>
+        <a class="btn btn-outline-secondary w-100 mb-2" href="/account/social/google/login/">Войти через Google</a>
+        <form action="/account/twa/login/" method="post">
+          {% csrf_token %}
+          <input type="hidden" name="initData" id="twa-initData">
+          <button type="submit" class="btn btn-outline-primary w-100">Войти через Telegram WebApp</button>
+        </form>
+        <div class="text-center mt-3 small">
+          Нет аккаунта? <a href="/account/register/">Зарегистрироваться</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  // Заполним initData, если страница открыта в Telegram WebApp
+  try {
+    const tg = window.Telegram && window.Telegram.WebApp;
+    if (tg && tg.initData) {
+      document.getElementById('twa-initData').value = tg.initData;
+    }
+  } catch (e) {}
+</script>
+{% endblock %}
+

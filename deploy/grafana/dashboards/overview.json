@@ -1,0 +1,60 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 0,
+  "iteration": 1,
+  "links": [],
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Targets Up",
+      "gridPos": {"x": 0, "y": 0, "w": 8, "h": 4},
+      "targets": [
+        {"expr": "sum(up)", "legendFormat": "up"}
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Nginx Active Connections",
+      "gridPos": {"x": 8, "y": 0, "w": 8, "h": 4},
+      "targets": [
+        {"expr": "nginx_connections_active", "legendFormat": "active"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Backend CPU (rate)",
+      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "rate(process_cpu_seconds_total{job=\\"backend\\"}[5m])", "legendFormat": "backend"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Bot CPU (rate)",
+      "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "rate(process_cpu_seconds_total{job=\\"bot\\"}[5m])", "legendFormat": "bot"}
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Loki Build",
+      "gridPos": {"x": 16, "y": 0, "w": 8, "h": 4},
+      "targets": [
+        {"expr": "count(loki_build_info)", "legendFormat": "build"}
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 36,
+  "style": "dark",
+  "tags": ["overview"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timezone": "",
+  "title": "Overview",
+  "uid": "overview",
+  "version": 1
+}

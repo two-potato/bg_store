@@ -1,0 +1,33 @@
+{% if requests %}
+  <div class="list-group" id="legal-requests">
+    {% for r in requests %}
+      <div class="list-group-item">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="small text-muted">ИНН: {{ r.inn }}</div>
+            <div id="req-prev-{{ r.id }}"
+                 hx-get="/api/commerce/lookup/party_preview?inn={{ r.inn }}"
+                 hx-trigger="load"
+                 hx-swap="innerHTML">
+              <div class="small text-muted">Загружаю данные…</div>
+            </div>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+          {% if r.status == 'pending' %}
+            <span class="badge text-bg-secondary">на согласовании</span>
+            <form hx-post="/account/legal/request/{{ r.id }}/cancel/" hx-target="#legal-requests" hx-swap="outerHTML">
+              <button class="btn btn-sm btn-outline-danger" type="submit">Отменить</button>
+            </form>
+          {% elif r.status == 'approved' %}
+            <span class="badge text-bg-success">одобрено</span>
+          {% else %}
+            <span class="badge text-bg-danger">отклонено</span>
+          {% endif %}
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="text-muted small" id="legal-requests">Заявок пока нет.</div>
+{% endif %}

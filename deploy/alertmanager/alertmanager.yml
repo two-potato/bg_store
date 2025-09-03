@@ -1,0 +1,10 @@
+route:
+  receiver: 'devnull'
+  group_by: ['alertname']
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 2h
+
+receivers:
+  - name: 'devnull'
+    # Добавьте интеграции здесь (email/slack/webhook)

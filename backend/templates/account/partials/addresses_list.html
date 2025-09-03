@@ -1,0 +1,16 @@
+{% if addresses %}
+  <div class="list-group">
+    {% for a in addresses %}
+      <div class="list-group-item d-flex justify-content-between align-items-center">
+        <div>
+          <div class="fw-semibold">{{ a.label }} {% if a.is_default %}<span class="badge text-bg-secondary">по умолчанию</span>{% endif %}</div>
+          <div class="small text-muted">{{ a.postcode }}, {{ a.country }}, {{ a.city }}, {{ a.street }}</div>
+          {% if a.details %}<div class="small">{{ a.details }}</div>{% endif %}
+        </div>
+        <div class="text-end small text-muted">{{ a.legal_entity.name }}</div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="alert alert-light border">Пока нет адресов доставки.</div>
+{% endif %}

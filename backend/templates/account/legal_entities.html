@@ -1,0 +1,107 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/account/">Личный кабинет</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Юр лица</li>
+  </ol>
+  <a class="small" href="/account/">← Назад в кабинет</a>
+</nav>
+<div class="row g-3">
+  <div class="col-12 col-lg-7 reveal" data-anim="animate__fadeInUp">
+    <h1 class="h5 mb-3">Мои юр лица</h1>
+    <div id="memberships"
+         hx-get="/account/legal/?fragment=memberships"
+         hx-trigger="load, every 5s"
+         hx-target="this"
+         hx-select="*"
+         hx-swap="innerHTML">
+      {% include "account/partials/memberships_list.html" %}
+    </div>
+
+    <h2 class="h6 mt-4">Мои заявки</h2>
+    <div id="legal-requests"
+         hx-get="/account/legal/?fragment=requests"
+         hx-trigger="every 5s"
+         hx-target="this"
+         hx-select="*"
+         hx-swap="innerHTML">
+      {% include "account/partials/legal_requests.html" %}
+    </div>
+  </div>
+  <div class="col-12 col-lg-5">
+    <div class="card border-0 shadow-sm rounded-4 reveal" data-anim="animate__fadeInUp">
+      <div class="card-body">
+        <h2 class="h6">Запросить создание юр лица</h2>
+        <form method="post" novalidate hx-boost="false">
+          {% csrf_token %}
+          <div class="mb-3">
+            <div class="small text-muted mb-1">Предпросмотр данных по ИНН</div>
+            <div class="border rounded p-2 bg-light" id="inn-preview">
+              <div class="small text-muted">Заполните ИНН — мы покажем найденные данные.</div>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">Название проекта</label>
+            <input class="form-control" name="name" value="{{ form.name.value|default:'' }}" required>
+            {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">ИНН</label>
+            <input class="form-control" name="inn" value="{{ form.inn.value|default:'' }}" required
+                   hx-get="/api/commerce/lookup/party_preview" hx-vals='js:{inn: this.value}'
+                   hx-target="#inn-preview" hx-swap="innerHTML" hx-trigger="change delay:300ms">
+            {% if form.inn.errors %}<div class="text-danger small">{{ form.inn.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">Общий телефон</label>
+            <input class="form-control" name="phone" value="{{ form.phone.value|default:'' }}" required>
+            {% if form.phone.errors %}<div class="text-danger small">{{ form.phone.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">БИК</label>
+            <input class="form-control" name="bik" value="{{ form.bik.value|default:'' }}" required>
+            {% if form.bik.errors %}<div class="text-danger small">{{ form.bik.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">Расчётный счёт</label>
+            <input class="form-control" name="checking_account" value="{{ form.checking_account.value|default:'' }}" required>
+            {% if form.checking_account.errors %}<div class="text-danger small">{{ form.checking_account.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Банк</label>
+            <input class="form-control" name="bank_name" value="{{ form.bank_name.value|default:'' }}">
+            {% if form.bank_name.errors %}<div class="text-danger small">{{ form.bank_name.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="confirm" id="confirm" {% if form.confirm.value %}checked{% endif %}>
+            <label class="form-check-label" for="confirm">Подтверждаю правильность данных</label>
+            {% if form.confirm.errors %}<div class="text-danger small">{{ form.confirm.errors.0 }}</div>{% endif %}
+          </div>
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger py-1 small">{{ form.non_field_errors.0 }}</div>
+          {% endif %}
+          <button class="btn btn-dark w-100 hvr-grow" id="submit-btn" {% if not form.confirm.value %}disabled{% endif %}>Отправить заявку</button>
+        </form>
+        <script>
+          (function(){
+            const chk = document.getElementById('confirm');
+            const btn = document.getElementById('submit-btn');
+            if(chk && btn){ chk.addEventListener('change', ()=>{ btn.disabled = !chk.checked; }); }
+            document.body.addEventListener('htmx:afterSwap', function(e){
+              if(e.target && e.target.id === 'inn-preview'){
+                const box = document.getElementById('inn-preview');
+                const name = box && box.querySelector('[data-name]') ? box.querySelector('[data-name]').getAttribute('data-name') : '';
+                if(name){
+                  const nameInput = document.querySelector("input[name='name']");
+                  if(nameInput && !nameInput.value){ nameInput.value = name; }
+                }
+              }
+            });
+          })();
+        </script>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

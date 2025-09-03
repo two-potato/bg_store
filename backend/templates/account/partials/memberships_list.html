@@ -1,0 +1,17 @@
+{% if memberships %}
+  <div class="list-group">
+    {% for m in memberships %}
+      <div class="list-group-item">
+        <div class="d-flex justify-content-between">
+          <div>
+            <div class="fw-semibold">{{ m.legal_entity.name }}</div>
+            <div class="small text-muted">ИНН: {{ m.legal_entity.inn }} · Роль: {{ m.role }}</div>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="alert alert-light border">Пока нет привязанных юр лиц.</div>
+{% endif %}
+

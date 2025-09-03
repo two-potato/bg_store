@@ -1,0 +1,8 @@
+{
+  "name": "Bad Guys Shop",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y python3 python3-pip"
+}

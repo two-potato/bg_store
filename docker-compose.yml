@@ -1,0 +1,96 @@
+version: "3.9"
+name: bad-guys-shop
+services:
+  backend:
+    build: ./backend
+    container_name: bg-backend
+    env_file: ./backend/.env
+    depends_on:
+      - db
+      - redis
+      - bot
+    volumes:
+      - ./backend/media:/app/media
+      - staticfiles:/app/staticfiles
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  celery-worker:
+    build: ./backend
+    container_name: bg-celery
+    env_file: ./backend/.env
+    command: ["python", "-m", "celery", "-A", "config.celery", "worker", "-l", "INFO"]
+    depends_on: [backend, redis, db]
+    restart: unless-stopped
+
+  celery-beat:
+    build: ./backend
+    container_name: bg-beat
+    env_file: ./backend/.env
+    command: ["python", "-m", "celery", "-A", "config.celery", "beat", "-l", "INFO", "--schedule", "/tmp/celerybeat-schedule"]
+    depends_on: [backend, redis, db]
+    restart: unless-stopped
+
+  bot:
+    build: ./bot
+    container_name: bg-bot
+    env_file: ./bot/.env
+    expose: ["8080"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    container_name: bg-db
+    env_file: ./backend/.env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    container_name: bg-redis
+    restart: unless-stopped
+
+  es:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.0
+    container_name: bg-es
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    restart: unless-stopped
+
+  nginx:
+    build: ./deploy/nginx
+    container_name: bg-nginx
+    # В dev не блокируем старт Nginx ожиданием health бэкенда,
+    # чтобы /health/ открывался даже при проблемах миграций
+    depends_on: [backend]
+    ports: ["8080:80"]
+    volumes:
+      - staticfiles:/staticfiles:ro
+      - ./backend/media:/media:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health/"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  esdata:
+  staticfiles:

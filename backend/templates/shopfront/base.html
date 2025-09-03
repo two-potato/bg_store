@@ -1,0 +1,179 @@
+{% load static %}
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <form style="display:none">{% csrf_token %}</form>
+    <title>Bad Guys Shop</title>
+    <link href="{% static 'vendor/bootstrap/bootstrap.min.css' %}" rel="stylesheet">
+    <script src="{% static 'vendor/htmx/htmx.min.js' %}"></script>
+    <script src="{% static 'vendor/iconify/iconify-icon.min.js' %}"></script>
+    <link rel="stylesheet" href="{% static 'vendor/animate/animate.min.css' %}">
+    <link rel="stylesheet" href="{% static 'vendor/hover/hover-min.css' %}">
+    <link rel="stylesheet" href="{% static 'shopfront/theme.css' %}">
+  </head>
+  <body class="bg-white" hx-boost="true" hx-target="main" hx-select="main" hx-swap="outerHTML" hx-indicator="#htmx-indicator" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+    <nav class="navbar bg-white sticky-top nav-shadow">
+      <div class="container-fluid d-flex align-items-center">
+        <a class="navbar-brand" href="/">BG</a>
+        <div class="d-none d-md-flex align-items-center gap-3 ms-3">
+          <a class="text-decoration-none text-dark nav-link-icon" href="/catalog/"><iconify-icon icon="tabler:layout-grid"></iconify-icon><span>Каталог</span></a>
+        </div>
+        <form class="d-none d-md-flex ms-auto me-2" action="/catalog/" role="search">
+          <input class="form-control form-control-sm" name="q" type="search" placeholder="Поиск" aria-label="Поиск">
+        </form>
+        <div class="d-flex align-items-center gap-2">
+          <a class="btn btn-sm btn-outline-secondary d-inline d-md-none" href="/catalog/" aria-label="Поиск"><iconify-icon icon="tabler:search"></iconify-icon></a>
+          <div class="dropdown">
+            <a class="btn btn-sm btn-outline-secondary" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Меню аккаунта">
+              <iconify-icon icon="tabler:user"></iconify-icon>
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end">
+              {% if request.user.is_authenticated %}
+                {% if request.user.is_staff %}
+                  <li><a class="dropdown-item" hx-boost="false" href="/admin/"><iconify-icon icon="tabler:gauge" class="me-2"></iconify-icon>Админка</a></li>
+                  <li><hr class="dropdown-divider"></li>
+                {% endif %}
+                <li><a class="dropdown-item" hx-boost="false" href="/account/"><iconify-icon icon="tabler:user" class="me-2"></iconify-icon>Личный кабинет</a></li>
+                <li><a class="dropdown-item" hx-boost="false" href="/account/logout/"><iconify-icon icon="tabler:logout" class="me-2"></iconify-icon>Выйти</a></li>
+              {% else %}
+                <li><a class="dropdown-item" hx-boost="false" href="/account/login/"><iconify-icon icon="tabler:login" class="me-2"></iconify-icon>Войти</a></li>
+                <li><a class="dropdown-item" hx-boost="false" href="/account/register/"><iconify-icon icon="tabler:user-plus" class="me-2"></iconify-icon>Регистрация</a></li>
+              {% endif %}
+            </ul>
+          </div>
+          <button type="button" id="toggle-cart" class="btn btn-sm btn-outline-secondary btn-icon position-relative" aria-label="Открыть корзину">
+            <iconify-icon icon="tabler:shopping-cart"></iconify-icon>
+            <span id="cart-badge"
+                  class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                  hx-get="/cart/badge/" hx-push-url="false"
+                  hx-trigger="load, cartChanged from:body"
+                  hx-target="#cart-badge" hx-select="*">0</span>
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Minimal divider under navbar -->
+    <div class="border-bottom"></div>
+
+    <main class="container my-3">
+      {% block content %}{% endblock %}
+    </main>
+
+    {% block cart_drawer %}
+    <!-- Top cart drawer -->
+    <div id="cart-drawer" class="cart-drawer">
+      <div class="cart-drawer-inner glass shadow-sm animate__animated">
+        <div class="cart-drawer-header">
+          <div class="d-flex align-items-center gap-2"><iconify-icon icon="tabler:shopping-cart"></iconify-icon> Корзина</div>
+          <div class="d-flex align-items-center gap-2">
+            <form hx-post="/cart/clear/" hx-target="#cart-content" hx-swap="innerHTML" hx-on::after-request="document.body.dispatchEvent(new Event('cartChanged'));">
+              <button type="submit" class="icon-btn" title="Очистить корзину" aria-label="Очистить корзину"><iconify-icon icon="tabler:trash"></iconify-icon></button>
+            </form>
+            <button type="button" id="cart-close" class="cart-close" aria-label="Закрыть"><iconify-icon icon="tabler:x"></iconify-icon></button>
+          </div>
+        </div>
+        <div id="cart-content" class="cart-drawer-body"><!-- filled by HTMX --></div>
+      </div>
+    </div>
+    {% endblock %}
+
+    <!-- HTMX loading indicator -->
+    <div id="htmx-indicator" class="position-fixed bottom-0 start-50 translate-middle-x mb-3 htmx-indicator" style="z-index:1080">
+      <div class="spinner-border text-secondary" role="status" style="width:2rem;height:2rem">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+
+    <!-- Toast overlay + stack -->
+    <div id="toast-overlay" class="toast-overlay" aria-hidden="true"></div>
+    <div id="toast-stack" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1081"></div>
+
+    <script src="{% static 'vendor/bootstrap/bootstrap.bundle.min.js' %}"></script>
+    <script src="{% static 'shopfront/htmx.csrf.js' %}"></script>
+    <script>
+      // Global handler for HX-Trigger showToast events
+      document.body.addEventListener('showToast', function(e){
+        const data = e.detail || {};
+        const msg = data.message || 'Готово';
+        const theme = data.variant === 'danger' ? 'text-bg-danger' : (data.variant === 'success' ? 'text-bg-success' : 'text-bg-dark');
+        const wrap = document.createElement('div');
+        wrap.innerHTML = `
+          <div class="toast align-items-center ${theme} show mb-2" role="alert">
+            <div class="d-flex">
+              <div class="toast-body">${msg}</div>
+              <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+          </div>`;
+        const node = wrap.firstElementChild;
+        document.getElementById('toast-stack').appendChild(node);
+        const overlay = document.getElementById('toast-overlay');
+        if (overlay) overlay.classList.add('show');
+        const hide = ()=>{
+          node.remove();
+          // hide overlay if no more toasts
+          const hasToasts = !!document.querySelector('#toast-stack .toast');
+          if (!hasToasts && overlay) overlay.classList.remove('show');
+        };
+        node.querySelector('.btn-close')?.addEventListener('click', hide, { once: true });
+        setTimeout(hide, 2500);
+      });
+
+      // Reveal on scroll using IntersectionObserver + animate.css
+      (function(){
+        const els = document.querySelectorAll('.reveal');
+        if (!('IntersectionObserver' in window) || els.length === 0) return;
+        const io = new IntersectionObserver((entries)=>{
+          entries.forEach(({isIntersecting, target})=>{
+            if (isIntersecting) {
+              const anim = target.getAttribute('data-anim') || 'animate__fadeInUp';
+              target.classList.add('animate__animated', anim);
+              io.unobserve(target);
+            }
+          });
+        }, { threshold: 0.12 });
+        els.forEach(el=> io.observe(el));
+      })();
+
+      // Cart drawer controls + cart badge animation
+      (function(){
+        const btn = document.getElementById('toggle-cart');
+        const drawer = document.getElementById('cart-drawer');
+        const inner = drawer && drawer.querySelector('.cart-drawer-inner');
+        const closeBtn = document.getElementById('cart-close');
+        const openDrawer = () => {
+          if (!drawer) return;
+          drawer.classList.add('open');
+          htmx.ajax('GET', '/cart/panel/', { target: '#cart-content', swap: 'innerHTML' })
+        };
+        const closeDrawer = () => {
+          if (!drawer) return;
+          drawer.classList.remove('open');
+        };
+        if (btn) btn.addEventListener('click', (e)=>{ e.preventDefault(); if (drawer.classList.contains('open')) closeDrawer(); else openDrawer(); });
+        if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
+        document.addEventListener('keydown', (e)=>{ if (e.key==='Escape' && drawer.classList.contains('open')) closeDrawer(); });
+        document.addEventListener('click', (e)=>{
+          if (!drawer.classList.contains('open')) return;
+          const within = e.target.closest('#cart-drawer .cart-drawer-inner') || e.target.closest('#toggle-cart');
+          if (!within) closeDrawer();
+        });
+        // bump animation when cart updates + refresh panel if open
+        document.body.addEventListener('cartChanged', function(){
+          const b = document.getElementById('cart-badge');
+          if (!b) return;
+          b.classList.remove('cart-badge-bump');
+          // force reflow to restart animation
+          void b.offsetWidth;
+          b.classList.add('cart-badge-bump');
+          if (drawer && drawer.classList.contains('open')) {
+            htmx.ajax('GET', '/cart/panel/', { target: '#cart-content', swap: 'innerHTML' })
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

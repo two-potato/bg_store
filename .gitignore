@@ -1,0 +1,11 @@
+**/__pycache__/
+**/*.pyc
+.env
+backend/.env
+bot/.env
+backend/media/
+backend/staticfiles/
+uv.lock
+.idea/
+.vscode/
+.devcontainer/.venv/

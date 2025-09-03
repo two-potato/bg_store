@@ -1,0 +1,23 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      args:
+        INSTALL_DEV: 1
+    environment:
+      DEBUG: "1"
+    command: ["python", "-m", "uvicorn", "config.asgi:application", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+  celery-worker:
+    build:
+      context: ./backend
+      args:
+        INSTALL_DEV: 1
+  celery-beat:
+    build:
+      context: ./backend
+      args:
+        INSTALL_DEV: 1
+  nginx:
+    build:
+      context: ./deploy/nginx
+      dockerfile: Dockerfile.dev

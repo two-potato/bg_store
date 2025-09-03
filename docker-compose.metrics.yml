@@ -1,0 +1,114 @@
+version: "3.9"
+name: bad-guys-shop
+services:
+  prometheus:
+    image: prom/prometheus
+    container_name: bg-prom
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports: ["9090:9090"]
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: bg-loki
+    user: "0:0"
+    command: -config.file=/etc/loki/config.yml
+    volumes:
+      - ./deploy/loki/config.yml:/etc/loki/config.yml:ro
+      - loki-wal:/wal
+      - loki-data:/loki
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:0.11.0
+    container_name: bg-nginx-exporter
+    command: ["-nginx.scrape-uri", "http://nginx/nginx_status"]
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager
+    container_name: bg-alertmanager
+    volumes:
+      - ./deploy/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports: ["9093:9093"]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana
+    container_name: bg-grafana
+    volumes:
+      - grafana:/var/lib/grafana
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning
+      - ./deploy/grafana/dashboards:/etc/grafana/dashboards:ro
+    ports: ["3000:3000"]
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: bg-promtail
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./deploy/promtail/config.yml:/etc/promtail/config.yml:ro
+    command: ["--config.file=/etc/promtail/config.yml"]
+    restart: unless-stopped
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: bg-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: postgresql://shop:shop@db:5432/shop?sslmode=disable
+    restart: unless-stopped
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.61.0
+    container_name: bg-redis-exporter
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    restart: unless-stopped
+
+  es-exporter:
+    image: quay.io/prometheuscommunity/elasticsearch-exporter:v1.7.0
+    container_name: bg-es-exporter
+    command: ["--es.uri=http://es:9200", "--es.all"]
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: bg-node-exporter
+    command:
+      - --path.rootfs=/rootfs
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($|/)
+    volumes:
+      - /:/rootfs:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: bg-cadvisor
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    restart: unless-stopped
+
+  blackbox:
+    image: prom/blackbox-exporter:v0.24.0
+    container_name: bg-blackbox
+    volumes:
+      - ./deploy/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    restart: unless-stopped
+
+volumes:
+  grafana:
+  loki-wal:
+  loki-data:

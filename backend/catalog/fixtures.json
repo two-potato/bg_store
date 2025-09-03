@@ -1,0 +1,16 @@
+[
+  {"model":"catalog.brand","pk":1,"fields":{"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z","name":"BaristaPro"}},
+  {"model":"catalog.series","pk":1,"fields":{"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z","brand":1,"name":"Classic"}},
+  {"model":"catalog.category","pk":1,"fields":{"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z","name":"Кофе"}},
+  {"model":"catalog.category","pk":2,"fields":{"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z","name":"Сиропы"}},
+  {"model":"catalog.category","pk":3,"fields":{"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z","name":"Безалкогольные напитки"}},
+  {"model":"catalog.category","pk":4,"fields":{"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z","name":"Расходники для баров"}},
+  {"model":"catalog.product","pk":1,"fields":{
+    "created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z",
+    "sku":"COF-ESP-250","manufacturer_sku":"ESP-250","name":"Эспрессо смесь 250г",
+    "brand":1,"series":1,"category":1,"country_of_origin":"Италия","material":"Зёрна",
+    "purpose":"Кофе для эспрессо","color":"","diameter_mm":null,"height_mm":null,"length_mm":null,"width_mm":null,
+    "volume_ml":null,"weight_g":250,"pack_qty":1,"unit":"уп.","barcode":"1234567890123",
+    "price":"650.00","stock_qty":50,"is_new":true,"is_promo":false,"attributes":{} }},
+  {"model":"catalog.productimage","pk":1,"fields":{"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z","product":1,"url":"https://picsum.photos/seed/coffee/600/400","alt":"Эспрессо смесь","is_primary":true,"ordering":0}}
+]

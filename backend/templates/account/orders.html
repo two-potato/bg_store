@@ -1,0 +1,26 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<h1 class="h5 mb-3">Мои заказы</h1>
+{% if orders %}
+  <div class="table-responsive">
+    <table class="table table-sm align-middle">
+      <thead>
+        <tr><th>ID</th><th>Статус</th><th>Сумма</th><th>Дата</th></tr>
+      </thead>
+      <tbody>
+        {% for o in orders %}
+          <tr>
+            <td>#{{ o.id }}</td>
+            <td>{{ o.status }}</td>
+            <td>{{ o.total }} ₽</td>
+            <td>{{ o.created_at }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="alert alert-light border">У вас пока нет заказов.</div>
+{% endif %}
+{% endblock %}
+

@@ -1,0 +1,125 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/account/">Личный кабинет</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Адреса доставки</li>
+  </ol>
+  <a class="small" href="/account/">← Назад в кабинет</a>
+</nav>
+<div class="row g-3">
+  <div class="col-12 col-lg-7 reveal" data-anim="animate__fadeInUp">
+    <h1 class="h5 mb-3">Адреса доставки</h1>
+    <div id="addresses-list">
+      {% include "account/partials/addresses_list.html" %}
+    </div>
+  </div>
+  <div class="col-12 col-lg-5 reveal" data-anim="animate__fadeInUp">
+    <div class="card border-0 shadow-sm rounded-4">
+      <div class="card-body">
+        <h2 class="h6">Добавить адрес</h2>
+        <form method="post" novalidate hx-post="/account/addresses/" hx-target="#addresses-list" hx-select="*" hx-swap="innerHTML">
+          {% csrf_token %}
+          <div id="address-form-errors" class="mb-2" aria-live="polite"></div>
+          <div class="mb-2">
+            <label class="form-label small">Юр лицо</label>
+            {{ form.legal_entity }}
+          </div>
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <button type="button" class="btn btn-outline-primary btn-sm" id="btn-geolocate" title="Отправить моё местоположение" aria-label="Отправить моё местоположение">
+              <iconify-icon icon="tabler:current-location"></iconify-icon>
+            </button>
+            <small class="text-muted">Браузер спросит доступ к геолокации</small>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">Страна</label>
+            <input class="form-control" name="country" placeholder="Россия">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">Город</label>
+            <input class="form-control" name="city" placeholder="Москва">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">Улица</label>
+            <input class="form-control" name="street" placeholder="ул. Тверская, 1">
+          </div>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="is_default" id="is_default">
+            <label class="form-check-label" for="is_default">Сделать по умолчанию</label>
+          </div>
+          <button class="btn btn-dark w-100 hvr-grow">Сохранить</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function setAddrField(name, value) {
+    const el = document.querySelector('[name="' + name + '"]');
+    if (el && value) el.value = value;
+  }
+  function parseGmapsComponents(components) {
+    const get = (type) => (components.find(c => c.types.includes(type)) || {}).long_name || '';
+    const route = get('route');
+    const street_number = get('street_number');
+    const locality = get('locality') || get('administrative_area_level_2') || get('administrative_area_level_1');
+    const country = get('country');
+    const postal_code = get('postal_code');
+    return {
+      country: country,
+      city: locality,
+      street: [route, street_number].filter(Boolean).join(', '),
+      postcode: postal_code,
+    };
+  }
+  function handleGeolocate() {
+    if (!navigator.geolocation) { alert('Геолокация не поддерживается'); return; }
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      // Если доступен Google Maps — используем его геокодер на клиенте
+      if (window.google && google.maps && google.maps.Geocoder) {
+        const geocoder = new google.maps.Geocoder();
+        geocoder.geocode({ location: { lat: lat, lng: lon } }, (results, status) => {
+          if (status === 'OK' && results && results[0]) {
+            const addr = parseGmapsComponents(results[0].address_components);
+            setAddrField('country', addr.country);
+            setAddrField('city', addr.city);
+            setAddrField('street', addr.street);
+            setAddrField('postcode', addr.postcode);
+          } else {
+            alert('Адрес не найден, заполните поля вручную');
+          }
+        });
+        return;
+      }
+      // Иначе — обратное геокодирование через наш API (DaData)
+      try {
+        const resp = await fetch(`/api/commerce/lookup/revgeo/?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`);
+        if (!resp.ok) { throw new Error('not ok'); }
+        const data = await resp.json();
+        if (data && (data.city || data.street)) {
+          setAddrField('country', data.country || '');
+          setAddrField('city', data.city || '');
+          setAddrField('street', data.street || '');
+          setAddrField('postcode', data.postcode || '');
+        } else {
+          alert('Адрес не найден, заполните поля вручную');
+        }
+      } catch (e) {
+        alert('Адрес не найден, заполните поля вручную');
+      }
+    }, (err) => alert('Не удалось получить геопозицию: ' + err.message), { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    const btn = document.getElementById('btn-geolocate');
+    if (btn) btn.addEventListener('click', handleGeolocate);
+  });
+</script>
+{% if gmaps_key %}
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key={{ gmaps_key }}&libraries=places"></script>
+{% endif %}
+{% endblock %}
+
+{% block cart_drawer %}{% endblock %}

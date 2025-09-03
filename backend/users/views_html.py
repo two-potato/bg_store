@@ -66,7 +66,7 @@ def account_addresses(request):
 def account_legal_entities(request):
     if not request.user.is_authenticated:
         return redirect("/account/login/?next=/account/legal/")
-    from commerce.models import LegalEntity, LegalEntityMembership, LegalEntityCreationRequest
+    from commerce.models import LegalEntityMembership, LegalEntityCreationRequest
     my_memberships = LegalEntityMembership.objects.select_related("legal_entity").filter(user=request.user)
     form = LegalEntityRequestForm(request.POST or None)
     requests_qs = LegalEntityCreationRequest.objects.filter(applicant=request.user).order_by("-id")

@@ -88,7 +88,7 @@
                           {% if p.stock_qty <= 0 %}disabled aria-disabled="true"{% endif %}
                           hx-post="/cart/add/"
                           hx-vals='{"product_id": "{{ p.id }}", "qty": 1}'
-                          hx-target="#toast-stack" hx-swap="beforeend" hx-select="*"
+                          hx-target="#cart-content" hx-swap="innerHTML"
                           hx-on::after-request="document.body.dispatchEvent(new Event('cartChanged')); this.classList.add('d-none'); this.closest('.card-controls').querySelector('.qty-stepper').classList.remove('d-none');">
                     <iconify-icon icon="tabler:shopping-bag"></iconify-icon>
                     <span class="ms-1">В корзину</span>

@@ -96,7 +96,13 @@ def cart_add(request):
     cart[str(pid)] = {"qty": cart.get(str(pid), {"qty":0})["qty"] + qty}
     request.session.modified = True
     log.info("cart_add", extra={"product_id": pid, "qty": qty})
-    return render(request, "shopfront/partials/cart_toast.html", status=201)
+    # Return updated cart panel and trigger UI events: toast + badge refresh + open drawer
+    items, total = _cart_summary(request)
+    resp = render(request, "shopfront/partials/cart_panel.html", {"items": items, "total": total}, status=201)
+    triggers = '{"showToast": {"message": "Товар добавлен в корзину", "variant": "success"}, "cartChanged": {}, "openCart": {}}'
+    resp["HX-Trigger"] = triggers
+    resp["HX-Trigger-After-Settle"] = triggers
+    return resp
 
 @csrf_exempt
 @log_calls(log)

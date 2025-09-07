@@ -173,6 +173,8 @@
             htmx.ajax('GET', '/cart/panel/', { target: '#cart-content', swap: 'innerHTML' })
           }
         });
+        // allow server to open the cart via HX-Trigger: {"openCart":{}}
+        document.body.addEventListener('openCart', function(){ openDrawer(); });
       })();
     </script>
   </body>

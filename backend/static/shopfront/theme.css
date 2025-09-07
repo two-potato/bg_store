@@ -36,7 +36,7 @@
 .cart-badge-bump { animation: cart-bump .18s ease-out; }
 
 /* right slide-in cart drawer */
-#cart-drawer { position: fixed; inset: 0; display: none; z-index: 1080; }
+#cart-drawer { position: fixed; inset: 0; display: none; z-index: 1095; }
 #cart-drawer.open { display: block; background: rgba(0,0,0,.15); }
 #cart-drawer .cart-drawer-inner {
   position: absolute; top: 0; right: 0; height: 100%; width: min(420px, 92vw);

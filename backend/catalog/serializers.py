@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Brand, Series, Category, Product, ProductImage, Tag
+from .models import Brand, Series, Category, Product, ProductImage, Tag, Color, Country
 
 class BrandSerializer(serializers.ModelSerializer):
     class Meta:
@@ -18,6 +18,16 @@ class CategorySerializer(serializers.ModelSerializer):
         model = Category
         fields = ["id", "name", "parent"]
 
+class ColorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Color
+        fields = ["id", "name", "hex_code"]
+
+class CountrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Country
+        fields = ["id", "name", "iso_code"]
+
 class ProductImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductImage
@@ -33,6 +43,9 @@ class ProductSerializer(serializers.ModelSerializer):
     series = SeriesSerializer(read_only=True)
     images = ProductImageSerializer(many=True, read_only=True)
     tags = TagSerializer(many=True, read_only=True)
+    # Keep backward-compatible representation: expose names for FKs
+    color = serializers.SlugRelatedField(read_only=True, slug_field="name")
+    country_of_origin = serializers.SlugRelatedField(read_only=True, slug_field="name")
     class Meta:
         model = Product
         fields = ["id","sku","manufacturer_sku","name","brand","series","category",

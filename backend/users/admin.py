@@ -13,6 +13,6 @@ class UserProfileAdmin(admin.ModelAdmin):
 
 @admin.register(Friendship)
 class FriendshipAdmin(admin.ModelAdmin):
-    list_display = ("from_user", "to_user", "accepted", "created", "modified")
+    list_display = ("from_user", "to_user", "accepted", "created_at", "updated_at")
     list_filter = ("accepted",)
     search_fields = ("from_user__username", "to_user__username")

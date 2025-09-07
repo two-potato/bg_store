@@ -128,6 +128,14 @@ class Migration(migrations.Migration):
             field=models.CharField(blank=True, max_length=255),
         ),
 
+        # Ensure existing SKU values fit into 8 characters before altering column
+        migrations.RunSQL(
+            sql=(
+                "UPDATE catalog_product SET sku = SUBSTRING(sku FROM 1 FOR 8) "
+                "WHERE LENGTH(sku) > 8;"
+            ),
+            reverse_sql=migrations.RunSQL.noop,
+        ),
         migrations.AlterField(
             model_name="product",
             name="sku",
@@ -158,4 +166,3 @@ class Migration(migrations.Migration):
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to="catalog.color"),
         ),
     ]
-

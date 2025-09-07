@@ -88,17 +88,17 @@
                           {% if p.stock_qty <= 0 %}disabled aria-disabled="true"{% endif %}
                           hx-post="/cart/add/"
                           hx-vals='{"product_id": "{{ p.id }}", "qty": 1}'
-                          hx-target="#cart-content" hx-swap="innerHTML"
+                          hx-swap="none"
                           hx-on::after-request="document.body.dispatchEvent(new Event('cartChanged')); this.classList.add('d-none'); this.closest('.card-controls').querySelector('.qty-stepper').classList.remove('d-none');">
                     <iconify-icon icon="tabler:shopping-bag"></iconify-icon>
                     <span class="ms-1">В корзину</span>
                   </button>
                   <div class="qty-stepper d-none d-flex align-items-center gap-2">
-                    <form hx-post="/cart/update/" hx-vals='{"product_id":"{{ p.id }}","op":"dec"}' hx-target="#cart-content" hx-swap="innerHTML" hx-on::after-request="document.body.dispatchEvent(new Event('cartChanged'));" onsubmit="const s=this.nextElementSibling; s.textContent=Math.max(1,(parseInt(s.textContent||'1')||1)-1);">
+                    <form hx-post="/cart/update/" hx-vals='{"product_id":"{{ p.id }}","op":"dec"}' hx-target="closest .cart-container" hx-swap="innerHTML" hx-on::after-request="document.body.dispatchEvent(new Event('cartChanged'));" onsubmit="const s=this.nextElementSibling; s.textContent=Math.max(1,(parseInt(s.textContent||'1')||1)-1);">
                       <button class="btn btn-outline-secondary btn-sm" type="submit"><iconify-icon icon="tabler:shopping-cart"></iconify-icon></button>
                     </form>
                     <span class="small fw-semibold" style="min-width:2rem; text-align:center">1</span>
-                    <form hx-post="/cart/update/" hx-vals='{"product_id":"{{ p.id }}","op":"inc"}' hx-target="#cart-content" hx-swap="innerHTML" hx-on::after-request="document.body.dispatchEvent(new Event('cartChanged'));" onsubmit="const s=this.previousElementSibling; s.textContent=(parseInt(s.textContent||'1')||1)+1;">
+                    <form hx-post="/cart/update/" hx-vals='{"product_id":"{{ p.id }}","op":"inc"}' hx-target="closest .cart-container" hx-swap="innerHTML" hx-on::after-request="document.body.dispatchEvent(new Event('cartChanged'));" onsubmit="const s=this.previousElementSibling; s.textContent=(parseInt(s.textContent||'1')||1)+1;">
                       <button class="btn btn-outline-secondary btn-sm" type="submit"><iconify-icon icon="tabler:plus"></iconify-icon></button>
                     </form>
                   </div>

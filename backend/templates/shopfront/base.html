@@ -44,14 +44,14 @@
               {% endif %}
             </ul>
           </div>
-          <button type="button" id="toggle-cart" class="btn btn-sm btn-outline-secondary btn-icon position-relative" aria-label="Открыть корзину">
+          <a id="toggle-cart" class="btn btn-sm btn-outline-secondary btn-icon position-relative" href="/cart/" aria-label="Открыть корзину">
             <iconify-icon icon="tabler:shopping-cart"></iconify-icon>
             <span id="cart-badge"
                   class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
                   hx-get="/cart/badge/" hx-push-url="false"
                   hx-trigger="load, cartChanged from:body"
                   hx-target="#cart-badge" hx-select="*">0</span>
-          </button>
+          </a>
         </div>
       </div>
     </nav>
@@ -63,23 +63,7 @@
       {% block content %}{% endblock %}
     </main>
 
-    {% block cart_drawer %}
-    <!-- Top cart drawer -->
-    <div id="cart-drawer" class="cart-drawer">
-      <div class="cart-drawer-inner glass shadow-sm animate__animated">
-        <div class="cart-drawer-header">
-          <div class="d-flex align-items-center gap-2"><iconify-icon icon="tabler:shopping-cart"></iconify-icon> Корзина</div>
-          <div class="d-flex align-items-center gap-2">
-            <form hx-post="/cart/clear/" hx-target="#cart-content" hx-swap="innerHTML" hx-on::after-request="document.body.dispatchEvent(new Event('cartChanged'));">
-              <button type="submit" class="icon-btn" title="Очистить корзину" aria-label="Очистить корзину"><iconify-icon icon="tabler:trash"></iconify-icon></button>
-            </form>
-            <button type="button" id="cart-close" class="cart-close" aria-label="Закрыть"><iconify-icon icon="tabler:x"></iconify-icon></button>
-          </div>
-        </div>
-        <div id="cart-content" class="cart-drawer-body"><!-- filled by HTMX --></div>
-      </div>
-    </div>
-    {% endblock %}
+    {% block cart_drawer %}{% endblock %}
 
     <!-- HTMX loading indicator -->
     <div id="htmx-indicator" class="position-fixed bottom-0 start-50 translate-middle-x mb-3 htmx-indicator" style="z-index:1080">
@@ -138,43 +122,15 @@
         els.forEach(el=> io.observe(el));
       })();
 
-      // Cart drawer controls + cart badge animation
+      // Cart badge animation on updates (no drawer)
       (function(){
-        const btn = document.getElementById('toggle-cart');
-        const drawer = document.getElementById('cart-drawer');
-        const inner = drawer && drawer.querySelector('.cart-drawer-inner');
-        const closeBtn = document.getElementById('cart-close');
-        const openDrawer = () => {
-          if (!drawer) return;
-          drawer.classList.add('open');
-          htmx.ajax('GET', '/cart/panel/', { target: '#cart-content', swap: 'innerHTML' })
-        };
-        const closeDrawer = () => {
-          if (!drawer) return;
-          drawer.classList.remove('open');
-        };
-        if (btn) btn.addEventListener('click', (e)=>{ e.preventDefault(); if (drawer.classList.contains('open')) closeDrawer(); else openDrawer(); });
-        if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
-        document.addEventListener('keydown', (e)=>{ if (e.key==='Escape' && drawer.classList.contains('open')) closeDrawer(); });
-        document.addEventListener('click', (e)=>{
-          if (!drawer.classList.contains('open')) return;
-          const within = e.target.closest('#cart-drawer .cart-drawer-inner') || e.target.closest('#toggle-cart');
-          if (!within) closeDrawer();
-        });
-        // bump animation when cart updates + refresh panel if open
         document.body.addEventListener('cartChanged', function(){
           const b = document.getElementById('cart-badge');
           if (!b) return;
           b.classList.remove('cart-badge-bump');
-          // force reflow to restart animation
           void b.offsetWidth;
           b.classList.add('cart-badge-bump');
-          if (drawer && drawer.classList.contains('open')) {
-            htmx.ajax('GET', '/cart/panel/', { target: '#cart-content', swap: 'innerHTML' })
-          }
         });
-        // allow server to open the cart via HX-Trigger: {"openCart":{}}
-        document.body.addEventListener('openCart', function(){ openDrawer(); });
       })();
     </script>
   </body>

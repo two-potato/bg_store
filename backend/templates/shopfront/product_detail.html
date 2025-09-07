@@ -45,7 +45,7 @@
                hx-post="/cart/add/"
                hx-vals='{"product_id": "{{ p.id }}"}'
                hx-include="#qty-{{ p.id }}"
-               hx-target="#cart-content" hx-swap="innerHTML"
+               hx-swap="none"
                hx-on::after-request="document.body.dispatchEvent(new Event('cartChanged'));"
                {% if p.stock_qty <= 0 %}disabled aria-disabled="true"{% endif %}>
         <iconify-icon icon="tabler:shopping-cart-plus"></iconify-icon>

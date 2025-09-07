@@ -1,5 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from catalog.models import Product, Category, Brand, Tag
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
@@ -96,13 +96,17 @@ def cart_add(request):
     cart[str(pid)] = {"qty": cart.get(str(pid), {"qty":0})["qty"] + qty}
     request.session.modified = True
     log.info("cart_add", extra={"product_id": pid, "qty": qty})
-    # Return updated cart panel and trigger UI events: toast + badge refresh + open drawer
-    items, total = _cart_summary(request)
-    resp = render(request, "shopfront/partials/cart_panel.html", {"items": items, "total": total}, status=201)
-    triggers = '{"showToast": {"message": "Товар добавлен в корзину", "variant": "success"}, "cartChanged": {}, "openCart": {}}'
+    # Return an empty response with HX-Trigger events to update badge and show toast.
+    triggers = '{"showToast": {"message": "Товар добавлен в корзину", "variant": "success"}, "cartChanged": {}}'
+    resp = HttpResponse("", status=204)
     resp["HX-Trigger"] = triggers
     resp["HX-Trigger-After-Settle"] = triggers
     return resp
+
+@log_calls(log)
+def cart_page(request):
+    items, total = _cart_summary(request)
+    return render(request, "shopfront/cart.html", {"items": items, "total": total})
 
 @csrf_exempt
 @log_calls(log)

@@ -16,6 +16,8 @@ deploy/ — configs for monitoring, nginx, etc.
 - POSTGRES_PASSWORD
 - DJANGO_SECRET_KEY
 - TELEGRAM_BOT_TOKEN
+- GOOGLE_CLIENT_ID
+- GOOGLE_CLIENT_SECRET
 
 ## Quick Start (Dev)
 
@@ -35,6 +37,21 @@ Open:
 - Metrics: http://localhost/metrics
 - Prometheus: http://localhost:9090
 - Grafana: http://localhost:3000  (admin / admin)
+
+## Google OAuth (real login)
+
+1. Create OAuth 2.0 Client ID in Google Cloud Console.
+2. Add Authorized redirect URIs:
+   - `http://localhost:8080/account/social/google/login/callback/`
+   - `http://localhost:8000/account/social/google/login/callback/`
+3. Put credentials into `backend/.env`:
+   - `GOOGLE_CLIENT_ID=...`
+   - `GOOGLE_CLIENT_SECRET=...`
+4. Rebuild/restart backend:
+```bash
+docker compose build backend
+docker compose up -d backend nginx
+```
 
 ## Production (example)
 ```bash

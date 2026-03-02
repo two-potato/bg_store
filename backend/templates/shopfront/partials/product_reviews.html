@@ -1,0 +1,139 @@
+<section id="product-reviews" class="mt-4 product-reviews-v2" aria-label="Отзывы о товаре">
+  <div class="card bg-base-100 border border-base-200">
+    <div class="card-body p-3 gap-3">
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <h2 class="text-sm font-semibold">Отзывы и рейтинг</h2>
+        <div class="text-xs text-base-content/70">
+          Средняя оценка: <span class="font-semibold">{{ rating_avg|floatformat:1 }}</span>/5 ({{ rating_count }})
+        </div>
+      </div>
+
+      {% if request.user.is_authenticated %}
+      <form hx-post="/product/{{ p.id }}/review/"
+            hx-target="#product-reviews"
+            hx-select="#product-reviews"
+            hx-swap="outerHTML"
+            class="grid gap-2">
+        <div class="text-xs text-base-content/70">
+          {% if user_review %}Редактирование вашего отзыва{% else %}Оставьте отзыв о товаре{% endif %}
+        </div>
+        <div class="review-stars" role="radiogroup" aria-label="Оценка товара">
+          {% for value in "12345" %}
+            <label class="review-star-option">
+              <input type="radio" name="rating" value="{{ value }}" {% if user_review and user_review.rating|stringformat:"s" == value %}checked{% endif %} required>
+              <span>{{ value }}</span>
+            </label>
+          {% endfor %}
+        </div>
+        <textarea name="text"
+                  class="textarea textarea-bordered w-full"
+                  rows="3"
+                  placeholder="Ваш отзыв (необязательно)">{{ user_review.text|default:"" }}</textarea>
+        <div class="flex justify-end gap-2">
+          {% if user_review %}
+          <button class="btn btn-outline btn-sm"
+                  type="button"
+                  hx-post="/product/{{ p.id }}/review/delete/"
+                  hx-target="#product-reviews"
+                  hx-select="#product-reviews"
+                  hx-swap="outerHTML">
+            Удалить отзыв
+          </button>
+          {% endif %}
+          <button class="btn btn-primary btn-sm" type="submit">Сохранить отзыв</button>
+        </div>
+      </form>
+      {% else %}
+      <div class="text-xs text-base-content/70">
+        Чтобы оставить отзыв и рейтинг, <a class="link" href="/account/login/" hx-boost="false">войдите в аккаунт</a>.
+      </div>
+      {% endif %}
+
+      <div class="divide-y divide-base-200">
+        {% for r in reviews %}
+        <article class="py-3">
+          <div class="review-item-head">
+            <div class="review-item-author">
+              <div class="review-item-avatar" aria-hidden="true">
+                {% if r.user.profile.photo %}
+                  <img src="{{ r.user.profile.photo.url }}" alt="{{ r.user.username }}">
+                {% else %}
+                  <span>{{ r.user.username|slice:":1"|upper }}</span>
+                {% endif %}
+              </div>
+              <div class="review-item-author-meta">
+                <div class="font-semibold">{{ r.user.username }}</div>
+                <div class="text-base-content/60">{{ r.created_at|date:"d.m.Y H:i" }}</div>
+              </div>
+            </div>
+            <div class="text-xs text-warning">Оценка: {{ r.rating }}/5</div>
+          </div>
+          {% if r.text %}
+            <p class="text-sm text-base-content/80 mt-1 whitespace-pre-line">{{ r.text }}</p>
+          {% endif %}
+          <div class="mt-2 pl-8 grid gap-2">
+            {% for c in r.comments.all %}
+            <div class="review-comment">
+              <div class="review-item-head">
+                <div class="review-item-author">
+                  <div class="review-item-avatar" aria-hidden="true">
+                    {% if c.user.profile.photo %}
+                      <img src="{{ c.user.profile.photo.url }}" alt="{{ c.user.username }}">
+                    {% else %}
+                      <span>{{ c.user.username|slice:":1"|upper }}</span>
+                    {% endif %}
+                  </div>
+                  <div class="review-item-author-meta">
+                    <div class="font-semibold">{{ c.user.username }}</div>
+                    <div class="text-base-content/60">{{ c.created_at|date:"d.m.Y H:i" }}</div>
+                  </div>
+                </div>
+              </div>
+              {% if request.user.is_authenticated and request.user.id == c.user_id %}
+              <form class="grid gap-2 mt-1"
+                    hx-post="/product/{{ p.id }}/comment/{{ c.id }}/update/"
+                    hx-target="#product-reviews"
+                    hx-select="#product-reviews"
+                    hx-swap="outerHTML">
+                <textarea name="text" class="textarea textarea-bordered w-full" rows="2" required>{{ c.text }}</textarea>
+                <div class="flex justify-end gap-2">
+                  <button class="btn btn-outline btn-xs"
+                          type="button"
+                          hx-post="/product/{{ p.id }}/comment/{{ c.id }}/delete/"
+                          hx-target="#product-reviews"
+                          hx-select="#product-reviews"
+                          hx-swap="outerHTML">
+                    Удалить
+                  </button>
+                  <button class="btn btn-primary btn-xs" type="submit">Сохранить</button>
+                </div>
+              </form>
+              {% else %}
+              <p class="text-sm text-base-content/80 mt-1 whitespace-pre-line">{{ c.text }}</p>
+              {% endif %}
+            </div>
+            {% empty %}
+            <div class="text-xs text-base-content/60">Комментариев пока нет.</div>
+            {% endfor %}
+
+            {% if request.user.is_authenticated %}
+            <form hx-post="/product/{{ p.id }}/review/{{ r.id }}/comment/"
+                  hx-target="#product-reviews"
+                  hx-select="#product-reviews"
+                  hx-swap="outerHTML"
+                  class="grid gap-2">
+              <textarea name="text" class="textarea textarea-bordered w-full" rows="2" placeholder="Добавить комментарий к отзыву" required></textarea>
+              <div class="flex justify-end">
+                <button class="btn btn-primary btn-xs" type="submit">Комментировать</button>
+              </div>
+            </form>
+            {% endif %}
+          </div>
+        </article>
+        {% empty %}
+        <div class="py-2 text-xs text-base-content/60">Пока нет отзывов.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</section>

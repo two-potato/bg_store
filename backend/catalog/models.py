@@ -1,6 +1,8 @@
 from django.db import models
 from django.core.validators import RegexValidator
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.core.exceptions import ValidationError
+from django.conf import settings
 from core.models import TimeStampedModel
 
 class SeoFieldsMixin(models.Model):
@@ -124,3 +126,31 @@ class ProductImage(TimeStampedModel):
         # Ensure clean() runs during save
         self.full_clean()
         return super().save(*args, **kwargs)
+
+
+class ProductReview(TimeStampedModel):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="reviews")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="product_reviews")
+    rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    text = models.TextField(blank=True, default="")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["product", "user"], name="unique_product_review_per_user"),
+        ]
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"Review(product={self.product_id}, user={self.user_id}, rating={self.rating})"
+
+
+class ProductReviewComment(TimeStampedModel):
+    review = models.ForeignKey(ProductReview, on_delete=models.CASCADE, related_name="comments")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="product_review_comments")
+    text = models.TextField()
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+    def __str__(self):
+        return f"ReviewComment(review={self.review_id}, user={self.user_id})"

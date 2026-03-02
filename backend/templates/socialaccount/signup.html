@@ -1,0 +1,43 @@
+{% extends "shopfront/base.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-md mx-auto">
+  <div class="card bg-base-100 border border-base-200 shadow-sm">
+    <div class="card-body p-5">
+      <h1 class="text-xl font-semibold mb-2">{% trans "Завершение входа" %}</h1>
+      <p class="text-sm text-base-content/70 mb-4">
+        {% blocktrans with provider_name=account.get_provider.name %}
+          Вы входите через {{ provider_name }}. Заполните профиль для завершения регистрации.
+        {% endblocktrans %}
+      </p>
+
+      {% if form.non_field_errors %}
+        <div class="alert alert-error text-sm mb-3">{{ form.non_field_errors }}</div>
+      {% endif %}
+
+      <form method="post" action="{% url 'socialaccount_signup' %}" class="grid gap-3">
+        {% csrf_token %}
+        {% for hidden in form.hidden_fields %}
+          {{ hidden }}
+        {% endfor %}
+        {% for field in form.visible_fields %}
+          <div>
+            <label class="text-xs mb-1 block" for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}
+              <div class="text-error text-xs mt-1">{{ field.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+        {{ redirect_field }}
+        <button class="btn btn-primary w-full" type="submit">{% trans "Продолжить" %}</button>
+      </form>
+
+      <div class="text-xs text-base-content/60 mt-3">
+        {% trans "Данные используются только для входа и профиля в магазине." %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

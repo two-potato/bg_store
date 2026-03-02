@@ -9,6 +9,7 @@ from orders.models import Order
 from commerce.models import LegalEntityMembership
 from core.secure import sign_approve
 from core.pdf import render_invoice_pdf
+from users.models import UserProfile
 
 log = logging.getLogger("orders")
 
@@ -20,6 +21,16 @@ def _admin_recipients() -> list[str]:
     # Django native ADMINS fallback: [("Name", "email@example.com"), ...]
     admins = getattr(settings, "ADMINS", []) or []
     return [email for _, email in admins if email]
+
+
+def _admin_telegram_recipients() -> list[int]:
+    recipients: set[int] = set(getattr(settings, "ADMIN_NOTIFY_TELEGRAM_IDS", []) or [])
+    qs = UserProfile.objects.filter(
+        role=UserProfile.Role.ADMIN,
+        telegram_id__isnull=False,
+    ).values_list("telegram_id", flat=True)
+    recipients.update(int(v) for v in qs if v)
+    return sorted(recipients)
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
@@ -59,6 +70,60 @@ def notify_admin_order_status_email(self, order_id: int, event: str, previous_st
         fail_silently=False,
     )
     log.info("order_email_sent", extra={"order_id": order_id, "event": event, "recipients": recipients})
+
+
+@shared_task(bind=True, max_retries=0, default_retry_delay=30)
+def notify_order_status_telegram(self, order_id: int, event: str, previous_status: str | None = None):
+    order = Order.objects.select_related("legal_entity", "placed_by").get(id=order_id)
+    recipients = _admin_telegram_recipients()
+    if not recipients:
+        log.warning("order_status_tg_no_recipients", extra={"order_id": order_id, "event": event})
+        return
+
+    status_text = order.get_status_display()
+    if event == "created":
+        text = (
+            f"🆕 Новый заказ <b>#{order.id}</b>\n"
+            f"Статус: <b>{status_text}</b>\n"
+            f"Клиент: {order.placed_by}\n"
+            f"Юрлицо: {order.legal_entity or '-'}\n"
+            f"Сумма: {order.total}"
+        )
+    else:
+        prev_text = previous_status or "-"
+        text = (
+            f"🔔 Заказ <b>#{order.id}</b>: статус изменён\n"
+            f"Было: <code>{prev_text}</code>\n"
+            f"Стало: <b>{status_text}</b>\n"
+            f"Клиент: {order.placed_by}\n"
+            f"Юрлицо: {order.legal_entity or '-'}\n"
+            f"Сумма: {order.total}"
+        )
+
+    async def send():
+        async with httpx.AsyncClient(timeout=10) as c:
+            for tg in recipients:
+                resp = await c.post(
+                    f"{settings.BOT_NOTIFY_URL}/notify/send_text",
+                    json={"telegram_id": tg, "text": text},
+                )
+                resp.raise_for_status()
+
+    try:
+        asyncio.run(send())
+    except Exception as exc:
+        log.exception("order_status_tg_send_failed", extra={"order_id": order_id, "event": event, "recipients": recipients})
+        return
+    log.info(
+        "order_status_tg_sent",
+        extra={
+            "order_id": order_id,
+            "event": event,
+            "recipients": recipients,
+            "previous_status": previous_status,
+            "status": order.status,
+        },
+    )
 
 @shared_task(bind=True, max_retries=5, default_retry_delay=30)
 def notify_entity_admins_order_created(self, order_id: int):

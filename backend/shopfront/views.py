@@ -1,23 +1,105 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse, HttpResponse
 from django.template.loader import render_to_string
-from catalog.models import Product, Category, Brand, Tag
+from catalog.models import Product, Category, Brand, Tag, ProductReview, ProductReviewComment
 from django.core.paginator import Paginator, EmptyPage
 from django.views import View
 from django.views.generic import TemplateView
 from django.utils.decorators import method_decorator
+from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.middleware.csrf import get_token
 from django.contrib import messages
-from orders.models import Order, OrderItem
+from django.db.models import Avg, Count, Case, When, IntegerField, Value, FloatField
+from django.db.models.functions import Coalesce
+from orders.models import Order, OrderItem, FakeAcquiringPayment
 from commerce.models import LegalEntityMembership, DeliveryAddress
+from .forms import ContactFeedbackForm
+from .tasks import notify_contact_feedback
 import logging
 import json
+from uuid import uuid4
+from django.utils import timezone
 from core.logging_utils import log_calls
 from decimal import Decimal
+from .search import search_product_ids
+from urllib.parse import urlencode
 
 log = logging.getLogger("shopfront")
+
+
+def _with_rating(qs):
+    return qs.annotate(
+        rating_avg=Coalesce(Avg("reviews__rating"), Value(0.0), output_field=FloatField()),
+        rating_count=Count("reviews", distinct=True),
+    )
+
+
+def _payment_event_label(event_code: str) -> str:
+    return dict(FakeAcquiringPayment.Event.choices).get(event_code, event_code)
+
+
+def _append_payment_history(payment: FakeAcquiringPayment, event_code: str, status_code: str, note: str = ""):
+    history = list(payment.history or [])
+    history.append(
+        {
+            "at": timezone.now().strftime("%d.%m.%Y %H:%M:%S"),
+            "event": event_code,
+            "event_label": _payment_event_label(event_code),
+            "status": status_code,
+            "status_label": dict(FakeAcquiringPayment.Status.choices).get(status_code, status_code),
+            "note": note,
+        }
+    )
+    payment.history = history[-50:]
+    payment.last_event = event_code
+    payment.status = status_code
+
+
+def _apply_fake_payment_event(order: Order, payment: FakeAcquiringPayment, event_code: str):
+    status_map = {
+        FakeAcquiringPayment.Event.START: FakeAcquiringPayment.Status.PROCESSING,
+        FakeAcquiringPayment.Event.REQUIRE_3DS: FakeAcquiringPayment.Status.REQUIRES_3DS,
+        FakeAcquiringPayment.Event.PASS_3DS: FakeAcquiringPayment.Status.PAID,
+        FakeAcquiringPayment.Event.SUCCESS: FakeAcquiringPayment.Status.PAID,
+        FakeAcquiringPayment.Event.FAIL: FakeAcquiringPayment.Status.FAILED,
+        FakeAcquiringPayment.Event.CANCEL: FakeAcquiringPayment.Status.CANCELED,
+        FakeAcquiringPayment.Event.REFUND: FakeAcquiringPayment.Status.REFUNDED,
+    }
+    next_status = status_map.get(event_code)
+    if not next_status:
+        return
+    _append_payment_history(payment, event_code, next_status)
+    payment.save(update_fields=["history", "last_event", "status", "updated_at"])
+
+    if next_status == FakeAcquiringPayment.Status.PAID:
+        if order.status in {Order.Status.NEW, Order.Status.CHANGED}:
+            try:
+                order.approve()
+            except Exception:
+                order.status = Order.Status.CONFIRMED
+            order.save(update_fields=["status"])
+        if order.status == Order.Status.CONFIRMED:
+            try:
+                order.pay()
+            except Exception:
+                order.status = Order.Status.PAID
+            order.save(update_fields=["status"])
+    elif next_status in {FakeAcquiringPayment.Status.FAILED, FakeAcquiringPayment.Status.CANCELED}:
+        if order.status not in {Order.Status.CANCELED, Order.Status.DELIVERED}:
+            try:
+                order.cancel()
+            except Exception:
+                order.status = Order.Status.CANCELED
+            order.save(update_fields=["status"])
+    elif next_status == FakeAcquiringPayment.Status.REFUNDED:
+        if order.status not in {Order.Status.CANCELED, Order.Status.DELIVERED}:
+            try:
+                order.mark_changed()
+            except Exception:
+                order.status = Order.Status.CHANGED
+            order.save(update_fields=["status"])
 
 def _cart(req):
     return req.session.setdefault("cart", {})
@@ -118,15 +200,70 @@ class HomeView(TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["cats"] = Category.objects.all().order_by("name")[:8]
-        ctx["products"] = Product.objects.prefetch_related("images","tags").order_by("-is_new","name")[:12]
+        ctx["products"] = _with_rating(
+            Product.objects.prefetch_related("images", "tags").order_by("-is_new", "name")
+        )[:12]
         return ctx
+
+
+@method_decorator(ensure_csrf_cookie, name="dispatch")
+class AboutPageView(TemplateView):
+    template_name = "shopfront/about.html"
+
+    @log_calls(log)
+    def get(self, request, *args, **kwargs):
+        get_token(request)
+        return super().get(request, *args, **kwargs)
+
+
+@method_decorator(ensure_csrf_cookie, name="dispatch")
+class DeliveryPageView(TemplateView):
+    template_name = "shopfront/delivery.html"
+
+    @log_calls(log)
+    def get(self, request, *args, **kwargs):
+        get_token(request)
+        return super().get(request, *args, **kwargs)
+
+
+@method_decorator(ensure_csrf_cookie, name="dispatch")
+class ContactsPageView(TemplateView):
+    template_name = "shopfront/contacts.html"
+
+    @log_calls(log)
+    def get(self, request, *args, **kwargs):
+        get_token(request)
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["form"] = kwargs.get("form") or ContactFeedbackForm()
+        return ctx
+
+    @log_calls(log)
+    def post(self, request, *args, **kwargs):
+        form = ContactFeedbackForm(request.POST)
+        if not form.is_valid():
+            return self.render_to_response(self.get_context_data(form=form), status=400)
+
+        cleaned = form.cleaned_data
+        notify_contact_feedback.delay(
+            name=cleaned["name"],
+            phone=cleaned["phone"],
+            message=cleaned["message"],
+            source=request.build_absolute_uri("/contacts/"),
+        )
+        messages.success(request, "Спасибо. Мы получили заявку и свяжемся с вами.")
+        return redirect("/contacts/")
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class CatalogView(View):
     @log_calls(log)
     def get(self, request):
         get_token(request)
-        qs = Product.objects.select_related("brand","series","category").prefetch_related("images","tags").all()
+        qs = _with_rating(
+            Product.objects.select_related("brand", "series", "category").prefetch_related("images", "tags").all()
+        )
         brand = request.GET.get("brand")
         category = request.GET.get("category")
         q = request.GET.get("q","")
@@ -138,8 +275,14 @@ class CatalogView(View):
             qs = qs.filter(brand_id=brand)
         if category:
             qs = qs.filter(category_id=category)
+        es_ranked_ids = []
         if q:
-            qs = qs.filter(name__icontains=q)
+            max_hits = int(getattr(settings, "ES_CATALOG_MAX_HITS", 2000))
+            es_ranked_ids = search_product_ids(query=q, limit=max_hits)
+            if not es_ranked_ids:
+                qs = qs.none()
+            else:
+                qs = qs.filter(id__in=es_ranked_ids)
         if tag:
             if tag.isdigit():
                 qs = qs.filter(tags__id=int(tag))
@@ -151,15 +294,23 @@ class CatalogView(View):
             "price_desc": ["-price", "name"],
             "name": ["name"],
             "promo": ["-is_promo", "name"],
+            "rating_desc": ["-rating_avg", "-rating_count", "name"],
         }
-        qs = qs.order_by(*sort_map.get(sort, ["-is_new", "name"]))
+        if q and es_ranked_ids and not sort:
+            rank_order = Case(
+                *[When(id=pid, then=pos) for pos, pid in enumerate(es_ranked_ids)],
+                default=len(es_ranked_ids),
+                output_field=IntegerField(),
+            )
+            qs = qs.order_by(rank_order)
+        else:
+            qs = qs.order_by(*sort_map.get(sort, ["-is_new", "name"]))
         paginator = Paginator(qs, page_size)
         try:
             page_obj = paginator.page(page)
         except EmptyPage:
             page_obj = paginator.page(paginator.num_pages or 1)
         products_page = list(page_obj.object_list)
-        from urllib.parse import urlencode
         base_params = {}
         if q:
             base_params["q"] = q
@@ -172,6 +323,9 @@ class CatalogView(View):
         if sort:
             base_params["sort"] = sort
         querystring_base = urlencode(base_params)
+        category_reset_params = {k: v for k, v in base_params.items() if k != "category"}
+        category_reset_querystring = urlencode(category_reset_params)
+        category_reset_url = f"/catalog/?{category_reset_querystring}" if category_reset_querystring else "/catalog/"
         if request.headers.get("HX-Request") and request.GET.get("fragment") == "grid_append":
             return render(request, "shopfront/partials/catalog_grid_append.html", {
                 "products": products_page,
@@ -202,7 +356,61 @@ class CatalogView(View):
             "page_size": page_size,
             "sel_brand": sel_brand,
             "sel_category": sel_category,
+            "category_reset_url": category_reset_url,
         })
+
+
+class LiveSearchView(View):
+    @log_calls(log)
+    def get(self, request):
+        q = (request.GET.get("q") or "").strip()
+        if len(q) < 3:
+            return render(
+                request,
+                "shopfront/partials/live_search_results.html",
+                {"q": q, "products": [], "show": False},
+            )
+
+        ids = search_product_ids(query=q, limit=8)
+        products = (
+            Product.objects.select_related("brand")
+            .prefetch_related("images")
+            .filter(id__in=ids)
+        )
+        order = {pid: idx for idx, pid in enumerate(ids)}
+        products = sorted(products, key=lambda p: order.get(p.id, 9999))
+        return render(
+            request,
+            "shopfront/partials/live_search_results.html",
+            {"q": q, "products": products, "show": True},
+        )
+
+
+def _reviews_context(product: Product, user):
+    reviews_qs = (
+        product.reviews.select_related("user", "user__profile")
+        .prefetch_related("comments__user__profile")
+    )
+    agg = reviews_qs.aggregate(avg=Avg("rating"), count=Count("id"))
+    user_review = None
+    if getattr(user, "is_authenticated", False):
+        user_review = reviews_qs.filter(user=user).first()
+    return {
+        "p": product,
+        "reviews": reviews_qs[:30],
+        "rating_avg": agg["avg"] or 0,
+        "rating_count": agg["count"] or 0,
+        "user_review": user_review,
+    }
+
+
+def _render_reviews_partial(request, product: Product, status: int = 200):
+    return render(
+        request,
+        "shopfront/partials/product_reviews.html",
+        _reviews_context(product, request.user),
+        status=status,
+    )
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class ProductDetailView(TemplateView):
@@ -214,8 +422,106 @@ class ProductDetailView(TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         pk = kwargs.get("pk")
-        ctx["p"] = get_object_or_404(Product.objects.prefetch_related("images","tags"), pk=pk)
+        p = get_object_or_404(Product.objects.prefetch_related("images", "tags"), pk=pk)
+        ctx.update(_reviews_context(p, self.request.user))
         return ctx
+
+
+class ProductReviewUpsertView(LoginRequiredMixin, View):
+    @log_calls(log)
+    def post(self, request, pk):
+        p = get_object_or_404(Product, pk=pk)
+        raw_rating = (request.POST.get("rating") or "").strip()
+        text = (request.POST.get("text") or "").strip()
+        try:
+            rating = int(raw_rating)
+        except Exception:
+            rating = 0
+        if rating < 1 or rating > 5:
+            if request.headers.get("HX-Request"):
+                return _render_reviews_partial(request, p, status=400)
+            messages.error(request, "Рейтинг должен быть от 1 до 5")
+            return redirect(f"/product/{pk}/#reviews")
+
+        ProductReview.objects.update_or_create(
+            product=p,
+            user=request.user,
+            defaults={"rating": rating, "text": text},
+        )
+        context = _reviews_context(p, request.user)
+
+        if request.headers.get("HX-Request"):
+            return render(request, "shopfront/partials/product_reviews.html", context)
+        messages.success(request, "Отзыв сохранен")
+        return redirect(f"/product/{pk}/#reviews")
+
+
+class ProductReviewDeleteView(LoginRequiredMixin, View):
+    @log_calls(log)
+    def post(self, request, pk):
+        p = get_object_or_404(Product, pk=pk)
+        deleted, _ = ProductReview.objects.filter(product=p, user=request.user).delete()
+        if deleted:
+            messages.success(request, "Отзыв удален")
+        context = _reviews_context(p, request.user)
+        if request.headers.get("HX-Request"):
+            return render(request, "shopfront/partials/product_reviews.html", context)
+        return redirect(f"/product/{pk}/#reviews")
+
+
+class ProductReviewCommentCreateView(LoginRequiredMixin, View):
+    @log_calls(log)
+    def post(self, request, pk, review_id):
+        p = get_object_or_404(Product, pk=pk)
+        review = get_object_or_404(ProductReview, pk=review_id, product=p)
+        text = (request.POST.get("text") or "").strip()
+        if not text:
+            if request.headers.get("HX-Request"):
+                return _render_reviews_partial(request, p, status=400)
+            return redirect(f"/product/{pk}/#reviews")
+        ProductReviewComment.objects.create(review=review, user=request.user, text=text)
+        context = _reviews_context(p, request.user)
+        if request.headers.get("HX-Request"):
+            return render(request, "shopfront/partials/product_reviews.html", context)
+        return redirect(f"/product/{pk}/#reviews")
+
+
+class ProductReviewCommentUpdateView(LoginRequiredMixin, View):
+    @log_calls(log)
+    def post(self, request, pk, comment_id):
+        p = get_object_or_404(Product, pk=pk)
+        comment = get_object_or_404(ProductReviewComment.objects.select_related("review"), pk=comment_id, review__product=p)
+        if comment.user_id != request.user.id:
+            if request.headers.get("HX-Request"):
+                return _render_reviews_partial(request, p, status=403)
+            return HttpResponse(status=403)
+        text = (request.POST.get("text") or "").strip()
+        if not text:
+            if request.headers.get("HX-Request"):
+                return _render_reviews_partial(request, p, status=400)
+            return redirect(f"/product/{pk}/#reviews")
+        comment.text = text
+        comment.save(update_fields=["text", "updated_at"])
+        context = _reviews_context(p, request.user)
+        if request.headers.get("HX-Request"):
+            return render(request, "shopfront/partials/product_reviews.html", context)
+        return redirect(f"/product/{pk}/#reviews")
+
+
+class ProductReviewCommentDeleteView(LoginRequiredMixin, View):
+    @log_calls(log)
+    def post(self, request, pk, comment_id):
+        p = get_object_or_404(Product, pk=pk)
+        comment = get_object_or_404(ProductReviewComment.objects.select_related("review"), pk=comment_id, review__product=p)
+        if comment.user_id != request.user.id:
+            if request.headers.get("HX-Request"):
+                return _render_reviews_partial(request, p, status=403)
+            return HttpResponse(status=403)
+        comment.delete()
+        context = _reviews_context(p, request.user)
+        if request.headers.get("HX-Request"):
+            return render(request, "shopfront/partials/product_reviews.html", context)
+        return redirect(f"/product/{pk}/#reviews")
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class TwaHomeView(TemplateView):
@@ -226,7 +532,9 @@ class TwaHomeView(TemplateView):
         return super().get(request, *args, **kwargs)
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["products"] = Product.objects.prefetch_related("images","tags").order_by("-is_new","name")[:12]
+        ctx["products"] = _with_rating(
+            Product.objects.prefetch_related("images", "tags").order_by("-is_new", "name")
+        )[:12]
         return ctx
 
 class CartBadgeView(TemplateView):
@@ -499,6 +807,37 @@ class CheckoutSubmitView(LoginRequiredMixin, View):
         order.save(update_fields=["subtotal","discount_amount","total"])
         request.session["cart"] = {}
         request.session.modified = True
+        if pay_method == Order.PaymentMethod.MIR_CARD:
+            payment, _ = FakeAcquiringPayment.objects.get_or_create(
+                order=order,
+                defaults={
+                    "amount": order.total,
+                    "provider_payment_id": f"fake_{order.id}_{uuid4().hex[:10]}",
+                },
+            )
+            if not payment.history:
+                _append_payment_history(
+                    payment,
+                    FakeAcquiringPayment.Event.START,
+                    FakeAcquiringPayment.Status.PROCESSING,
+                    note="Симуляция эквайринга запущена",
+                )
+                payment.save(update_fields=["history", "status", "last_event", "updated_at"])
+            if is_hx:
+                resp = render(
+                    request,
+                    "shopfront/partials/fake_payment_panel.html",
+                    {"order": order, "payment": payment},
+                )
+                resp["HX-Trigger"] = json.dumps(
+                    {
+                        "showToast": {"message": f"Заказ #{order.id} создан. Запущен тест эквайринга", "variant": "success"},
+                        "cartChanged": {},
+                    }
+                )
+                return resp
+            messages.info(request, f"Заказ #{order.id} создан. Откройте симулятор оплаты.")
+            return redirect("fake_payment_page", order_id=order.id)
         if is_hx:
             resp = render(request, "shopfront/partials/checkout_success_panel.html", {"order": order})
             resp["HX-Trigger"] = json.dumps({
@@ -508,3 +847,37 @@ class CheckoutSubmitView(LoginRequiredMixin, View):
             return resp
         messages.success(request, f"Заказ #{order.id} оформлен")
         return redirect("account_orders")
+
+
+class FakePaymentPageView(LoginRequiredMixin, TemplateView):
+    template_name = "shopfront/fake_payment.html"
+
+    @log_calls(log)
+    def get(self, request, *args, **kwargs):
+        order = get_object_or_404(Order.objects.select_related("placed_by"), pk=kwargs["order_id"], placed_by=request.user)
+        payment = get_object_or_404(FakeAcquiringPayment, order=order)
+        return render(request, self.template_name, {"order": order, "payment": payment})
+
+
+class FakePaymentEventView(LoginRequiredMixin, View):
+    @log_calls(log)
+    def post(self, request, order_id):
+        order = get_object_or_404(Order.objects.select_related("placed_by"), pk=order_id, placed_by=request.user)
+        payment = get_object_or_404(FakeAcquiringPayment, order=order)
+        event = (request.POST.get("event") or "").strip()
+        allowed = {x[0] for x in FakeAcquiringPayment.Event.choices}
+        if event not in allowed:
+            return HttpResponse("Unknown event", status=400)
+        _apply_fake_payment_event(order, payment, event)
+        payment.refresh_from_db()
+        order.refresh_from_db()
+        response = render(request, "shopfront/partials/fake_payment_panel.html", {"order": order, "payment": payment})
+        response["HX-Trigger"] = json.dumps(
+            {
+                "showToast": {
+                    "message": f"Событие: {_payment_event_label(event)}",
+                    "variant": "success" if payment.status == FakeAcquiringPayment.Status.PAID else "warning",
+                }
+            }
+        )
+        return response

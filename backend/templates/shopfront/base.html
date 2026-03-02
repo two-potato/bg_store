@@ -34,6 +34,7 @@
     <main class="container mx-auto px-3 my-3 app-main">
       {% block content %}{% endblock %}
     </main>
+    {% include 'shopfront/components/site_footer.html' %}
 
     {% block cart_drawer %}{% endblock %}
     {% include 'shopfront/components/mobile_nav.html' %}

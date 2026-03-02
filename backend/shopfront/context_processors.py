@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from catalog.models import Product
+from catalog.models import Product, Category
 
 
 def cart_badge(request):
@@ -37,3 +37,11 @@ def cart_badge(request):
         "cart_badge_subtotal": subtotal.quantize(Decimal("0.01")),
     }
 
+
+def header_categories(request):
+    cats = (
+        Category.objects.filter(parent__isnull=True)
+        .order_by("name")
+        .values("id", "name")[:24]
+    )
+    return {"header_categories": list(cats)}

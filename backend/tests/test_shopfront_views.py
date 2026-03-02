@@ -1,7 +1,10 @@
 import pytest
-from catalog.models import Brand, Category, Product, Series, Tag
+from django.contrib.auth import get_user_model
+from catalog.models import Brand, Category, Product, ProductReview, ProductReviewComment, Series, Tag
+from shopfront import search as sf_search
 from commerce.models import LegalEntity, LegalEntityMembership, DeliveryAddress
-from orders.models import Order
+from orders.models import Order, FakeAcquiringPayment
+from shopfront.tasks import notify_contact_feedback
 
 pytestmark = pytest.mark.django_db
 
@@ -30,6 +33,167 @@ def test_product_page(client, db):
     p, *_ = _prod()
     r = client.get(f"/product/{p.id}/")
     assert r.status_code == 200
+
+def test_live_search_htmx_from_three_symbols(client, monkeypatch, db):
+    b = Brand.objects.create(name="LiveBrand")
+    c = Category.objects.create(name="LiveCategory")
+    p1 = Product.objects.create(
+        sku="12345678",
+        name="Memory Syrup Pro",
+        brand=b,
+        category=c,
+        price=99,
+        stock_qty=3,
+    )
+    p2 = Product.objects.create(
+        sku="87654321",
+        name="Coffee Beans",
+        brand=b,
+        category=c,
+        price=49,
+        stock_qty=3,
+    )
+    monkeypatch.setattr(sf_search, "_es_search_ids", lambda query, limit: [p1.id, p2.id])
+
+    short_resp = client.get("/search/live/?q=me", HTTP_HX_REQUEST="true")
+    assert short_resp.status_code == 200
+    assert short_resp.text.strip() == ""
+
+    live_resp = client.get("/search/live/?q=mem", HTTP_HX_REQUEST="true")
+    assert live_resp.status_code == 200
+    assert "Memory Syrup Pro" in live_resp.text
+    assert "live-search-panel" in live_resp.text
+    assert "live-search-head__label" in live_resp.text
+    assert "live-search-head__query" in live_resp.text
+    assert "live-search-thumb" in live_resp.text
+    assert "/product/" in live_resp.text
+
+
+def test_live_search_partial_uses_fallback_image_when_product_has_no_images(client, monkeypatch, db):
+    b = Brand.objects.create(name="NoImgBrand")
+    c = Category.objects.create(name="NoImgCategory")
+    p = Product.objects.create(
+        sku="11223344",
+        name="No image product",
+        brand=b,
+        category=c,
+        price=10,
+        stock_qty=1,
+    )
+    monkeypatch.setattr(sf_search, "_es_search_ids", lambda query, limit: [p.id])
+    r = client.get("/search/live/?q=noi", HTTP_HX_REQUEST="true")
+    assert r.status_code == 200
+    assert f"https://picsum.photos/seed/live-{p.id}/96/96" in r.text
+
+def test_live_search_uses_es_results_when_available(client, monkeypatch, db):
+    b = Brand.objects.create(name="ESBrand")
+    c = Category.objects.create(name="ESCategory")
+    p1 = Product.objects.create(sku="10000001", name="AAA", brand=b, category=c, price=1, stock_qty=1)
+    p2 = Product.objects.create(sku="10000002", name="BBB", brand=b, category=c, price=2, stock_qty=1)
+
+    monkeypatch.setattr(sf_search, "_es_search_ids", lambda query, limit: [p2.id, p1.id])
+    r = client.get("/search/live/?q=bbb", HTTP_HX_REQUEST="true")
+    assert r.status_code == 200
+    assert r.text.find("BBB") < r.text.find("AAA")
+
+
+def test_catalog_q_uses_es_ids_only(client, monkeypatch, db):
+    b = Brand.objects.create(name="CatESBrand")
+    c = Category.objects.create(name="CatESCategory")
+    p1 = Product.objects.create(sku="10010001", name="Alpha", brand=b, category=c, price=1, stock_qty=1)
+    p2 = Product.objects.create(sku="10010002", name="Beta", brand=b, category=c, price=2, stock_qty=1)
+
+    monkeypatch.setattr("shopfront.views.search_product_ids", lambda query, limit: [p2.id])
+    r = client.get("/catalog/?q=alpha")
+    assert r.status_code == 200
+    assert "Beta" in r.text
+    assert "Alpha" not in r.text
+
+
+def test_catalog_sort_by_rating_desc(client, db):
+    b = Brand.objects.create(name="RatingBrand")
+    c = Category.objects.create(name="RatingCategory")
+    low = Product.objects.create(sku="10020001", name="LowRate", brand=b, category=c, price=1, stock_qty=1)
+    high = Product.objects.create(sku="10020002", name="HighRate", brand=b, category=c, price=1, stock_qty=1)
+    User = get_user_model()
+    u1 = User.objects.create_user(username="r1", password="pass")
+    u2 = User.objects.create_user(username="r2", password="pass")
+    ProductReview.objects.create(product=low, user=u1, rating=2, text="ok")
+    ProductReview.objects.create(product=high, user=u1, rating=5, text="great")
+    ProductReview.objects.create(product=high, user=u2, rating=4, text="good")
+
+    r = client.get("/catalog/?sort=rating_desc")
+    assert r.status_code == 200
+    assert r.text.find("HighRate") < r.text.find("LowRate")
+
+
+def test_catalog_category_reset_link_preserves_sort_and_brand(client, db):
+    b = Brand.objects.create(name="B1")
+    c = Category.objects.create(name="ReviewCategory")
+    Product.objects.create(sku="11112222", name="P1", brand=b, category=c, price=10, stock_qty=2)
+    r = client.get(f"/catalog/?category={c.id}&brand={b.id}&sort=price_desc")
+    assert r.status_code == 200
+    assert "Сбросить категорию" in r.text
+    assert f'href="/catalog/?brand={b.id}&amp;sort=price_desc"' in r.text
+
+
+def test_live_search_es_unavailable_returns_empty(client, monkeypatch, db):
+    from catalog.models import Country
+    country = Country.objects.create(name="Italy", iso_code="IT")
+    b = Brand.objects.create(name="Lavazza")
+    c = Category.objects.create(name="Кофе")
+    Product.objects.create(
+        sku="20000001",
+        name="Coffee Gold",
+        brand=b,
+        category=c,
+        country_of_origin=country,
+        price=123,
+        stock_qty=4,
+    )
+
+    def _boom(*args, **kwargs):
+        raise sf_search.ESSearchUnavailable("es down")
+
+    monkeypatch.setattr(sf_search, "_es_search_ids", _boom)
+
+    r_country = client.get("/search/live/?q=italy", HTTP_HX_REQUEST="true")
+    assert r_country.status_code == 200
+    assert "Coffee Gold" not in r_country.text
+
+    r_category = client.get("/search/live/?q=кофе", HTTP_HX_REQUEST="true")
+    assert r_category.status_code == 200
+    assert "Coffee Gold" not in r_category.text
+
+    r_brand = client.get("/search/live/?q=lavazza", HTTP_HX_REQUEST="true")
+    assert r_brand.status_code == 200
+    assert "Coffee Gold" not in r_brand.text
+
+
+def test_static_info_pages(client, db):
+    assert client.get("/about/").status_code == 200
+    assert client.get("/delivery/").status_code == 200
+    assert client.get("/contacts/").status_code == 200
+
+
+def test_contacts_feedback_submits_and_schedules_notify(client, monkeypatch, db):
+    sent = {}
+
+    def _fake_delay(**kwargs):
+        sent.update(kwargs)
+        return None
+
+    monkeypatch.setattr(notify_contact_feedback, "delay", _fake_delay)
+    r = client.post(
+        "/contacts/",
+        {"name": "Ivan", "phone": "+79001234567", "message": "Нужна консультация по заказу"},
+        follow=True,
+    )
+    assert r.status_code == 200
+    assert sent["name"] == "Ivan"
+    assert sent["phone"] == "+79001234567"
+    assert "консультация" in sent["message"]
+    assert sent["source"].endswith("/contacts/")
 
 
 def test_cart_flow(client, db):
@@ -124,3 +288,170 @@ def test_checkout_company_and_individual(client_logged, user, db):
     assert str(second.subtotal) == "30.00"
     assert str(second.discount_amount) == "3.00"
     assert str(second.total) == "27.00"
+
+
+def test_checkout_mir_card_creates_fake_payment_panel(client_logged, user, db):
+    p, *_ = _prod()
+    s = client_logged.session
+    s["cart"] = {str(p.id): {"qty": 1}}
+    s.save()
+
+    r = client_logged.post(
+        "/checkout/submit/",
+        {
+            "customer_type": "individual",
+            "payment_method": "mir_card",
+            "customer_name": "Ivan",
+            "customer_phone": "+71234567890",
+            "address_text": "Street 1",
+        },
+        HTTP_HX_REQUEST="true",
+    )
+    assert r.status_code == 200
+    assert "Тестовый эквайринг" in r.text
+    order = Order.objects.filter(placed_by=user).order_by("-id").first()
+    assert order.payment_method == Order.PaymentMethod.MIR_CARD
+    payment = FakeAcquiringPayment.objects.get(order=order)
+    assert payment.status in (FakeAcquiringPayment.Status.CREATED, FakeAcquiringPayment.Status.PROCESSING)
+
+
+def test_fake_payment_event_success_marks_order_paid(client_logged, user, db):
+    p, *_ = _prod()
+    order = Order.objects.create(
+        customer_type=Order.CustomerType.INDIVIDUAL,
+        payment_method=Order.PaymentMethod.MIR_CARD,
+        customer_name="Ivan",
+        customer_phone="+79999999999",
+        address_text="Addr",
+        placed_by=user,
+    )
+    Order.objects.filter(pk=order.pk).update(status=Order.Status.NEW)
+    FakeAcquiringPayment.objects.create(
+        order=order,
+        amount=15,
+        provider_payment_id=f"fake_{order.id}",
+        status=FakeAcquiringPayment.Status.PROCESSING,
+        last_event=FakeAcquiringPayment.Event.START,
+        history=[],
+    )
+
+    r = client_logged.post(
+        f"/payments/fake/{order.id}/event/",
+        {"event": "success"},
+        HTTP_HX_REQUEST="true",
+    )
+    assert r.status_code == 200
+    assert "Оплачен" in r.text
+    order.refresh_from_db()
+    payment = FakeAcquiringPayment.objects.get(order=order)
+    assert order.status == Order.Status.PAID
+    assert payment.status == FakeAcquiringPayment.Status.PAID
+
+
+def test_product_review_upsert_create_and_update(client_logged, user, db):
+    p, *_ = _prod()
+
+    r1 = client_logged.post(
+        f"/product/{p.id}/review/",
+        {"rating": "5", "text": "Отличный товар"},
+    )
+    assert r1.status_code in (302, 303)
+    assert ProductReview.objects.filter(product=p, user=user).count() == 1
+    review = ProductReview.objects.get(product=p, user=user)
+    assert review.rating == 5
+    assert review.text == "Отличный товар"
+
+    r2 = client_logged.post(
+        f"/product/{p.id}/review/",
+        {"rating": "3", "text": "Нормально"},
+    )
+    assert r2.status_code in (302, 303)
+    assert ProductReview.objects.filter(product=p, user=user).count() == 1
+    review.refresh_from_db()
+    assert review.rating == 3
+    assert review.text == "Нормально"
+
+
+def test_product_review_upsert_requires_auth(client, db):
+    p, *_ = _prod()
+    r = client.post(f"/product/{p.id}/review/", {"rating": "4", "text": "ok"})
+    assert r.status_code in (302, 303)
+    assert "/account/login/" in r.headers.get("Location", "")
+
+
+def test_product_page_contains_reviews_block(client_logged, user, db):
+    p, *_ = _prod()
+    ProductReview.objects.create(product=p, user=user, rating=4, text="Good")
+    r = client_logged.get(f"/product/{p.id}/")
+    assert r.status_code == 200
+    assert 'id="product-reviews"' in r.text
+    assert "Отзывы и рейтинг" in r.text
+    assert "Good" in r.text
+
+
+def test_product_review_upsert_htmx_returns_updated_reviews_panel(client_logged, user, db):
+    p, *_ = _prod()
+    r = client_logged.post(
+        f"/product/{p.id}/review/",
+        {"rating": "5", "text": "new htmx text"},
+        HTTP_HX_REQUEST="true",
+    )
+    assert r.status_code == 200
+    assert 'id="product-reviews"' in r.text
+    assert "new htmx text" in r.text
+    assert "5" in r.text
+    assert "<textarea" in r.text
+    assert ProductReview.objects.filter(product=p, user=user).count() == 1
+    assert ProductReview.objects.get(product=p, user=user).rating == 5
+
+
+def test_product_review_delete_by_author_htmx(client_logged, user, db):
+    p, *_ = _prod()
+    ProductReview.objects.create(product=p, user=user, rating=4, text="to delete")
+    r = client_logged.post(
+        f"/product/{p.id}/review/delete/",
+        HTTP_HX_REQUEST="true",
+    )
+    assert r.status_code == 200
+    assert ProductReview.objects.filter(product=p, user=user).count() == 0
+    assert 'id="product-reviews"' in r.text
+
+
+def test_product_review_comment_create_update_delete_htmx(client_logged, user, db):
+    p, *_ = _prod()
+    review = ProductReview.objects.create(product=p, user=user, rating=5, text="base")
+
+    r_create = client_logged.post(
+        f"/product/{p.id}/review/{review.id}/comment/",
+        {"text": "first comment"},
+        HTTP_HX_REQUEST="true",
+    )
+    assert r_create.status_code == 200
+    comment = ProductReviewComment.objects.get(review=review, user=user)
+    assert comment.text == "first comment"
+
+    r_update = client_logged.post(
+        f"/product/{p.id}/comment/{comment.id}/update/",
+        {"text": "updated comment"},
+        HTTP_HX_REQUEST="true",
+    )
+    assert r_update.status_code == 200
+    comment.refresh_from_db()
+    assert comment.text == "updated comment"
+
+    r_delete = client_logged.post(
+        f"/product/{p.id}/comment/{comment.id}/delete/",
+        HTTP_HX_REQUEST="true",
+    )
+    assert r_delete.status_code == 200
+    assert ProductReviewComment.objects.filter(pk=comment.id).count() == 0
+
+
+def test_rating_visible_in_product_card_on_home(client_logged, user, db):
+    p, *_ = _prod()
+    ProductReview.objects.create(product=p, user=user, rating=4, text="ok")
+
+    r = client_logged.get("/")
+    assert r.status_code == 200
+    assert "★" in r.text
+    assert "4.0" in r.text

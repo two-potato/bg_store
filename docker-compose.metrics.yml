@@ -38,7 +38,7 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana
+    image: grafana/grafana:11.6.0
     container_name: bg-grafana
     volumes:
       - grafana:/var/lib/grafana

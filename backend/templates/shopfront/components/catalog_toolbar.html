@@ -1,11 +1,11 @@
 <div class="mb-3">
-  <form method="get" class="flex flex-col md:flex-row gap-2 items-stretch md:items-center">
-    <input class="input input-bordered w-full md:w-auto flex-1" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Поиск по названию" aria-label="Поиск">
-
-    <select class="select select-bordered md:w-56" name="sort" aria-label="Сортировка" onchange="this.form.submit()">
+  <form method="get" class="catalog-toolbar">
+    <label class="catalog-toolbar__label" for="catalog-sort">Сортировка</label>
+    <select id="catalog-sort" class="select select-bordered catalog-toolbar__select" name="sort" aria-label="Сортировка" onchange="this.form.submit()">
       <option value="new" {% if sort|default:'new' == 'new' %}selected{% endif %}>Сначала новинки</option>
       <option value="price_asc" {% if sort == 'price_asc' %}selected{% endif %}>По возрастанию цены</option>
       <option value="price_desc" {% if sort == 'price_desc' %}selected{% endif %}>По убыванию цены</option>
+      <option value="rating_desc" {% if sort == 'rating_desc' %}selected{% endif %}>По рейтингу</option>
       <option value="name" {% if sort == 'name' %}selected{% endif %}>По алфавиту</option>
       <option value="promo" {% if sort == 'promo' %}selected{% endif %}>Сначала акции</option>
     </select>
@@ -14,8 +14,5 @@
     {% if request.GET.category %}<input type="hidden" name="category" value="{{ request.GET.category }}">{% endif %}
     {% if request.GET.brand %}<input type="hidden" name="brand" value="{{ request.GET.brand }}">{% endif %}
     {% if request.GET.tag %}<input type="hidden" name="tag" value="{{ request.GET.tag }}">{% endif %}
-
-    <button class="btn btn-primary">Найти</button>
-    <a class="btn btn-outline" href="/catalog/">Сброс</a>
   </form>
 </div>

@@ -42,6 +42,11 @@
                    {% if form_data.payment_method == "invoice" %}checked{% endif %}>
             <span class="label-text">По счёту</span>
           </label>
+          <label class="label cursor-pointer gap-2">
+            <input class="radio radio-sm" type="radio" name="payment_method" value="mir_card"
+                   {% if form_data.payment_method == "mir_card" %}checked{% endif %}>
+            <span class="label-text">Карта МИР (тест)</span>
+          </label>
         </div>
       </div>
 

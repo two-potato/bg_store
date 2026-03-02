@@ -1,0 +1,16 @@
+{% extends "shopfront/base.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-md mx-auto">
+  <div class="card bg-base-100 border border-base-200 shadow-sm">
+    <div class="card-body p-5">
+      <h1 class="text-xl font-semibold mb-2">{% trans "Вход отменён" %}</h1>
+      <p class="text-sm text-base-content/70 mb-4">
+        {% trans "Вы отменили вход через внешний аккаунт. Можно вернуться и попробовать снова." %}
+      </p>
+      <a class="btn btn-primary w-full" href="/account/login/" hx-boost="false">{% trans "Вернуться ко входу" %}</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

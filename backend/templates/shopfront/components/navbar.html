@@ -1,40 +1,73 @@
-<header class="site-header-v2">
+<header class="site-header-v3">
   <div class="container mx-auto px-3">
-    <div class="navbar site-header-v2__row">
-      <div class="navbar-start gap-2">
-        <a class="site-header-v2__logo" href="/" hx-boost="false">BG</a>
-        <a class="btn btn-sm site-header-v2__catalog" href="/catalog/" hx-boost="false">{% include 'shopfront/icons/category.svg' %}<span class="hidden md:inline">Каталог</span></a>
+    <div class="site-header-v3__row">
+      <div class="site-header-v3__left">
+        <a class="site-header-v3__logo" href="/" hx-boost="false">BG</a>
+        <nav class="site-header-v3__nav hidden lg:flex" aria-label="Основная навигация">
+          <details class="site-catalog-menu">
+            <summary class="btn btn-sm site-header-v3__nav-btn">{% include 'shopfront/icons/category.svg' %}<span>Каталог</span></summary>
+            <div class="site-catalog-menu__panel">
+              <div class="site-catalog-menu__inner">
+                <div class="site-catalog-menu__head">
+                  <a href="/catalog/" hx-boost="false" class="site-catalog-menu__all">Открыть весь каталог</a>
+                </div>
+                <div class="site-catalog-menu__grid">
+                  {% for c in header_categories %}
+                    <a href="/catalog/?category={{ c.id }}" hx-boost="false" class="site-catalog-menu__item">{{ c.name }}</a>
+                  {% empty %}
+                    <span class="site-catalog-menu__empty">Категории пока не добавлены</span>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </details>
+          <a href="/about/" hx-boost="false" class="btn btn-sm site-header-v3__nav-btn">О нас</a>
+          <a href="/delivery/" hx-boost="false" class="btn btn-sm site-header-v3__nav-btn">Доставка</a>
+          <a href="/contacts/" hx-boost="false" class="btn btn-sm site-header-v3__nav-btn">Контакты</a>
+        </nav>
       </div>
-      <div class="navbar-center hidden md:flex">
-        <form action="/catalog/" role="search" class="site-header-v2__search-wrap">
-          <input class="input input-bordered input-sm site-header-v2__search" name="q" type="search" placeholder="Поиск по товарам" aria-label="Поиск">
-          <button class="btn btn-sm btn-primary site-header-v2__search-btn" type="submit">{% include 'shopfront/icons/search.svg' %}</button>
-        </form>
-      </div>
-      <div class="navbar-end gap-2">
-        <a class="btn btn-sm site-header-v2__icon-btn md:hidden" href="/catalog/" hx-boost="false" aria-label="Поиск">{% include 'shopfront/icons/search.svg' %}</a>
+
+      <form action="/catalog/" role="search" class="site-header-v2__search-wrap site-header-v3__search hidden md:flex">
+        <input class="input input-bordered input-sm site-header-v2__search"
+               name="q"
+               type="search"
+               placeholder="Поиск по товарам"
+               aria-label="Поиск"
+               autocomplete="off"
+               hx-get="/search/live/"
+               hx-trigger="input changed delay:220ms, search"
+               hx-target="#live-search-results"
+               hx-select="*"
+               hx-swap="innerHTML"
+               hx-indicator="#htmx-indicator">
+        <button class="btn btn-sm btn-primary site-header-v2__search-btn" type="submit">{% include 'shopfront/icons/search.svg' %}</button>
+        <div id="live-search-results" class="live-search-results" aria-live="polite"></div>
+      </form>
+
+      <div class="site-header-v3__right">
         <div class="dropdown dropdown-end">
-          <div tabindex="0" role="button" class="btn btn-sm site-header-v2__icon-btn" aria-label="Меню аккаунта">{% include 'shopfront/icons/user.svg' %}</div>
+          <div tabindex="0" role="button" class="btn btn-sm site-header-v3__icon-btn" aria-label="Меню аккаунта">{% include 'shopfront/icons/user.svg' %}</div>
           <ul tabindex="0" class="dropdown-content menu rounded-box z-[1] w-56 p-2 shadow site-header-v2__menu">
-          {% if request.user.is_authenticated %}
-            {% if request.user.is_staff %}
-              <li><a hx-boost="false" href="/admin/">{% include 'shopfront/icons/gauge.svg' %}<span>Админка</span></a></li>
-              <li><hr></li>
+            {% if request.user.is_authenticated %}
+              {% if request.user.is_staff %}
+                <li><a hx-boost="false" href="/admin/">{% include 'shopfront/icons/gauge.svg' %}<span>Админка</span></a></li>
+                <li><hr></li>
+              {% endif %}
+              <li><a href="/account/" hx-boost="false">{% include 'shopfront/icons/user.svg' %}<span>Личный кабинет</span></a></li>
+              <li><a href="/account/comments/" hx-boost="false">{% include 'shopfront/icons/tag.svg' %}<span>Мои комментарии</span></a></li>
+              <li><a hx-boost="false" href="/account/logout/">{% include 'shopfront/icons/logout.svg' %}<span>Выйти</span></a></li>
+            {% else %}
+              <li><a href="/account/login/" hx-boost="false">{% include 'shopfront/icons/login.svg' %}<span>Войти</span></a></li>
+              <li><a href="/account/register/" hx-boost="false">{% include 'shopfront/icons/user-plus.svg' %}<span>Регистрация</span></a></li>
             {% endif %}
-            <li><a href="/account/" hx-boost="false">{% include 'shopfront/icons/user.svg' %}<span>Личный кабинет</span></a></li>
-            <li><a hx-boost="false" href="/account/logout/">{% include 'shopfront/icons/logout.svg' %}<span>Выйти</span></a></li>
-          {% else %}
-            <li><a href="/account/login/" hx-boost="false">{% include 'shopfront/icons/login.svg' %}<span>Войти</span></a></li>
-            <li><a href="/account/register/" hx-boost="false">{% include 'shopfront/icons/user-plus.svg' %}<span>Регистрация</span></a></li>
-          {% endif %}
-        </ul>
-      </div>
+          </ul>
+        </div>
         <div class="indicator">
-          <a id="toggle-cart" class="btn btn-sm site-header-v2__icon-btn" href="/cart/" hx-boost="false" aria-label="Открыть корзину">
-          <span class="cart-icon-wrap inline-flex items-center">
-            <span id="cart-icon-outline">{% include 'shopfront/icons/shopping-cart.svg' %}</span>
-            <span id="cart-icon-filled" class="hidden">{% include 'shopfront/icons/shopping-cart-filled.svg' %}</span>
-          </span>
+          <a id="toggle-cart" class="btn btn-sm site-header-v3__icon-btn" href="/cart/" hx-boost="false" aria-label="Открыть корзину">
+            <span class="cart-icon-wrap inline-flex items-center">
+              <span id="cart-icon-outline">{% include 'shopfront/icons/shopping-cart.svg' %}</span>
+              <span id="cart-icon-filled" class="hidden">{% include 'shopfront/icons/shopping-cart-filled.svg' %}</span>
+            </span>
           </a>
           <span id="cart-badge"
                 class="indicator-item badge badge-error hidden cart-badge-pill"
@@ -49,5 +82,6 @@
         </div>
       </div>
     </div>
+
   </div>
 </header>

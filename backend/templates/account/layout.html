@@ -42,6 +42,9 @@
          hx-select="#account-main-content"
          hx-swap="outerHTML"
          hx-push-url="true">Мои заказы</a>
+      <a class="{% if account_section == 'comments' %}is-active{% endif %}"
+         href="/account/comments/"
+         hx-boost="false">Мои комментарии</a>
       <a href="/account/logout/">Выйти</a>
     </nav>
   </aside>

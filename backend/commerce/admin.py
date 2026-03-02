@@ -1,5 +1,6 @@
 from django.contrib import admin, messages
 from django.db import transaction
+import logging
 
 from .models import (
     LegalEntity,
@@ -8,6 +9,8 @@ from .models import (
     MembershipRequest,
     LegalEntityCreationRequest,
 )
+
+log = logging.getLogger("commerce")
 
 
 @admin.register(LegalEntity)
@@ -56,16 +59,27 @@ class MembershipRequestAdmin(admin.ModelAdmin):
                 mr.status = RequestStatus.objects.get(code='approved')
                 mr.save(update_fields=["status"])
                 approved += 1
+                log.info(
+                    "membership_request_approved_admin_action",
+                    extra={
+                        "request_id": mr.id,
+                        "legal_entity_id": mr.legal_entity_id,
+                        "applicant_id": mr.applicant_id,
+                        "admin_user_id": request.user.id,
+                    },
+                )
         if approved:
             messages.success(request, f"Одобрено: {approved}")
         if skipped:
             messages.info(request, f"Пропущено (не pending): {skipped}")
+        log.info("membership_requests_admin_action_done", extra={"approved": approved, "skipped": skipped, "admin_user_id": request.user.id})
 
     @admin.action(description="Отклонить выбранные заявки")
     def reject_requests(self, request, queryset):
         from .models import RequestStatus
         updated = queryset.filter(status__code='pending').update(status=RequestStatus.objects.get(code='rejected'))
         messages.success(request, f"Отклонено: {updated}")
+        log.info("membership_requests_rejected_admin_action", extra={"updated": updated, "admin_user_id": request.user.id})
 
 
 @admin.register(LegalEntityCreationRequest)
@@ -105,13 +119,24 @@ class LegalEntityCreationRequestAdmin(admin.ModelAdmin):
                 cr.status = RequestStatus.objects.get(code='approved')
                 cr.save(update_fields=["status"])
                 created += 1
+                log.info(
+                    "entity_creation_approved_admin_action",
+                    extra={
+                        "request_id": cr.id,
+                        "legal_entity_id": le.id,
+                        "applicant_id": cr.applicant_id,
+                        "admin_user_id": request.user.id,
+                    },
+                )
         if created:
             messages.success(request, f"Создано юрлиц: {created}")
         if skipped:
             messages.info(request, f"Пропущено (не pending): {skipped}")
+        log.info("entity_creations_admin_action_done", extra={"created": created, "skipped": skipped, "admin_user_id": request.user.id})
 
     @admin.action(description="Отклонить создание юрлица")
     def reject_creations(self, request, queryset):
         from .models import RequestStatus
         updated = queryset.filter(status__code='pending').update(status=RequestStatus.objects.get(code='rejected'))
         messages.success(request, f"Отклонено заявок: {updated}")
+        log.info("entity_creations_rejected_admin_action", extra={"updated": updated, "admin_user_id": request.user.id})

@@ -1,14 +1,29 @@
 from django.urls import path
 from .views import (
     HomeView, CatalogView, ProductDetailView, TwaHomeView,
+    AboutPageView, DeliveryPageView, ContactsPageView,
+    LiveSearchView,
+    ProductReviewUpsertView, ProductReviewDeleteView,
+    ProductReviewCommentCreateView, ProductReviewCommentUpdateView, ProductReviewCommentDeleteView,
+    FakePaymentPageView,
+    FakePaymentEventView,
     CartBadgeView, CartPanelView, CartAddView, CartRemoveView, CartClearView, CartUpdateView, CartPageView,
     CheckoutPageView, CheckoutSubmitView,
 )
 
 urlpatterns = [
     path("", HomeView.as_view(), name="home"),
+    path("about/", AboutPageView.as_view(), name="about"),
+    path("delivery/", DeliveryPageView.as_view(), name="delivery"),
+    path("contacts/", ContactsPageView.as_view(), name="contacts"),
     path("catalog/", CatalogView.as_view(), name="catalog"),
+    path("search/live/", LiveSearchView.as_view(), name="live_search"),
     path("product/<int:pk>/", ProductDetailView.as_view(), name="product"),
+    path("product/<int:pk>/review/", ProductReviewUpsertView.as_view(), name="product_review_upsert"),
+    path("product/<int:pk>/review/delete/", ProductReviewDeleteView.as_view(), name="product_review_delete"),
+    path("product/<int:pk>/review/<int:review_id>/comment/", ProductReviewCommentCreateView.as_view(), name="product_review_comment_create"),
+    path("product/<int:pk>/comment/<int:comment_id>/update/", ProductReviewCommentUpdateView.as_view(), name="product_review_comment_update"),
+    path("product/<int:pk>/comment/<int:comment_id>/delete/", ProductReviewCommentDeleteView.as_view(), name="product_review_comment_delete"),
     path("cart/badge/", CartBadgeView.as_view(), name="cart_badge"),
     path("cart/", CartPageView.as_view(), name="cart_page"),
     path("cart/panel/", CartPanelView.as_view(), name="cart_panel"),
@@ -19,4 +34,6 @@ urlpatterns = [
     path("twa/", TwaHomeView.as_view(), name="twa_home"),
     path("checkout/", CheckoutPageView.as_view(), name="checkout"),
     path("checkout/submit/", CheckoutSubmitView.as_view(), name="checkout_submit"),
+    path("payments/fake/<int:order_id>/", FakePaymentPageView.as_view(), name="fake_payment_page"),
+    path("payments/fake/<int:order_id>/event/", FakePaymentEventView.as_view(), name="fake_payment_event"),
 ]

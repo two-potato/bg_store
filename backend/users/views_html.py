@@ -184,10 +184,30 @@ def account_order_detail(request, order_id: int):
     )
     if not order:
         raise Http404("Order not found")
+    fake_payment = getattr(order, "fake_payment", None)
     return render(
         request,
         "account/order_detail.html",
-        {"order": order, "profile": profile, "account_section": "orders"},
+        {"order": order, "fake_payment": fake_payment, "profile": profile, "account_section": "orders"},
+    )
+
+
+@log_calls()
+def account_comments(request):
+    if not request.user.is_authenticated:
+        return redirect("/account/login/?next=/account/comments/")
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    from catalog.models import ProductReviewComment
+
+    comments = (
+        ProductReviewComment.objects.select_related("review__product")
+        .filter(user=request.user)
+        .order_by("-created_at", "-id")[:200]
+    )
+    return render(
+        request,
+        "account/comments.html",
+        {"comments": comments, "profile": profile, "account_section": "comments"},
     )
 
 
@@ -221,7 +241,19 @@ def login_view(request):
             login(request, user)
             return redirect(request.GET.get("next") or "account_home")
         messages.error(request, "Неверные учётные данные")
-    return render(request, "account/login.html", {"form": form})
+    return render(
+        request,
+        "account/login.html",
+        {
+            "form": form,
+            "google_oauth_enabled": bool(
+                getattr(settings, "SOCIALACCOUNT_PROVIDERS", {})
+                .get("google", {})
+                .get("APP", {})
+                .get("client_id")
+            ),
+        },
+    )
 
 
 @require_http_methods(["GET", "POST"])

@@ -1,0 +1,35 @@
+{% if show %}
+  <div class="live-search-panel" role="listbox" aria-label="Результаты поиска">
+    <div class="live-search-head">
+      <span class="live-search-head__label">Быстрый поиск</span>
+      <span class="live-search-head__query">«{{ q }}»</span>
+    </div>
+    {% if products %}
+      <ul class="live-search-list">
+        {% for p in products %}
+          <li class="live-search-row">
+            <a href="/product/{{ p.id }}/" hx-boost="false" class="live-search-item">
+              <span class="live-search-thumb">
+                {% with img=p.images.first %}
+                  {% if img %}
+                    <img src="{{ img.url }}" alt="{{ img.alt|default:p.name }}" loading="lazy">
+                  {% else %}
+                    <img src="https://picsum.photos/seed/live-{{ p.id }}/96/96" alt="{{ p.name }}" loading="lazy">
+                  {% endif %}
+                {% endwith %}
+              </span>
+              <span class="live-search-meta">
+                <span class="live-search-title">{{ p.name }}</span>
+                <span class="live-search-subtitle">{{ p.brand|default:"Без бренда" }}{% if p.category %} · {{ p.category.name }}{% endif %}</span>
+              </span>
+              <span class="live-search-price">{{ p.price }} ₽</span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+      <a href="/catalog/?q={{ q|urlencode }}" class="live-search-all" hx-boost="false">Смотреть все результаты</a>
+    {% else %}
+      <div class="live-search-empty">По запросу «{{ q }}» ничего не найдено</div>
+    {% endif %}
+  </div>
+{% endif %}

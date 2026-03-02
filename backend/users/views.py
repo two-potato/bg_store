@@ -10,21 +10,27 @@ import hashlib
 from django.conf import settings
 from rest_framework_simplejwt.tokens import AccessToken
 from core.logging_utils import log_calls
+import logging
+
+log = logging.getLogger("users")
 
 def verify_init_data(init_data: str) -> dict | None:
     try:
         parsed = urllib.parse.parse_qs(init_data, keep_blank_values=True)
         received_hash = parsed.pop("hash", [None])[0]
         if not received_hash:
+            log.warning("tg_init_data_missing_hash")
             return None
         data_check_string = "\n".join(f"{k}={','.join(v)}" for k,v in sorted(parsed.items()))
         secret_key = hashlib.sha256(("WebAppData" + settings.TELEGRAM_BOT_TOKEN).encode()).digest()
         h = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
         if h != received_hash:
+            log.warning("tg_init_data_hash_mismatch")
             return None
         user_json = parsed.get("user", [None])[0]
         return json.loads(user_json) if user_json else {}
     except Exception:
+        log.exception("tg_init_data_verify_error")
         return None
 
 @api_view(["GET"])
@@ -44,6 +50,7 @@ def tg_webapp_auth(request):
     init_data = request.data.get("initData","")
     tg_user = verify_init_data(init_data)
     if tg_user is None:
+        log.warning("tg_webapp_auth_invalid_init_data")
         return Response({"detail":"invalid initData"}, status=403)
     telegram_id = tg_user.get("id")
     username = tg_user.get("username") or f"tg_{telegram_id}"
@@ -54,4 +61,5 @@ def tg_webapp_auth(request):
     profile.telegram_username = username
     profile.save()
     token = str(AccessToken.for_user(user))
+    log.info("tg_webapp_auth_ok", extra={"user_id": user.id, "telegram_id": telegram_id})
     return Response({"access": token})

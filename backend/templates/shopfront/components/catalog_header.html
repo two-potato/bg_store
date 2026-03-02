@@ -2,9 +2,12 @@
   <div>
     <h1 class="text-xl font-semibold m-0">Каталог</h1>
     <div class="text-sm text-base-content/60">Найдено: {{ total_count }}</div>
-    <div class="mt-1 flex flex-wrap gap-1">
+    <div class="mt-1 flex flex-wrap gap-1 catalog-active-filters">
       {% if q %}<span class="badge badge-ghost">Поиск: “{{ q }}”</span>{% endif %}
-      {% if sel_category %}<span class="badge badge-ghost">Категория: {{ sel_category.name }}</span>{% endif %}
+      {% if sel_category %}
+        <span class="badge badge-ghost">Категория: {{ sel_category.name }}</span>
+        <a class="badge badge-outline" href="{{ category_reset_url }}">Сбросить категорию</a>
+      {% endif %}
       {% if sel_brand %}<span class="badge badge-ghost">Бренд: {{ sel_brand.name }}</span>{% endif %}
       {% if request.GET.tag %}<span class="badge badge-ghost">Тег: {{ request.GET.tag }}</span>{% endif %}
       {% if q or sel_category or sel_brand or request.GET.tag %}
@@ -16,4 +19,3 @@
     {% include 'shopfront/components/catalog_toolbar.html' %}
   </div>
 </div>
-

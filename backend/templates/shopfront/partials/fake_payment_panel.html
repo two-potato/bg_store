@@ -1,0 +1,83 @@
+<div id="checkout-form-block">
+  <div class="card bg-base-100">
+    <div class="card-body">
+      <h2 class="text-lg font-semibold">Тестовый эквайринг</h2>
+      <p class="text-sm text-base-content/70">Заказ #{{ order.id }} · Платеж {{ payment.provider_payment_id }}</p>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2 text-sm">
+        <div><span class="text-base-content/60">Статус платежа:</span> <b>{{ payment.get_status_display }}</b></div>
+        <div><span class="text-base-content/60">Событие:</span> <b>{{ payment.get_last_event_display }}</b></div>
+        <div><span class="text-base-content/60">Статус заказа:</span> <b>{{ order.get_status_display }}</b></div>
+        <div><span class="text-base-content/60">Сумма:</span> <b>{{ payment.amount }} ₽</b></div>
+      </div>
+
+      {% if payment.status == "processing" %}
+      <div class="alert alert-info text-sm mt-3">
+        Тестовый webhook запланирован: через 2 секунды платеж автоматически перейдет в успешный.
+      </div>
+      <div
+        hx-post="/payments/fake/{{ order.id }}/event/"
+        hx-vals='{"event":"success"}'
+        hx-trigger="load delay:2s"
+        hx-target="#checkout-form-block"
+        hx-swap="outerHTML"
+        class="hidden"
+        aria-hidden="true"></div>
+      {% endif %}
+
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button class="btn btn-sm btn-primary" type="button"
+                hx-post="/payments/fake/{{ order.id }}/event/"
+                hx-vals='{"event":"success"}'
+                hx-target="#checkout-form-block"
+                hx-swap="outerHTML">Успех</button>
+        <button class="btn btn-sm btn-warning" type="button"
+                hx-post="/payments/fake/{{ order.id }}/event/"
+                hx-vals='{"event":"require_3ds"}'
+                hx-target="#checkout-form-block"
+                hx-swap="outerHTML">Запрос 3DS</button>
+        <button class="btn btn-sm btn-secondary" type="button"
+                hx-post="/payments/fake/{{ order.id }}/event/"
+                hx-vals='{"event":"pass_3ds"}'
+                hx-target="#checkout-form-block"
+                hx-swap="outerHTML">3DS пройден</button>
+        <button class="btn btn-sm btn-error" type="button"
+                hx-post="/payments/fake/{{ order.id }}/event/"
+                hx-vals='{"event":"fail"}'
+                hx-target="#checkout-form-block"
+                hx-swap="outerHTML">Ошибка</button>
+        <button class="btn btn-sm btn-outline" type="button"
+                hx-post="/payments/fake/{{ order.id }}/event/"
+                hx-vals='{"event":"cancel"}'
+                hx-target="#checkout-form-block"
+                hx-swap="outerHTML">Отмена</button>
+        <button class="btn btn-sm btn-outline" type="button"
+                hx-post="/payments/fake/{{ order.id }}/event/"
+                hx-vals='{"event":"refund"}'
+                hx-target="#checkout-form-block"
+                hx-swap="outerHTML">Возврат</button>
+      </div>
+
+      <div class="mt-3">
+        <h3 class="text-sm font-semibold mb-1">История событий</h3>
+        {% if payment.history %}
+          <ul class="text-xs divide-y divide-base-200 border border-base-200 rounded-lg">
+            {% for row in payment.history reversed %}
+              <li class="px-2 py-1 flex justify-between gap-2">
+                <span>{{ row.at }} · {{ row.event_label }} → {{ row.status_label }}</span>
+                {% if row.note %}<span class="text-base-content/60">{{ row.note }}</span>{% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="text-xs text-base-content/60">История пока пустая.</div>
+        {% endif %}
+      </div>
+
+      <div class="grid gap-2 mt-3">
+        <a class="btn btn-neutral" href="/account/orders/{{ order.id }}/" hx-boost="false">Открыть заказ</a>
+        <a class="btn btn-outline" href="/account/orders/" hx-boost="false">К моим заказам</a>
+      </div>
+    </div>
+  </div>
+</div>

@@ -48,6 +48,42 @@ def test_order_status_changed_schedules_email_task(monkeypatch, user):
     assert calls[0]["previous_status"] == Order.Status.NEW
 
 
+def test_order_status_changed_schedules_telegram_task(monkeypatch, user):
+    calls = []
+
+    def fake_delay(**kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr("orders.signals.notify_order_status_telegram.delay", fake_delay)
+
+    order = Order.objects.create(placed_by=user)
+    calls.clear()
+
+    order.status = Order.Status.DELIVERING
+    order.save(update_fields=["status", "updated_at"])
+
+    assert len(calls) == 1
+    assert calls[0]["order_id"] == order.id
+    assert calls[0]["event"] == "status_changed"
+    assert calls[0]["previous_status"] == Order.Status.NEW
+
+
+def test_order_created_schedules_telegram_task(monkeypatch, user):
+    calls = []
+
+    def fake_delay(**kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr("orders.signals.notify_order_status_telegram.delay", fake_delay)
+
+    order = Order.objects.create(placed_by=user)
+    assert order.id is not None
+    assert len(calls) == 1
+    assert calls[0]["order_id"] == order.id
+    assert calls[0]["event"] == "created"
+    assert calls[0]["previous_status"] is None
+
+
 def test_order_save_without_status_change_does_not_schedule(monkeypatch, user):
     calls = []
 

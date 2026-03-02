@@ -30,6 +30,7 @@ compactor:
   working_directory: /loki/compactor
   shared_store: filesystem
 limits_config:
+  volume_enabled: true
   ingestion_rate_mb: 4
   ingestion_burst_size_mb: 6
 chunk_store_config:

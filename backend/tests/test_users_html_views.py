@@ -2,6 +2,7 @@ import pytest
 from orders.models import Order
 from commerce.models import LegalEntity, LegalEntityMembership, DeliveryAddress, LegalEntityCreationRequest
 from users.models import UserProfile
+from catalog.models import Product, ProductReview, ProductReviewComment
 
 pytestmark = pytest.mark.django_db
 
@@ -29,6 +30,31 @@ def test_user_profile_created_automatically(client, db):
     User = get_user_model()
     u = User.objects.create_user(username="auto_profile_u", password="pass")
     assert UserProfile.objects.filter(user=u).exists()
+
+
+def test_user_email_syncs_to_profile_on_user_save(db):
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    u = User.objects.create_user(username="sync_u", password="pass", email="first@example.com")
+    p = UserProfile.objects.get(user=u)
+    assert p.contact_email == "first@example.com"
+
+    u.email = "second@example.com"
+    u.save(update_fields=["email"])
+    p.refresh_from_db()
+    assert p.contact_email == "second@example.com"
+
+
+def test_profile_email_syncs_to_user_on_profile_save(db):
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    u = User.objects.create_user(username="sync_p", password="pass", email="user@example.com")
+    p = UserProfile.objects.get(user=u)
+
+    p.contact_email = "profile@example.com"
+    p.save(update_fields=["contact_email"])
+    u.refresh_from_db()
+    assert u.email == "profile@example.com"
 
 
 def test_account_addresses_htmx_flow(client_logged, user, db):
@@ -114,6 +140,24 @@ def test_account_order_detail_owner_only(client, client_logged, user, db):
     assert r2.status_code == 404
 
 
+def test_account_comments_page_lists_only_user_comments(client_logged, user, db):
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+
+    product = Product.objects.create(sku="12345678", name="Test product")
+    own_review = ProductReview.objects.create(product=product, user=user, rating=5, text="Good")
+    ProductReviewComment.objects.create(review=own_review, user=user, text="Мой комментарий")
+
+    other = User.objects.create_user(username="u3", password="pass")
+    other_review = ProductReview.objects.create(product=product, user=other, rating=4, text="Other")
+    ProductReviewComment.objects.create(review=other_review, user=other, text="Чужой комментарий")
+
+    r = client_logged.get("/account/comments/")
+    assert r.status_code == 200
+    assert "Мой комментарий" in r.text
+    assert "Чужой комментарий" not in r.text
+
+
 def test_login_register_logout(client, user):
     # login GET
     r0 = client.get("/account/login/")
@@ -137,6 +181,18 @@ def test_login_register_logout(client, user):
     # logout
     r5 = client.get("/account/logout/")
     assert r5.status_code in (302, 303)
+
+
+def test_login_page_google_button_state(client, settings):
+    settings.SOCIALACCOUNT_PROVIDERS["google"]["APP"]["client_id"] = ""
+    r_disabled = client.get("/account/login/")
+    assert r_disabled.status_code == 200
+    assert "Войти через Google (не настроено)" in r_disabled.text
+
+    settings.SOCIALACCOUNT_PROVIDERS["google"]["APP"]["client_id"] = "client-id"
+    r_enabled = client.get("/account/login/")
+    assert r_enabled.status_code == 200
+    assert "/account/social/google/login/" in r_enabled.text
 
 
 def test_twa_login_flow(monkeypatch, client):

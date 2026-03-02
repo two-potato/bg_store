@@ -1,11 +1,13 @@
 apiVersion: 1
+
 providers:
-  - name: 'Default'
+  - name: Bad Guys Shop
     orgId: 1
-    folder: ''
+    folder: Bad Guys Shop
     type: file
     disableDeletion: false
-    updateIntervalSeconds: 30
+    updateIntervalSeconds: 15
     allowUiUpdates: true
     options:
       path: /etc/grafana/dashboards
+      foldersFromFilesStructure: false

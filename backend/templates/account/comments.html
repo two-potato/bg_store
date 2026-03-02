@@ -1,0 +1,36 @@
+{% extends "account/layout.html" %}
+{% load tz %}
+{% block account_main %}
+<section id="account-main-content" class="cabinet-dark-main">
+  <div class="cabinet-dark-hero compact">
+    <div class="cabinet-dark-hero-title">Мои комментарии</div>
+    <div class="cabinet-dark-hero-sub">Ваши комментарии к отзывам по товарам.</div>
+  </div>
+  <section class="cabinet-dark-panel">
+    <h2 class="cabinet-dark-panel-title">Список комментариев</h2>
+    {% if comments %}
+      <div class="overflow-x-auto">
+        <table class="table table-zebra table-sm">
+          <thead>
+            <tr><th>Товар</th><th>Комментарий</th><th>Дата</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for c in comments %}
+              <tr>
+                <td class="font-medium">{{ c.review.product.name }}</td>
+                <td class="max-w-[520px] whitespace-pre-line">{{ c.text }}</td>
+                <td>{{ c.created_at|timezone:"Europe/Moscow"|date:"d.m.Y H:i" }}</td>
+                <td class="text-right">
+                  <a class="btn btn-ghost btn-xs" href="/product/{{ c.review.product_id }}/" hx-boost="false">Открыть товар</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="alert">У вас пока нет комментариев.</div>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

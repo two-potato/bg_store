@@ -36,31 +36,17 @@ INSTALLED_APPS = [
 ]
 
 JAZZMIN_SETTINGS = {
-    "site_title": "BG Shop Admin",
-    "site_header": "Bad Guys Shop",
-    "site_brand": "BG Shop",
-    "welcome_sign": "Управление магазином",
-    "copyright": "Bad Guys Shop",
+    "site_title": "Admin",
+    "site_header": "Admin",
+    "site_brand": "Admin",
+    "welcome_sign": "Welcome to admin",
     "show_sidebar": True,
     "navigation_expanded": True,
-    "hide_apps": [],
-    "hide_models": [],
-    "order_with_respect_to": [
-        "orders",
-        "commerce",
-        "catalog",
-        "users",
-    ],
-    "icons": {
-        "orders.Order": "fas fa-cart-shopping",
-        "orders.OrderItem": "fas fa-box",
-        "commerce.LegalEntity": "fas fa-building",
-        "commerce.DeliveryAddress": "fas fa-location-dot",
-        "catalog.Product": "fas fa-tags",
-        "users.User": "fas fa-user",
-    },
-    "custom_links": {},
-    "show_ui_builder": False,
+}
+
+JAZZMIN_UI_TWEAKS = {
+    "theme": "darkly",
+    "dark_mode_theme": "darkly",
 }
 
 MIDDLEWARE = [
@@ -111,6 +97,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "shopfront.context_processors.cart_badge",
+                "shopfront.context_processors.header_categories",
             ],
         },
     }
@@ -146,17 +133,21 @@ LOGIN_URL = "/account/login/"
 # Google provider keys (set in environment for production)
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
+        "SCOPE": ["profile", "email"],
+        "AUTH_PARAMS": {"prompt": "select_account"},
         "APP": {
             "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
             "secret": os.getenv("GOOGLE_CLIENT_SECRET", ""),
             "key": "",
-        }
+        },
     }
 }
+SOCIALACCOUNT_LOGIN_ON_GET = True
+SOCIALACCOUNT_AUTO_SIGNUP = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_DIRS = [ BASE_DIR / "static" ]
+STATICFILES_DIRS = [BASE_DIR / "static"]
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.getenv("MEDIA_ROOT", BASE_DIR / "media")
 
@@ -179,12 +170,26 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 # Google Maps
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")
 
+# Elasticsearch
+ES_URL = os.getenv("ES_URL", "http://es:9200")
+ES_PRODUCTS_INDEX = os.getenv("ES_PRODUCTS_INDEX", "products")
+ES_TIMEOUT_SECONDS = float(os.getenv("ES_TIMEOUT_SECONDS", "0.8"))
+
 # Admin email notifications (orders lifecycle)
 ADMIN_NOTIFY_EMAILS = [
-    e.strip() for e in os.getenv("ADMIN_NOTIFY_EMAILS", os.getenv("ADMIN_EMAIL", "")).split(",") if e.strip()
+    e.strip()
+    for e in os.getenv("ADMIN_NOTIFY_EMAILS", os.getenv("ADMIN_EMAIL", "")).split(",")
+    if e.strip()
+]
+ADMIN_NOTIFY_TELEGRAM_IDS = [
+    int(v.strip())
+    for v in os.getenv("ADMIN_NOTIFY_TELEGRAM_IDS", "").split(",")
+    if v.strip().lstrip("-").isdigit()
 ]
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@bgshop.local")
-EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+EMAIL_BACKEND = os.getenv(
+    "EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend"
+)
 EMAIL_HOST = os.getenv("EMAIL_HOST", "localhost")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "25"))
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
@@ -196,7 +201,9 @@ EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "30"))
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # CSRF trusted origins (needed when serving through a different port like 8080)
-_csrf_env = [u.strip() for u in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if u.strip()]
+_csrf_env = [
+    u.strip() for u in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if u.strip()
+]
 CSRF_TRUSTED_ORIGINS = _csrf_env or [
     "http://localhost",
     "http://localhost:8000",
@@ -265,13 +272,45 @@ LOGGING = {
         "uvicorn": {"level": "INFO"},
         "uvicorn.error": {"level": "INFO"},
         "uvicorn.access": {"level": "INFO"},
-        "django.db.backends": {"handlers": ["console", "file"], "level": os.getenv("DB_LOG_LEVEL", "WARNING"), "propagate": False},
-        "celery": {"handlers": ["console", "file"], "level": LOG_LEVEL, "propagate": False},
-        "request": {"handlers": ["console", "file"], "level": "INFO", "propagate": False},
-        "shopfront": {"handlers": ["console", "file"], "level": LOG_LEVEL, "propagate": False},
-        "commerce": {"handlers": ["console", "file"], "level": LOG_LEVEL, "propagate": False},
-        "users": {"handlers": ["console", "file"], "level": LOG_LEVEL, "propagate": False},
-        "orders": {"handlers": ["console", "file"], "level": LOG_LEVEL, "propagate": False},
-        "catalog": {"handlers": ["console", "file"], "level": LOG_LEVEL, "propagate": False},
+        "django.db.backends": {
+            "handlers": ["console", "file"],
+            "level": os.getenv("DB_LOG_LEVEL", "WARNING"),
+            "propagate": False,
+        },
+        "celery": {
+            "handlers": ["console", "file"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        "request": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "shopfront": {
+            "handlers": ["console", "file"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        "commerce": {
+            "handlers": ["console", "file"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        "users": {
+            "handlers": ["console", "file"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        "orders": {
+            "handlers": ["console", "file"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        "catalog": {
+            "handlers": ["console", "file"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
     },
 }

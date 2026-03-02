@@ -1,5 +1,5 @@
-{% load tz %}
 {% extends "account/layout.html" %}
+{% load tz %}
 {% block account_main %}
 <section id="account-main-content" class="cabinet-dark-main">
   <div class="cabinet-dark-hero compact">
@@ -52,6 +52,10 @@
       <div><span class="text-base-content/60">Дата:</span> {{ order.created_at|timezone:"Europe/Moscow"|date:"d.m.Y H:i" }} (МСК)</div>
       <div><span class="text-base-content/60">Тип клиента:</span> {{ order.get_customer_type_display }}</div>
       <div><span class="text-base-content/60">Оплата:</span> {{ order.get_payment_method_display }}</div>
+      {% if fake_payment %}
+        <div><span class="text-base-content/60">Платеж:</span> {{ fake_payment.get_status_display }}</div>
+        <a class="btn btn-outline btn-sm mt-2" href="/payments/fake/{{ order.id }}/" hx-boost="false">Симулятор эквайринга</a>
+      {% endif %}
       <div><span class="text-base-content/60">Юрлицо:</span> {{ order.legal_entity|default:"-" }}</div>
       <div><span class="text-base-content/60">Адрес:</span> {{ order.delivery_address|default:"-" }}</div>
       <div class="divider my-1"></div>

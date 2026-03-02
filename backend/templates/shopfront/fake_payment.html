@@ -1,0 +1,10 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3 text-sm text-base-content/60">
+  <a class="link" href="/">Главная</a> /
+  <a class="link" href="/account/orders/">Мои заказы</a> /
+  <span>Тестовый эквайринг</span>
+</nav>
+
+{% include "shopfront/partials/fake_payment_panel.html" with order=order payment=payment %}
+{% endblock %}

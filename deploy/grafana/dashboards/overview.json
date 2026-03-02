@@ -1,60 +1,86 @@
 {
   "annotations": {"list": []},
   "editable": true,
-  "gnetId": null,
   "graphTooltip": 0,
-  "iteration": 1,
-  "links": [],
   "panels": [
     {
+      "id": 1,
       "type": "stat",
-      "title": "Targets Up",
-      "gridPos": {"x": 0, "y": 0, "w": 8, "h": 4},
-      "targets": [
-        {"expr": "sum(up)", "legendFormat": "up"}
-      ]
+      "title": "Scrape Targets Up",
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(up)", "legendFormat": "up"}]
     },
     {
+      "id": 2,
+      "type": "stat",
+      "title": "App Services Up",
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(up{job=~\"backend|bot|nginx|postgres|redis|elasticsearch\"})", "legendFormat": "services"}]
+    },
+    {
+      "id": 3,
       "type": "stat",
       "title": "Nginx Active Connections",
-      "gridPos": {"x": 8, "y": 0, "w": 8, "h": 4},
-      "targets": [
-        {"expr": "nginx_connections_active", "legendFormat": "active"}
-      ]
+      "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(nginx_connections_active)", "legendFormat": "active"}]
     },
     {
-      "type": "graph",
-      "title": "Backend CPU (rate)",
-      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
-      "targets": [
-        {"expr": "rate(process_cpu_seconds_total{job=\\"backend\\"}[5m])", "legendFormat": "backend"}
-      ]
-    },
-    {
-      "type": "graph",
-      "title": "Bot CPU (rate)",
-      "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
-      "targets": [
-        {"expr": "rate(process_cpu_seconds_total{job=\\"bot\\"}[5m])", "legendFormat": "bot"}
-      ]
-    },
-    {
+      "id": 4,
       "type": "stat",
-      "title": "Loki Build",
-      "gridPos": {"x": 16, "y": 0, "w": 8, "h": 4},
+      "title": "HTTP Probe Success",
+      "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(probe_success)", "legendFormat": "ok"}]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Request Rate (Nginx)",
+      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(rate(nginx_http_requests_total[5m]))", "legendFormat": "req/s"}]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "CPU Usage by Service",
+      "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
-        {"expr": "count(loki_build_info)", "legendFormat": "build"}
+        {"expr": "sum by (job) (rate(process_cpu_seconds_total{job=~\"backend|bot\"}[5m]))", "legendFormat": "{{job}}"}
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "HTTP p95 Latency (Nginx)",
+      "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum by (le) (rate(nginx_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p95"}
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Memory RSS by Service",
+      "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum by (job) (process_resident_memory_bytes{job=~\"backend|bot\"})", "legendFormat": "{{job}}"}
       ]
     }
   ],
   "refresh": "10s",
-  "schemaVersion": 36,
-  "style": "dark",
-  "tags": ["overview"],
+  "schemaVersion": 38,
+  "tags": ["overview", "popular"],
   "templating": {"list": []},
-  "time": {"from": "now-1h", "to": "now"},
-  "timezone": "",
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
   "title": "Overview",
-  "uid": "overview",
+  "uid": "bg-overview",
   "version": 1
 }

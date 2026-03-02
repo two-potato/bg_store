@@ -20,7 +20,18 @@ log = logging.getLogger("bot")
 BACKEND_URL = os.getenv("BACKEND_URL","http://backend:8000")
 INTERNAL_TOKEN = os.getenv("INTERNAL_TOKEN","change-me")
 ORDER_APPROVE_SECRET = os.getenv("ORDER_APPROVE_SECRET","dev-secret")
-MANAGERS_GROUP_ID = int(os.getenv("MANAGERS_GROUP_ID", "0"))  # Telegram chat id of managers group (negative for supergroups)
+BOT_MODE = (os.getenv("BOT_MODE") or "shop").strip().lower()
+def _env_int(name: str, default: int = 0) -> int:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except Exception:
+        return default
+
+
+MANAGERS_GROUP_ID = _env_int("MANAGERS_GROUP_ID", 0)  # Telegram chat id of managers group (negative for supergroups)
 TWA_WEBAPP_URL = os.getenv("TWA_WEBAPP_URL", "https://example.com/webapp/")
 
 # Prometheus metrics
@@ -59,13 +70,35 @@ async def send_document(m: DocMsg):
     NOTIFY_SENT.labels(type="document").inc()
     return {"ok": True}
 
+
+class TextMsg(BaseModel):
+    telegram_id: int
+    text: str
+
+
+@app.post("/notify/send_text")
+async def send_text(m: TextMsg):
+    await bot.send_message(m.telegram_id, m.text, parse_mode="HTML")
+    try:
+        log.info("notify_send_text", extra={"telegram_id": m.telegram_id, "len": len(m.text or "")})
+    except Exception:
+        pass
+    NOTIFY_SENT.labels(type="text").inc()
+    return {"ok": True}
+
 @dp.message(Command("start"))
 async def start(m: types.Message):
-    kb = ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="Открыть магазин", web_app=WebAppInfo(url=TWA_WEBAPP_URL))]],
-        resize_keyboard=True
-    )
-    await m.answer("Добро пожаловать в магазин!", reply_markup=kb)
+    if BOT_MODE == "notify":
+        await m.answer(
+            "Это бот уведомлений BG Shop.\n"
+            "Сюда приходят уведомления о заказах и изменении их статусов."
+        )
+    else:
+        kb = ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="Открыть магазин", web_app=WebAppInfo(url=TWA_WEBAPP_URL))]],
+            resize_keyboard=True
+        )
+        await m.answer("Добро пожаловать в магазин!", reply_markup=kb)
     try:
         log.info("bot_start_cmd", extra={"user_id": m.from_user.id if m.from_user else None})
     except Exception:
@@ -159,4 +192,8 @@ async def send_group(m: GroupMsg):
 @app.on_event("startup")
 async def _startup():
     import asyncio
+    try:
+        await bot.delete_webhook(drop_pending_updates=False)
+    except Exception:
+        pass
     asyncio.create_task(dp.start_polling(bot))

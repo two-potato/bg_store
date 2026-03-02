@@ -1,14 +1,15 @@
 from rest_framework import viewsets, mixins, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.db import transaction
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from .models import Order
 from .serializers import OrderSerializer, OrderCreateSerializer
-from .tasks import notify_entity_admins_order_created, send_invoice_to_buyer
 from commerce.models import LegalEntityMembership
 from core.logging_utils import LoggedViewSetMixin, LoggedAPIViewMixin
+import logging
+
+log = logging.getLogger("orders")
 
 class OrderViewSet(LoggedViewSetMixin, mixins.CreateModelMixin, mixins.RetrieveModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -24,7 +25,7 @@ class OrderViewSet(LoggedViewSetMixin, mixins.CreateModelMixin, mixins.RetrieveM
         ser = self.get_serializer(data=request.data)
         ser.is_valid(raise_exception=True)
         order = ser.save()
-        transaction.on_commit(lambda: notify_entity_admins_order_created.delay(order.id))
+        log.info("order_created_api", extra={"order_id": order.id, "user_id": request.user.id})
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
 class IsInternalService(permissions.BasePermission):
@@ -40,10 +41,11 @@ class OrderApproveView(LoggedAPIViewMixin, APIView):
             legal_entity=order.legal_entity, user__profile__telegram_id=admin_tg_id,
             role__code__in=["owner","admin"]
         ).exists():
+            log.warning("order_approve_forbidden_not_entity_admin", extra={"order_id": order.id, "admin_tg_id": admin_tg_id, "legal_entity_id": order.legal_entity_id})
             return Response({"detail":"Not entity admin"}, status=403)
         order.approve()
         order.save(update_fields=["status"])
-        transaction.on_commit(lambda: send_invoice_to_buyer.delay(order.id))
+        log.info("order_approved", extra={"order_id": order.id, "admin_tg_id": admin_tg_id})
         return Response({"ok": True})
 
 class OrderRejectView(LoggedAPIViewMixin, APIView):
@@ -55,7 +57,9 @@ class OrderRejectView(LoggedAPIViewMixin, APIView):
             legal_entity=order.legal_entity, user__profile__telegram_id=admin_tg_id,
             role__code__in=["owner","admin"]
         ).exists():
+            log.warning("order_reject_forbidden_not_entity_admin", extra={"order_id": order.id, "admin_tg_id": admin_tg_id, "legal_entity_id": order.legal_entity_id})
             return Response({"detail":"Not entity admin"}, status=403)
         order.cancel()
         order.save(update_fields=["status"])
+        log.info("order_rejected", extra={"order_id": order.id, "admin_tg_id": admin_tg_id})
         return Response({"ok": True})

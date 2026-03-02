@@ -125,15 +125,19 @@ class Command(BaseCommand):
                         p.description = description
                         p.save(update_fields=["description"])
                     p.save()
-                    seed = f"{prefix.lower()}-{i}"
-                    ProductImage.objects.create(
-                        product=p,
-                        url=f"https://picsum.photos/seed/{seed}/600/400",
-                        alt=p.name,
-                        is_primary=True,
-                        ordering=0,
-                    )
-                    created_total += 1
+                # Ensure minimum 3 photos for each product
+                img_count = p.images.count()
+                if img_count < 3:
+                    for idx in range(img_count, 3):
+                        seed = f"{prefix.lower()}-{i}-{idx + 1}"
+                        ProductImage.objects.create(
+                            product=p,
+                            url=f"https://picsum.photos/seed/{seed}/600/400",
+                            alt=p.name,
+                            is_primary=(idx == 0 and img_count == 0),
+                            ordering=idx,
+                        )
+                created_total += int(created)
 
                 # Ensure tags (brand, category, flags, sku prefix, country, color, flavor)
                 tag_objs = []
@@ -160,6 +164,17 @@ class Command(BaseCommand):
                 # flavor
                 if p.flavor:
                     ensure_tag(p.flavor, f"flavor-{slugify(p.flavor)}")
+                # Fallbacks to guarantee minimum tag count for every product
+                fallback_tags = [
+                    ("Товар", "type-product"),
+                    ("Каталог", "type-catalog"),
+                    (f"SKU {p.sku[:2]}", f"sku-prefix-{slugify(p.sku[:2])}"),
+                    ("Ассортимент", "type-assortment"),
+                ]
+                for name, slug in fallback_tags:
+                    if len({t.id for t in tag_objs}) >= 4:
+                        break
+                    ensure_tag(name, slug)
                 if tag_objs:
                     for t in tag_objs:
                         if not p.tags.filter(id=t.id).exists():

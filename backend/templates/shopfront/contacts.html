@@ -1,0 +1,50 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<section class="info-page reveal" data-anim="animate__fadeInUp">
+  <h1 class="info-page__title">Контакты</h1>
+  <p class="info-page__lead">
+    Если нужна помощь с заказом, подбором ассортимента или доставкой - оставьте заявку.
+    Мы отвечаем в рабочее время и связываемся по указанному телефону.
+  </p>
+
+  <div class="info-page__grid">
+    <article class="info-page__card">
+      <h3>Общие контакты</h3>
+      <p>Email: support@badguys.shop</p>
+      <p>Телефон: +7 (800) 000-00-00</p>
+      <p>График: пн-пт, 09:00-20:00 (МСК)</p>
+    </article>
+    <article class="info-page__card">
+      <h3>Адрес офиса</h3>
+      <p>Москва, ул. Примерная, д. 15, офис 402</p>
+      <p>Склад: Химки, Логистический проезд, 3</p>
+    </article>
+  </div>
+
+  <form method="post" action="/contacts/" class="contact-form">
+    {% csrf_token %}
+    <h2 class="text-base font-semibold mb-2">Обратная связь</h2>
+    <div class="contact-form__row">
+      <label class="form-control">
+        <span class="label"><span class="label-text">Имя</span></span>
+        <input class="input input-bordered" type="text" name="name" value="{{ form.name.value|default_if_none:'' }}" required>
+        {% if form.name.errors %}<span class="text-error text-xs mt-1">{{ form.name.errors|join:", " }}</span>{% endif %}
+      </label>
+      <label class="form-control">
+        <span class="label"><span class="label-text">Телефон</span></span>
+        <input class="input input-bordered" type="text" name="phone" value="{{ form.phone.value|default_if_none:'' }}" required>
+        {% if form.phone.errors %}<span class="text-error text-xs mt-1">{{ form.phone.errors|join:", " }}</span>{% endif %}
+      </label>
+    </div>
+    <label class="form-control mt-2">
+      <span class="label"><span class="label-text">Сообщение</span></span>
+      <textarea class="textarea textarea-bordered" name="message" required>{{ form.message.value|default_if_none:'' }}</textarea>
+      {% if form.message.errors %}<span class="text-error text-xs mt-1">{{ form.message.errors|join:", " }}</span>{% endif %}
+    </label>
+    <div class="mt-3">
+      <button class="btn btn-primary" type="submit">Отправить</button>
+    </div>
+  </form>
+</section>
+{% endblock %}
+

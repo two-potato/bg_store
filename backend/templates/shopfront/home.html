@@ -6,11 +6,39 @@
       <span class="home-minimal-kicker">Bad Guys Shop</span>
       <h1 class="home-minimal-title">Минимум кликов до нужного товара</h1>
       <p class="home-minimal-subtitle">Сиропы, кофе, напитки и расходники в современной витрине без перегруза.</p>
-      <form class="home-minimal-search" action="/catalog/" role="search">
-        <input class="input input-bordered w-full" type="search" name="q" placeholder="Большой поиск по каталогу: сироп, кофе, расходники..." aria-label="Поиск по каталогу">
-        <button class="btn btn-primary" type="submit">{% include 'shopfront/icons/search.svg' %}<span>Поиск</span></button>
-      </form>
+      <div class="home-minimal-hero__actions">
+        <a class="btn btn-primary" href="/catalog/">Перейти в каталог</a>
+        <a class="btn btn-outline" href="/delivery/">Условия доставки</a>
+      </div>
     </div>
+  </section>
+
+  <section class="home-minimal-banners">
+    <a class="home-minimal-banner home-minimal-banner--lg" href="/catalog/?sort=rating">
+      <img src="https://picsum.photos/seed/bg-hero-banner/1400/700" alt="Подборка лидеров продаж" loading="lazy">
+      <div class="home-minimal-banner__overlay">
+        <span class="home-minimal-banner__kicker">Подборка недели</span>
+        <h3>Хиты с лучшим рейтингом</h3>
+        <p>Товары, которые чаще всего добавляют в корзину и рекомендуют другим.</p>
+        <span class="home-minimal-banner__cta">Смотреть подборку</span>
+      </div>
+    </a>
+    <a class="home-minimal-banner" href="/catalog/?is_new=1">
+      <img src="https://picsum.photos/seed/bg-new-arrivals/900/700" alt="Новые поступления" loading="lazy">
+      <div class="home-minimal-banner__overlay">
+        <span class="home-minimal-banner__kicker">Обновление витрины</span>
+        <h3>Новые позиции</h3>
+        <span class="home-minimal-banner__cta">Открыть новинки</span>
+      </div>
+    </a>
+    <a class="home-minimal-banner" href="/catalog/?sort=price_asc">
+      <img src="https://picsum.photos/seed/bg-best-price/900/700" alt="Товары по выгодной цене" loading="lazy">
+      <div class="home-minimal-banner__overlay">
+        <span class="home-minimal-banner__kicker">Экономия</span>
+        <h3>Лучшие цены</h3>
+        <span class="home-minimal-banner__cta">Перейти в раздел</span>
+      </div>
+    </a>
   </section>
 
   <section class="home-minimal-categories">
@@ -35,5 +63,6 @@
     </div>
     {% include "shopfront/components/product_grid.html" with products=products %}
   </section>
-  </div>
+
+</div>
 {% endblock %}

@@ -1,4 +1,5 @@
 {% extends "shopfront/base.html" %}
+{% load socialaccount %}
 {% block content %}
 <div class="max-w-md mx-auto">
   <div class="card bg-base-100">
@@ -20,7 +21,15 @@
         <button class="btn btn-primary w-full">Войти</button>
       </form>
       <div class="divider my-3"></div>
-      <a class="btn btn-outline w-full mb-2" href="/account/social/google/login/">Войти через Google</a>
+      {% if google_oauth_enabled %}
+      <a class="btn btn-outline w-full mb-2"
+         href="{% provider_login_url 'google' process='login' %}"
+         hx-boost="false">Войти через Google</a>
+      {% else %}
+      <button class="btn btn-outline w-full mb-2" type="button" disabled title="Нужны GOOGLE_CLIENT_ID и GOOGLE_CLIENT_SECRET в backend/.env">
+        Войти через Google (не настроено)
+      </button>
+      {% endif %}
       <form action="/account/twa/login/" method="post" class="mt-2">
         {% csrf_token %}
         <input type="hidden" name="initData" id="twa-initData">

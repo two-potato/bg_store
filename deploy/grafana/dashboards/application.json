@@ -1,0 +1,77 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 0,
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Backend HTTP Requests",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(rate(django_http_requests_total_by_method_total[5m])) by (method)", "legendFormat": "{{method}}"}
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Backend HTTP Responses",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(rate(django_http_responses_total_by_status_total[5m])) by (status)", "legendFormat": "{{status}}"}
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Backend p95 Latency",
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum by (le) (rate(django_http_requests_latency_seconds_by_view_method_bucket[5m])))", "legendFormat": "p95"}
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Backend Exceptions",
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(rate(django_http_exceptions_total_by_type_total[5m])) by (type)", "legendFormat": "{{type}}"}
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Celery Tasks Started/Failed",
+      "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(rate(celery_tasks_total{state=\"STARTED\"}[5m]))", "legendFormat": "started"},
+        {"expr": "sum(rate(celery_tasks_total{state=\"FAILURE\"}[5m]))", "legendFormat": "failed"}
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Celery Task Runtime",
+      "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(rate(celery_task_runtime_seconds_sum[5m])) / clamp_min(sum(rate(celery_task_runtime_seconds_count[5m])), 1)", "legendFormat": "avg sec"}
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "tags": ["application", "django", "celery"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "title": "Application",
+  "uid": "bg-application",
+  "version": 1
+}

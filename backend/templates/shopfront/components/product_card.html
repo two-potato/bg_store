@@ -5,16 +5,31 @@ Usage:
 {% endcomment %}
 <div class="card product-card bg-base-100 shadow-sm hover:shadow-md h-full">
   <a href="/product/{{ p.id }}/" class="block flex-1" aria-label="Подробнее о товаре {{ p.name }}">
-    {% with img=p.images.first %}
-      {% if img %}
-        <figure class="media">
-          <img src="{{ img.url }}" alt="{{ img.alt|default:p.name }}" loading="lazy"/>
+    {% with images=p.images.all|slice:":5" %}
+      {% with slide_count=images|length %}
+        <figure class="media product-card-carousel" data-carousel-id="{{ p.id }}">
+          <div class="product-card-carousel__track" id="pc-track-{{ p.id }}" data-index="0" data-count="{{ slide_count }}">
+            {% for img in images %}
+              <div class="product-card-carousel__slide">
+                <img src="{{ img.url }}" alt="{{ img.alt|default:p.name }}" loading="lazy"/>
+              </div>
+            {% empty %}
+              <div class="product-card-carousel__slide">
+                <img src="https://picsum.photos/seed/p-{{ p.id }}-fallback/600/400" alt="{{ p.name }}" loading="lazy"/>
+              </div>
+            {% endfor %}
+          </div>
+          {% if slide_count > 1 %}
+            <button type="button" class="product-card-carousel__nav is-prev" data-carousel-prev="{{ p.id }}" aria-label="Предыдущее фото">‹</button>
+            <button type="button" class="product-card-carousel__nav is-next" data-carousel-next="{{ p.id }}" aria-label="Следующее фото">›</button>
+            <div class="product-card-carousel__dots">
+              {% for img in images %}
+                <button type="button" class="product-card-carousel__dot{% if forloop.first %} is-active{% endif %}" data-carousel-dot="{{ p.id }}" data-index="{{ forloop.counter0 }}" aria-label="Фото {{ forloop.counter }}"></button>
+              {% endfor %}
+            </div>
+          {% endif %}
         </figure>
-      {% else %}
-        <figure class="media">
-          <img src="https://picsum.photos/seed/p-{{ p.id }}/600/400" alt="{{ p.name }}" loading="lazy"/>
-        </figure>
-      {% endif %}
+      {% endwith %}
     {% endwith %}
     <div class="card-body p-3">
       <div class="flex items-center justify-between mb-1">
@@ -25,6 +40,15 @@ Usage:
         </div>
       </div>
       <div class="font-semibold truncate" title="{{ p.name }}">{{ p.name }}</div>
+      <div class="mt-1 text-xs text-base-content/75 flex items-center gap-1">
+        <span class="text-amber-400">★</span>
+        {% if p.rating_count %}
+          <span>{{ p.rating_avg|floatformat:1 }}</span>
+          <span class="text-base-content/50">({{ p.rating_count }})</span>
+        {% else %}
+          <span class="text-base-content/50">Нет оценок</span>
+        {% endif %}
+      </div>
       <div class="flex justify-between items-end mt-1">
         <div class="font-bold text-primary text-base">{{ p.price }} ₽</div>
         <div class="text-xs text-base-content/60">{{ p.pack_qty }} {{ p.unit }}</div>

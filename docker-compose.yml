@@ -72,7 +72,6 @@ services:
   bot-notify:
     build: ./bot
     container_name: bg-bot-notify
-    profiles: ["bots-extra"]
     env_file: ./bot/.env.notify
     expose: ["8080"]
     healthcheck:

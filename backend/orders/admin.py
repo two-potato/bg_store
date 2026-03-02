@@ -1,13 +1,25 @@
 from django import forms
 from django.contrib import admin
 import logging
-from .models import Order, OrderItem
+from .models import Order, OrderItem, FakeAcquiringPayment
 
 
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
     extra = 0
     readonly_fields = ("name", "price", "qty")
+
+
+class FakeAcquiringPaymentInline(admin.StackedInline):
+    model = FakeAcquiringPayment
+    extra = 0
+    can_delete = False
+    readonly_fields = ("provider_payment_id", "status", "last_event", "amount", "history", "created_at", "updated_at")
+    fieldsets = (
+        (None, {"fields": ("provider_payment_id", "status", "last_event", "amount")}),
+        ("История событий", {"fields": ("history",)}),
+        ("Служебные", {"fields": ("created_at", "updated_at")}),
+    )
 
 
 class OrderAdminForm(forms.ModelForm):
@@ -39,7 +51,7 @@ class OrderAdmin(admin.ModelAdmin):
     list_display = ("id", "status_label", "legal_entity", "placed_by", "total", "created_at")
     list_filter = ("status", "legal_entity")
     search_fields = ("id", "placed_by__username")
-    inlines = [OrderItemInline]
+    inlines = [OrderItemInline, FakeAcquiringPaymentInline]
     readonly_fields = (
         "subtotal",
         "discount_amount",
@@ -101,3 +113,11 @@ class OrderAdmin(admin.ModelAdmin):
 class OrderItemAdmin(admin.ModelAdmin):
     list_display = ("id", "order", "product", "name", "price", "qty")
     list_filter = ("order",)
+
+
+@admin.register(FakeAcquiringPayment)
+class FakeAcquiringPaymentAdmin(admin.ModelAdmin):
+    list_display = ("id", "order", "provider_payment_id", "status", "last_event", "amount", "updated_at")
+    search_fields = ("provider_payment_id", "order__id", "order__placed_by__username")
+    list_filter = ("status", "last_event")
+    readonly_fields = ("history", "created_at", "updated_at")

@@ -1,47 +1,35 @@
 {% extends "shopfront/base.html" %}
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-12 col-md-6 col-lg-5">
-    <div class="card">
-      <div class="card-body">
-        <h1 class="h5 mb-3">Вход</h1>
-        <form method="post">
-          {% csrf_token %}
-          <div class="mb-2">
-            <label class="form-label small">Email или телефон</label>
-            <input type="text" name="identifier" class="form-control" required>
-          </div>
-          <div class="mb-3">
-            <label class="form-label small">Пароль</label>
-            <input type="password" name="password" class="form-control" required>
-          </div>
-          {% if form.non_field_errors %}
-            <div class="alert alert-danger py-1 small">{{ form.non_field_errors }}</div>
-          {% endif %}
-          <button class="btn btn-dark w-100">Войти</button>
-        </form>
-        <hr>
-        <a class="btn btn-outline-secondary w-100 mb-2" href="/account/social/google/login/">Войти через Google</a>
-        <form action="/account/twa/login/" method="post">
-          {% csrf_token %}
-          <input type="hidden" name="initData" id="twa-initData">
-          <button type="submit" class="btn btn-outline-primary w-100">Войти через Telegram WebApp</button>
-        </form>
-        <div class="text-center mt-3 small">
-          Нет аккаунта? <a href="/account/register/">Зарегистрироваться</a>
+<div class="max-w-md mx-auto">
+  <div class="card bg-base-100">
+    <div class="card-body p-4">
+      <h1 class="text-lg font-semibold mb-3">Вход</h1>
+      <form method="post" class="grid gap-3">
+        {% csrf_token %}
+        <div>
+          <label class="text-xs mb-1 block">Email или телефон</label>
+          <input type="text" name="identifier" class="input input-bordered w-full" required>
         </div>
+        <div>
+          <label class="text-xs mb-1 block">Пароль</label>
+          <input type="password" name="password" class="input input-bordered w-full" required>
+        </div>
+        {% if form.non_field_errors %}
+          <div class="alert alert-error text-sm">{{ form.non_field_errors }}</div>
+        {% endif %}
+        <button class="btn btn-primary w-full">Войти</button>
+      </form>
+      <div class="divider my-3"></div>
+      <a class="btn btn-outline w-full mb-2" href="/account/social/google/login/">Войти через Google</a>
+      <form action="/account/twa/login/" method="post" class="mt-2">
+        {% csrf_token %}
+        <input type="hidden" name="initData" id="twa-initData">
+        <button type="submit" class="btn btn-outline w-full">Войти через Telegram WebApp</button>
+      </form>
+      <div class="text-center mt-3 text-xs">
+        Нет аккаунта? <a href="/account/register/" class="link">Зарегистрироваться</a>
       </div>
     </div>
   </div>
 </div>
-<script>
-  // Заполним initData, если страница открыта в Telegram WebApp
-  try {
-    const tg = window.Telegram && window.Telegram.WebApp;
-    if (tg && tg.initData) {
-      document.getElementById('twa-initData').value = tg.initData;
-    }
-  } catch (e) {}
-</script>
 {% endblock %}
-

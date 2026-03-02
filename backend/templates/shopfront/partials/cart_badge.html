@@ -1,1 +1,3 @@
-<span class="badge bg-danger ms-1">{{ count }}</span>
+<span class="cart-badge-count" data-count="{{ count }}">{{ count }}</span>
+<span class="cart-badge-sep">•</span>
+<span class="cart-badge-total">{{ subtotal|floatformat:-2 }} ₽</span>

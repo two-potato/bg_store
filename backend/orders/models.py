@@ -9,6 +9,14 @@ from catalog.models import Product as CatalogProduct
 User = settings.AUTH_USER_MODEL
 
 class Order(TimeStampedModel):
+    class Status(models.TextChoices):
+        NEW = "new", "Новый"
+        CONFIRMED = "confirmed", "Подтвержден"
+        PAID = "paid", "Оплачен"
+        DELIVERING = "delivering", "В работе"
+        DELIVERED = "delivered", "Выполнен"
+        CANCELED = "canceled", "Отменен"
+        CHANGED = "changed", "Изменен"
     class CustomerType(models.TextChoices):
         INDIVIDUAL = "individual", "Физ. лицо"
         COMPANY = "company", "Юр. лицо"
@@ -16,7 +24,7 @@ class Order(TimeStampedModel):
         CASH = "cash", "Наличные"
         INVOICE = "invoice", "По счёту"
 
-    status = FSMField(default="new", protected=True)
+    status = FSMField(default=Status.NEW, choices=Status.choices, protected=False)
     customer_type = models.CharField(max_length=16, choices=CustomerType.choices, default=CustomerType.COMPANY)
     payment_method = models.CharField(max_length=16, choices=PaymentMethod.choices, default=PaymentMethod.CASH)
     legal_entity = models.ForeignKey(LegalEntity, on_delete=models.PROTECT, related_name="orders", null=True, blank=True)
@@ -30,26 +38,49 @@ class Order(TimeStampedModel):
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
 
+    def profile_discount_percent(self) -> Decimal:
+        profile = getattr(self.placed_by, "profile", None)
+        raw = getattr(profile, "discount", Decimal("0.00")) if profile else Decimal("0.00")
+        try:
+            pct = Decimal(str(raw))
+        except Exception:
+            pct = Decimal("0.00")
+        if pct < 0:
+            return Decimal("0.00")
+        if pct > 100:
+            return Decimal("100.00")
+        return pct
+
     def recalc_totals(self):
         items = list(self.items.all())
-        self.subtotal = sum((i.price * i.qty for i in items), start=Decimal("0.00"))
-        self.discount_amount = Decimal("0.00")
+        self.subtotal = sum((i.price * i.qty for i in items), start=Decimal("0.00")).quantize(Decimal("0.01"))
+        discount_pct = self.profile_discount_percent()
+        self.discount_amount = (self.subtotal * discount_pct / Decimal("100.00")).quantize(Decimal("0.01"))
         self.total = (self.subtotal - self.discount_amount).quantize(Decimal("0.01"))
 
-    @transition(field=status, source="new", target="approved")
-    def approve(self): ...
+    @transition(field=status, source=[Status.NEW, Status.CHANGED], target=Status.CONFIRMED)
+    def approve(self):
+        ...
 
-    @transition(field=status, source="approved", target="paid")
-    def pay(self): ...
+    @transition(field=status, source=Status.CONFIRMED, target=Status.PAID)
+    def pay(self):
+        ...
 
-    @transition(field=status, source="paid", target="shipped")
-    def ship(self): ...
+    @transition(field=status, source=Status.PAID, target=Status.DELIVERING)
+    def ship(self):
+        ...
 
-    @transition(field=status, source="shipped", target="done")
-    def complete(self): ...
+    @transition(field=status, source=Status.DELIVERING, target=Status.DELIVERED)
+    def complete(self):
+        ...
 
-    @transition(field=status, source="*", target="canceled")
-    def cancel(self): ...
+    @transition(field=status, source="*", target=Status.CANCELED)
+    def cancel(self):
+        ...
+
+    @transition(field=status, source="*", target=Status.CHANGED)
+    def mark_changed(self):
+        ...
 
 class OrderItem(TimeStampedModel):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")

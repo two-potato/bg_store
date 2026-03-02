@@ -1,39 +1,59 @@
 <div class="cart-container-inner">
 {% if items %}
-  <ul class="list-group list-group-flush">
+  <ul class="divide-y">
   {% for it in items %}
-    <li class="list-group-item cart-item">
-      <div class="cart-line d-flex align-items-center">
+    <li class="py-2">
+      <div class="flex items-center">
         {% with img=it.p.images.first %}
           {% if img %}
-            <img class="cart-thumb me-2" src="{{ img.url }}" alt="{{ it.p.name }}">
+            <img class="w-12 h-12 object-cover rounded mr-2" src="{{ img.url }}" alt="{{ it.p.name }}">
           {% else %}
-            <div class="cart-thumb me-2 d-flex align-items-center justify-content-center"><iconify-icon icon="tabler:photo" class="text-muted"></iconify-icon></div>
+            <div class="w-12 h-12 rounded bg-base-200 flex items-center justify-center text-base-content/40 mr-2">{% include 'shopfront/icons/photo.svg' %}</div>
           {% endif %}
         {% endwith %}
-        <div class="title me-auto">
-          <div class="fw-semibold small text-truncate" title="{{ it.p.name }}">{{ it.p.name }}</div>
-          <div class="text-muted small">{{ it.p.price }} ₽</div>
+        <div class="mr-auto min-w-0">
+          <div class="font-semibold text-sm truncate" title="{{ it.p.name }}">{{ it.p.name }}</div>
+          <div class="text-xs text-base-content/60">{{ it.p.price }} ₽</div>
         </div>
-        <div class="controls d-flex align-items-center gap-1">
-          <form hx-post="/cart/update/" hx-vals='{"product_id":"{{ it.p.id }}","op":"inc"}' hx-target="closest .cart-container" hx-swap="innerHTML" hx-on::after-request="document.body.dispatchEvent(new Event('cartChanged'));">
-            <button class="btn btn-sm btn-outline-secondary" type="submit" aria-label="Добавить"><iconify-icon icon="tabler:plus"></iconify-icon></button>
+        <div class="flex flex-nowrap items-center gap-1">
+          <form class="shrink-0"
+                hx-post="/cart/update/"
+                hx-vals='{"product_id":"{{ it.p.id }}","op":"inc"}'
+                hx-target="#cart-root"
+                hx-select="#cart-root"
+                hx-swap="outerHTML">
+            <button class="btn btn-sm btn-outline" type="submit" aria-label="Добавить">{% include 'shopfront/icons/plus.svg' %}</button>
           </form>
-          <span class="small fw-semibold" style="min-width:2rem; text-align:center">{{ it.qty }}</span>
-          <form hx-post="/cart/remove/" hx-vals='{"product_id":"{{ it.p.id }}"}' hx-target="closest .cart-container" hx-swap="innerHTML" hx-on::after-request="document.body.dispatchEvent(new Event('cartChanged'));">
-            <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Удалить"><iconify-icon icon="tabler:trash"></iconify-icon></button>
+          <span class="text-sm font-semibold inline-block w-8 text-center shrink-0">{{ it.qty }}</span>
+          <form class="shrink-0"
+                hx-post="/cart/remove/"
+                hx-vals='{"product_id":"{{ it.p.id }}"}'
+                hx-target="#cart-root"
+                hx-select="#cart-root"
+                hx-swap="outerHTML">
+            <button class="btn btn-sm btn-outline" type="submit" aria-label="Удалить">{% include 'shopfront/icons/trash.svg' %}</button>
           </form>
         </div>
       </div>
-      <div class="d-flex justify-content-end small text-muted mt-1">Итого: {{ it.row }} ₽</div>
+      <div class="flex justify-end text-xs text-base-content/70 mt-1">Итого: {{ it.row }} ₽</div>
     </li>
   {% endfor %}
   </ul>
-  <div class="mt-3 d-flex justify-content-between">
-    <div class="fw-semibold">Итого</div>
-    <div class="fw-semibold">{{ total }} ₽</div>
+  <div class="mt-3 flex justify-between font-semibold">
+    <div>Подытог</div>
+    <div>{{ subtotal }} ₽</div>
+  </div>
+  {% if discount_amount > 0 %}
+    <div class="mt-1 flex justify-between text-sm text-success">
+      <div>Скидка ({{ discount_percent }}%)</div>
+      <div>-{{ discount_amount }} ₽</div>
+    </div>
+  {% endif %}
+  <div class="mt-1 flex justify-between font-semibold">
+    <div>Итого</div>
+    <div>{{ total }} ₽</div>
   </div>
 {% else %}
-  <div class="text-muted">Корзина пуста</div>
+  <div class="text-base-content/60">Корзина пуста</div>
 {% endif %}
 </div>

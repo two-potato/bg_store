@@ -19,12 +19,19 @@ class Friendship(TimeStampedModel):
 
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+    full_name = models.CharField(max_length=255, blank=True, default="")
+    contact_email = models.EmailField(blank=True, default="")
     phone = models.CharField(max_length=32, blank=True, null=True)
     telegram_id = models.BigIntegerField(unique=True, null=True, blank=True)
     telegram_username = models.CharField(max_length=255, blank=True, null=True)
     discount = models.DecimalField(max_digits=6, decimal_places=2, default=0)
     photo = models.ImageField(upload_to='user_photos/', null=True, blank=True)
     friends = models.ManyToManyField('self', through=Friendship, symmetrical=False, blank=True, related_name='friend_of')
+    class Role(models.TextChoices):
+        ADMIN = "admin", "Админ"
+        MANAGER = "manager", "Менеджер"
+        CLIENT = "client", "Клиент"
+    role = models.CharField(max_length=16, choices=Role.choices, default=Role.CLIENT)
 
     def __str__(self):
         return f"{self.user.username} profile"

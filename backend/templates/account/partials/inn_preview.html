@@ -1,18 +1,18 @@
 <div data-name="{{ name|default:'' }}">
   {% if found %}
-    <div class="small text-muted">ИНН: {{ inn }}{% if kpp %} · КПП: {{ kpp }}{% endif %}</div>
-    {% if name %}<div class="fw-semibold">{{ name }}</div>{% endif %}
+    <div class="text-xs text-base-content/60">ИНН: {{ inn }}{% if kpp %} · КПП: {{ kpp }}{% endif %}</div>
+    {% if name %}<div class="font-semibold">{{ name }}</div>{% endif %}
     {% if street or house or block or building %}
-      <div class="small">
+      <div class="text-sm">
         {% if street %}{{ street }}{% endif %}
         {% if house %}, дом {{ house }}{% endif %}
         {% if block %}, корп. {{ block }}{% endif %}
         {% if building %}, стр. {{ building }}{% endif %}
       </div>
     {% elif address %}
-      <div class="small">{{ address }}</div>
+      <div class="text-sm">{{ address }}</div>
     {% endif %}
   {% else %}
-    <div class="small text-muted">Нет данных по указанному ИНН</div>
+    <div class="text-xs text-base-content/60">Нет данных по указанному ИНН</div>
   {% endif %}
 </div>

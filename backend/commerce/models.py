@@ -18,19 +18,25 @@ class LegalEntity(TimeStampedModel):
             return f"{self.name} (ИНН {self.inn})"
         return self.name or f"Юрлицо #{self.pk}"
 
+class MembershipRole(TimeStampedModel):
+    code = models.CharField(max_length=32, unique=True)
+    name = models.CharField(max_length=64)
+    def __str__(self):
+        return self.name
+
 class LegalEntityMembership(TimeStampedModel):
-    class Role(models.TextChoices):
-        OWNER="owner","Владелец"
-        ADMIN="admin","Админ"
-        MANAGER="manager","Менеджер"
-        VIEWER="viewer","Наблюдатель"
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     legal_entity = models.ForeignKey(LegalEntity, on_delete=models.CASCADE)
-    role = models.CharField(max_length=16, choices=Role.choices, default=Role.MANAGER)
+    role = models.ForeignKey(MembershipRole, on_delete=models.PROTECT, null=True, blank=True)
     class Meta:
         unique_together = (("user", "legal_entity"),)
+    def save(self, *args, **kwargs):
+        if self.role_id is None:
+            self.role, _ = MembershipRole.objects.get_or_create(code="manager", defaults={"name": "Менеджер"})
+        super().save(*args, **kwargs)
     def __str__(self):
-        return f"{self.user} → {self.legal_entity} [{self.role}]"
+        role = getattr(self.role, "name", "-")
+        return f"{self.user} → {self.legal_entity} [{role}]"
 
 class DeliveryAddress(TimeStampedModel):
     legal_entity = models.ForeignKey(LegalEntity, on_delete=models.CASCADE, related_name="delivery_addresses")
@@ -52,28 +58,34 @@ class DeliveryAddress(TimeStampedModel):
     def __str__(self):
         return f"{self.label} — {self.city}, {self.street}"
 
+class RequestStatus(TimeStampedModel):
+    code = models.CharField(max_length=32, unique=True)
+    name = models.CharField(max_length=64)
+    def __str__(self):
+        return self.name
+
 class MembershipRequest(TimeStampedModel):
-    class Status(models.TextChoices):
-        PENDING="pending","На рассмотрении"
-        APPROVED="approved","Одобрено"
-        REJECTED="rejected","Отклонено"
     applicant = models.ForeignKey(User, on_delete=models.CASCADE, related_name="membership_requests")
     legal_entity = models.ForeignKey(LegalEntity, on_delete=models.CASCADE, related_name="membership_requests")
     comment = models.TextField(blank=True, null=True)
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    status = models.ForeignKey(RequestStatus, on_delete=models.PROTECT, null=True, blank=True)
+    def save(self, *args, **kwargs):
+        if self.status_id is None:
+            self.status, _ = RequestStatus.objects.get_or_create(code="pending", defaults={"name": "На рассмотрении"})
+        super().save(*args, **kwargs)
 
 class LegalEntityCreationRequest(TimeStampedModel):
-    class Status(models.TextChoices):
-        PENDING="pending","На рассмотрении"
-        APPROVED="approved","Одобрено"
-        REJECTED="rejected","Отклонено"
     applicant = models.ForeignKey(User, on_delete=models.CASCADE, related_name="entity_creation_requests")
     name = models.CharField(max_length=255)
     inn = models.CharField(max_length=12, validators=[validate_inn])
     bik = models.CharField(max_length=9, validators=[validate_bik])
     checking_account = models.CharField(max_length=20)
     bank_name = models.CharField(max_length=255, blank=True, null=True)
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    status = models.ForeignKey(RequestStatus, on_delete=models.PROTECT, null=True, blank=True)
     # Проверка р/с отключена по требованию; оставим только декларативную модель
     def clean(self):
         pass
+    def save(self, *args, **kwargs):
+        if self.status_id is None:
+            self.status, _ = RequestStatus.objects.get_or_create(code="pending", defaults={"name": "На рассмотрении"})
+        super().save(*args, **kwargs)

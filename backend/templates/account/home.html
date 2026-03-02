@@ -1,50 +1,73 @@
-{% extends "shopfront/base.html" %}
-{% block content %}
-<nav aria-label="breadcrumb" class="mb-3">
-  <ol class="breadcrumb">
-    <li class="breadcrumb-item"><a href="/">Главная</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Личный кабинет</li>
-  </ol>
-  <a class="small" href="/catalog/">← Вернуться к покупкам</a>
-</nav>
+{% extends "account/layout.html" %}
+{% block account_main %}
+<section id="account-main-content" class="cabinet-dark-main">
+  <div class="cabinet-dark-hero">
+    <div class="cabinet-dark-hero-title">Личный кабинет</div>
+    <div class="cabinet-dark-hero-sub">Управляйте заказами, компаниями, адресами и профилем без перезагрузки страницы.</div>
+  </div>
 
-<div class="row g-3">
-  <div class="col-12 col-md-6 col-lg-5 reveal" data-anim="animate__fadeInUp">
-    <div class="card border-0 shadow-sm rounded-4">
-      <div class="card-body">
-        <h1 class="h5 mb-3">Личный кабинет</h1>
-        <form method="post">
-          {% csrf_token %}
-          <div class="mb-2">
-            <label class="form-label small">Email</label>
-            <input type="email" name="email" class="form-control" value="{{ form.initial.email|default:request.user.email }}">
-          </div>
-          <div class="mb-2">
-            <label class="form-label small">Имя</label>
-            <input type="text" name="first_name" class="form-control" value="{{ request.user.first_name }}">
-          </div>
-          <div class="mb-2">
-            <label class="form-label small">Фамилия</label>
-            <input type="text" name="last_name" class="form-control" value="{{ request.user.last_name }}">
-          </div>
-          <div class="mb-3">
-            <label class="form-label small">Телефон</label>
-            <input type="text" name="phone" class="form-control" value="{{ form.fields.phone.initial }}">
-          </div>
-          <button class="btn btn-dark hvr-grow">Сохранить</button>
-          <a class="btn btn-outline-secondary ms-2 hvr-grow" href="/account/logout/" title="Выйти"><iconify-icon icon="tabler:logout"></iconify-icon></a>
-        </form>
-        <hr>
-        <div class="small text-muted">Telegram: {% if request.user.profile.telegram_id %}привязан (@{{ request.user.profile.telegram_username }}){% else %}не привязан{% endif %}</div>
-        <div class="small text-muted">Скидка: {{ request.user.profile.discount }}%</div>
-        <hr>
-        <div class="d-flex gap-2">
-          <a class="btn btn-outline-secondary btn-sm hvr-grow" href="/account/addresses/">Адреса</a>
-          <a class="btn btn-outline-secondary btn-sm hvr-grow" href="/account/legal/">Юр лица</a>
-          <a class="btn btn-outline-secondary btn-sm hvr-grow" href="/account/orders/">Мои заказы</a>
+  <section class="cabinet-dark-panel">
+    <h2 class="cabinet-dark-panel-title">Мои данные</h2>
+    <div class="cabinet-dark-metrics">
+      <article class="cabinet-dark-metric">
+        <div class="cabinet-dark-metric-label">Скидка профиля</div>
+        <div class="cabinet-dark-metric-value">{{ profile.discount }}%</div>
+      </article>
+      <article class="cabinet-dark-metric">
+        <div class="cabinet-dark-metric-label">Мои заказы</div>
+        <div class="cabinet-dark-metric-value">{{ metrics.orders_count }}</div>
+      </article>
+      <article class="cabinet-dark-metric">
+        <div class="cabinet-dark-metric-label">Компании / Адреса</div>
+        <div class="cabinet-dark-metric-value">{{ metrics.entities_count }} / {{ metrics.addresses_count }}</div>
+      </article>
+    </div>
+  </section>
+
+  <section class="cabinet-dark-panel" id="profile-edit">
+    <h2 class="cabinet-dark-panel-title">Профиль</h2>
+    <form method="post"
+          enctype="multipart/form-data"
+          class="cabinet-dark-form"
+          hx-post="/account/"
+          hx-target="#account-main-content"
+          hx-select="#account-main-content"
+          hx-swap="outerHTML"
+          hx-push-url="true">
+      {% csrf_token %}
+      <div class="grid md:grid-cols-2 gap-3">
+        <div>
+          <label class="label" for="id_full_name"><span class="label-text">Имя и фамилия</span></label>
+          <input id="id_full_name" type="text" name="full_name" class="input input-bordered w-full" value="{{ form.full_name.value|default_if_none:'' }}">
+        </div>
+        <div>
+          <label class="label" for="id_phone"><span class="label-text">Телефон</span></label>
+          <input id="id_phone" type="text" name="phone" class="input input-bordered w-full" value="{{ form.phone.value|default_if_none:'' }}">
         </div>
       </div>
-    </div>
-  </div>
-</div>
+      <div>
+        <label class="label" for="id_contact_email"><span class="label-text">Email для связи</span></label>
+        <input id="id_contact_email" type="email" name="contact_email" class="input input-bordered w-full" value="{{ form.contact_email.value|default_if_none:'' }}">
+      </div>
+      <div>
+        <label class="label" for="id_photo"><span class="label-text">Фото профиля</span></label>
+        <input id="id_photo" type="file" name="photo" class="file-input file-input-bordered w-full" accept="image/*">
+      </div>
+      {% if profile.telegram_id %}
+        <div class="text-sm text-base-content/70">Telegram привязан: @{{ profile.telegram_username|default:"linked" }}</div>
+      {% else %}
+        <div class="text-sm text-base-content/70">Telegram не привязан</div>
+      {% endif %}
+      {% if form.errors %}
+        <div class="alert alert-error text-sm">
+          <span>Проверьте заполнение формы.</span>
+        </div>
+      {% endif %}
+      <div class="flex gap-2">
+        <button class="btn btn-success">Сохранить изменения</button>
+        <a class="btn btn-ghost" href="/account/" hx-get="/account/" hx-target="#account-main-content" hx-select="#account-main-content" hx-swap="outerHTML" hx-push-url="true">Сбросить</a>
+      </div>
+    </form>
+  </section>
+</section>
 {% endblock %}

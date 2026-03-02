@@ -1,6 +1,6 @@
 from django.urls import path, include
 from .views_html import (
-    account_home, account_addresses, account_legal_entities, account_orders,
+    account_home, account_addresses, account_legal_entities, account_orders, account_order_detail,
     login_view, register_view, logout_view, telegram_webapp_login, cancel_legal_request
 )
 
@@ -10,6 +10,7 @@ urlpatterns = [
     path("legal/", account_legal_entities, name="account_legal"),
     path("legal/request/<int:pk>/cancel/", cancel_legal_request, name="account_legal_cancel"),
     path("orders/", account_orders, name="account_orders"),
+    path("orders/<int:order_id>/", account_order_detail, name="account_order_detail"),
     path("login/", login_view, name="login"),
     path("register/", register_view, name="register"),
     path("logout/", logout_view, name="logout"),

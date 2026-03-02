@@ -1,0 +1,50 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<section class="cabinet-dark reveal" data-anim="animate__fadeInUp">
+  <aside class="cabinet-dark-sidebar">
+    <div class="cabinet-dark-profile">
+      <div class="cabinet-dark-avatar">
+        {% if profile.photo %}
+          <img src="{{ profile.photo.url }}" alt="Фото профиля" class="avatar-img">
+        {% else %}
+          <div class="avatar-fallback">{{ request.user.username|slice:":1"|upper }}</div>
+        {% endif %}
+      </div>
+      <div class="cabinet-dark-name">{{ profile.full_name|default:request.user.username }}</div>
+      <div class="cabinet-dark-sub">@{{ request.user.username }}</div>
+    </div>
+    <nav class="cabinet-dark-nav">
+      <a class="{% if account_section == 'home' %}is-active{% endif %}"
+         href="/account/"
+         hx-get="/account/"
+         hx-target="#account-main-content"
+         hx-select="#account-main-content"
+         hx-swap="outerHTML"
+         hx-push-url="true">Главная</a>
+      <a class="{% if account_section == 'legal' %}is-active{% endif %}"
+         href="/account/legal/"
+         hx-get="/account/legal/"
+         hx-target="#account-main-content"
+         hx-select="#account-main-content"
+         hx-swap="outerHTML"
+         hx-push-url="true">Мои компании</a>
+      <a class="{% if account_section == 'addresses' %}is-active{% endif %}"
+         href="/account/addresses/"
+         hx-get="/account/addresses/"
+         hx-target="#account-main-content"
+         hx-select="#account-main-content"
+         hx-swap="outerHTML"
+         hx-push-url="true">Мои адреса</a>
+      <a class="{% if account_section == 'orders' %}is-active{% endif %}"
+         href="/account/orders/"
+         hx-get="/account/orders/"
+         hx-target="#account-main-content"
+         hx-select="#account-main-content"
+         hx-swap="outerHTML"
+         hx-push-url="true">Мои заказы</a>
+      <a href="/account/logout/">Выйти</a>
+    </nav>
+  </aside>
+  {% block account_main %}{% endblock %}
+</section>
+{% endblock %}

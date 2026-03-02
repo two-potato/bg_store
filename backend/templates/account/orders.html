@@ -1,26 +1,17 @@
-{% extends "shopfront/base.html" %}
-{% block content %}
-<h1 class="h5 mb-3">Мои заказы</h1>
-{% if orders %}
-  <div class="table-responsive">
-    <table class="table table-sm align-middle">
-      <thead>
-        <tr><th>ID</th><th>Статус</th><th>Сумма</th><th>Дата</th></tr>
-      </thead>
-      <tbody>
-        {% for o in orders %}
-          <tr>
-            <td>#{{ o.id }}</td>
-            <td>{{ o.status }}</td>
-            <td>{{ o.total }} ₽</td>
-            <td>{{ o.created_at }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+{% extends "account/layout.html" %}
+{% block account_main %}
+<section id="account-main-content" class="cabinet-dark-main">
+  <div class="cabinet-dark-hero compact">
+    <div class="cabinet-dark-hero-title">Мои заказы</div>
+    <div class="cabinet-dark-hero-sub">История заказов с быстрым просмотром без перезагрузки.</div>
   </div>
-{% else %}
-  <div class="alert alert-light border">У вас пока нет заказов.</div>
-{% endif %}
+  <section class="cabinet-dark-panel">
+    <h2 class="cabinet-dark-panel-title">Список заказов</h2>
+    {% if orders %}
+      {% include 'account/components/order_table.html' with orders=orders %}
+    {% else %}
+      <div class="alert">У вас пока нет заказов.</div>
+    {% endif %}
+  </section>
+</section>
 {% endblock %}
-

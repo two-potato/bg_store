@@ -1,0 +1,29 @@
+<section id="cart-root" class="cart-container">
+  <div class="flex items-center justify-between mb-3">
+    <h1 class="text-lg font-semibold m-0">Корзина</h1>
+    {% if items %}
+      <form
+        hx-post="/cart/clear/"
+        hx-target="#cart-root"
+        hx-select="#cart-root"
+        hx-swap="outerHTML">
+        <button type="submit" class="btn btn-sm btn-outline">
+          {% include 'shopfront/icons/trash.svg' %}
+          <span class="ml-1">Очистить</span>
+        </button>
+      </form>
+    {% endif %}
+  </div>
+
+  {% include "shopfront/partials/cart_panel.html" %}
+
+  {% if items %}
+    <div class="mt-3 grid gap-2">
+      <a href="/checkout/" class="btn btn-primary w-full">Оформить заказ</a>
+    </div>
+  {% else %}
+    <div class="mt-3">
+      <a href="/catalog/" class="btn btn-outline w-full">Перейти в каталог</a>
+    </div>
+  {% endif %}
+</section>

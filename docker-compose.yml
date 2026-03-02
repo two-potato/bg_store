@@ -9,11 +9,14 @@ services:
       - db
       - redis
       - bot
+      - mailpit
     volumes:
       - ./backend/media:/app/media
       - staticfiles:/app/staticfiles
+      - ./logs:/app/logs
     ports:
       - "8000:8000"
+    command: ["sh", "-lc", "until /app/.venv/bin/python manage.py migrate --noinput; do echo 'Waiting for DB...'; sleep 2; done; exec /app/.venv/bin/python -m uvicorn config.asgi:application --host 0.0.0.0 --port 8000"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
       interval: 10s
@@ -27,6 +30,8 @@ services:
     env_file: ./backend/.env
     command: ["python", "-m", "celery", "-A", "config.celery", "worker", "-l", "INFO"]
     depends_on: [backend, redis, db]
+    volumes:
+      - ./logs:/app/logs
     restart: unless-stopped
 
   celery-beat:
@@ -35,6 +40,8 @@ services:
     env_file: ./backend/.env
     command: ["python", "-m", "celery", "-A", "config.celery", "beat", "-l", "INFO", "--schedule", "/tmp/celerybeat-schedule"]
     depends_on: [backend, redis, db]
+    volumes:
+      - ./logs:/app/logs
     restart: unless-stopped
 
   bot:
@@ -49,6 +56,32 @@ services:
       retries: 10
     restart: unless-stopped
 
+  bot-twa:
+    build: ./bot
+    container_name: bg-bot-twa
+    profiles: ["bots-extra"]
+    env_file: ./bot/.env.twa
+    expose: ["8080"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+
+  bot-notify:
+    build: ./bot
+    container_name: bg-bot-notify
+    profiles: ["bots-extra"]
+    env_file: ./bot/.env.notify
+    expose: ["8080"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+
   db:
     image: postgres:16
     container_name: bg-db
@@ -60,6 +93,14 @@ services:
   redis:
     image: redis:7
     container_name: bg-redis
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: bg-mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
     restart: unless-stopped
 
   es:

@@ -1,0 +1,15 @@
+{# Items to append into #product-grid #}
+{% include "shopfront/components/product_grid_items.html" with products=products %}
+
+{# Replace or remove the load-more sentinel via out-of-band swap #}
+{% if has_next %}
+  <div id="load-more"
+       hx-get="/catalog/?{% if querystring_base %}{{ querystring_base }}&{% endif %}page={{ next_page }}&fragment=grid_append"
+       hx-trigger="revealed"
+       hx-target="#product-grid"
+       hx-swap="beforeend"
+       hx-swap-oob="true"></div>
+{% else %}
+  <div id="load-more" hx-swap-oob="true"></div>
+{% endif %}
+

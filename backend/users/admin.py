@@ -8,8 +8,9 @@ class UserAdmin(admin.ModelAdmin):
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ("user","telegram_id","telegram_username","discount")
-    search_fields = ("telegram_id","telegram_username","user__username")
+    list_display = ("user", "full_name", "contact_email", "role", "telegram_id", "telegram_username", "discount")
+    list_filter = ("role",)
+    search_fields = ("telegram_id", "telegram_username", "user__username", "full_name", "contact_email")
 
 @admin.register(Friendship)
 class FriendshipAdmin(admin.ModelAdmin):

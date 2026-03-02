@@ -1,73 +1,83 @@
 {% extends "shopfront/base.html" %}
 {% block content %}
-<div class="row g-3">
-  <div class="col-12 col-md-6 reveal" data-anim="animate__fadeIn">
+<nav aria-label="breadcrumb" class="mb-3 text-sm text-base-content/60">
+  <a class="link" href="/">Главная</a> / <a class="link" href="/catalog/">Каталог</a> / <span>{{ p.name }}</span>
+</nav>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+  <div class="reveal" data-anim="animate__fadeIn">
     {% with img=p.images.first %}
       {% if img %}
-        <img src="{{ img.url }}" class="img-fluid rounded" alt="{{ p.name }}">
+        <img src="{{ img.url }}" class="w-full rounded" alt="{{ p.name }}">
       {% else %}
-        <img src="https://picsum.photos/seed/p-{{ p.id }}/900/600" class="img-fluid rounded" alt="{{ p.name }}">
+        <img src="https://picsum.photos/seed/p-{{ p.id }}/900/600" class="w-full rounded" alt="{{ p.name }}">
       {% endif %}
     {% endwith %}
   </div>
-  <div class="col-12 col-md-6 reveal" data-anim="animate__fadeInUp">
-    <h1 class="h4">{{ p.name }}</h1>
-    <div class="text-muted small mb-2">{{ p.brand }}{% if p.series %} / {{ p.series.name }}{% endif %}</div>
-    <div class="h5 mb-3">{{ p.price }} ₽</div>
-    <div class="mb-2 small text-muted d-flex flex-column gap-1">
-      <div><strong class="me-1">Бренд:</strong>{{ p.brand }}</div>
+  <div class="reveal" data-anim="animate__fadeInUp">
+    <h1 class="text-xl font-semibold">{{ p.name }}</h1>
+    <div class="text-sm text-base-content/60 mb-2">{{ p.brand }}{% if p.series %} / {{ p.series.name }}{% endif %}</div>
+    <div class="text-lg font-bold mb-3">{{ p.price }} ₽</div>
+    <div class="mb-3 text-sm text-base-content/70 space-y-1">
+      <div><span class="font-semibold mr-1">Бренд:</span>{{ p.brand }}</div>
       {% if p.category %}
         <div>
-          <strong class="me-1">Категория:</strong>
+          <span class="font-semibold mr-1">Категория:</span>
           {% if p.category.parent %}{{ p.category.parent.name }} / {% endif %}{{ p.category.name }}
         </div>
       {% endif %}
-      {% if p.flavor %}<div><strong class="me-1">Вкус:</strong>{{ p.flavor }}</div>{% endif %}
-      {% if p.volume_ml %}<div><strong class="me-1">Объём:</strong>{{ p.volume_ml }} мл</div>{% endif %}
-      <div class="{% if p.stock_qty > 0 %}text-success{% else %}text-danger{% endif %}">
-        {% if p.stock_qty > 0 %}<iconify-icon icon="tabler:circle-check" class="me-1"></iconify-icon>В наличии: {{ p.stock_qty }}{% else %}<iconify-icon icon="tabler:circle-x" class="me-1"></iconify-icon>Нет в наличии{% endif %}
+      {% if p.flavor %}<div><span class="font-semibold mr-1">Вкус:</span>{{ p.flavor }}</div>{% endif %}
+      {% if p.volume_ml %}<div><span class="font-semibold mr-1">Объём:</span>{{ p.volume_ml }} мл</div>{% endif %}
+      <div class="{% if p.stock_qty > 0 %}text-success{% else %}text-error{% endif %}">
+        {% if p.stock_qty > 0 %}<span class="mr-1 inline-block">{% include 'shopfront/icons/circle-check.svg' %}</span>В наличии: {{ p.stock_qty }}{% else %}<span class="mr-1 inline-block">{% include 'shopfront/icons/circle-x.svg' %}</span>Нет в наличии{% endif %}
       </div>
     </div>
     {% if p.tags.all %}
-    <div class="mb-3 d-flex flex-wrap gap-1">
+    <div class="mb-3 flex flex-wrap gap-1">
       {% for t in p.tags.all %}
-        <a class="chip text-decoration-none hvr-underline-from-center" href="/catalog/?tag={{ t.slug }}"><iconify-icon icon="tabler:tag" class="me-1"></iconify-icon>{{ t.name }}</a>
+        <a class="badge badge-ghost" href="/catalog/?tag={{ t.slug }}"><span class="mr-1">{% include 'shopfront/icons/tag.svg' %}</span>{{ t.name }}</a>
       {% endfor %}
     </div>
     {% endif %}
-    <div class="d-flex gap-2 mb-3">
-      <div class="input-group" style="max-width:200px">
-        <button class="btn btn-outline-secondary" type="button" onclick="var i=document.getElementById('qty-{{ p.id }}'); i.value = Math.max(1, (parseInt(i.value||'1')||1) - 1)">−</button>
-        <input type="number" id="qty-{{ p.id }}" name="qty" class="form-control text-center" value="1" min="1" max="{{ p.stock_qty }}" {% if p.stock_qty <= 0 %}disabled{% endif %}>
-        <button class="btn btn-outline-secondary" type="button" onclick="var i=document.getElementById('qty-{{ p.id }}'); i.value = (parseInt(i.value||'1')||1) + 1">+</button>
+    <div class="flex gap-2 mb-3 items-center pb-14 lg:pb-0">
+      <div class="join max-w-xs">
+        <button class="btn btn-outline join-item" type="button" data-qty-action="dec" data-qty-target="qty-{{ p.id }}">−</button>
+        <input type="number" id="qty-{{ p.id }}" name="qty" class="input input-bordered text-center join-item w-20" value="1" min="1" max="{{ p.stock_qty }}" {% if p.stock_qty <= 0 %}disabled{% endif %}>
+        <button class="btn btn-outline join-item" type="button" data-qty-action="inc" data-qty-target="qty-{{ p.id }}">+</button>
       </div>
-      <button class="btn btn-dark"
+      <button class="btn btn-accent fixed lg:static bottom-16 left-3 right-3 z-40 lg:w-auto"
                hx-post="/cart/add/"
                hx-vals='{"product_id": "{{ p.id }}"}'
                hx-include="#qty-{{ p.id }}"
                hx-swap="none"
-               hx-on::after-request="document.body.dispatchEvent(new Event('cartChanged'));"
                {% if p.stock_qty <= 0 %}disabled aria-disabled="true"{% endif %}>
-        <iconify-icon icon="tabler:shopping-cart-plus"></iconify-icon>
+        {% include 'shopfront/icons/shopping-cart-plus.svg' %}
       </button>
     </div>
     {% if p.composition or p.shelf_life %}
     <div class="mb-3">
-      <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-composition" aria-expanded="false" aria-controls="collapse-composition">
-        <iconify-icon icon="tabler:list-details" class="me-1"></iconify-icon>Состав и срок годности
-      </button>
-      <div class="collapse mt-2" id="collapse-composition">
-        <div class="small">
+      <details class="collapse collapse-arrow bg-base-200">
+        <summary class="collapse-title text-sm font-medium flex items-center"> <span class="mr-2 inline-block">{% include 'shopfront/icons/list-details.svg' %}</span>Состав и срок годности</summary>
+        <div class="collapse-content text-sm">
           {% if p.composition %}<div><strong>Состав:</strong> {{ p.composition }}</div>{% endif %}
           {% if p.shelf_life %}<div><strong>Срок годности:</strong> {{ p.shelf_life }}</div>{% endif %}
+        </div>
+      </details>
+    </div>
+    {% endif %}
+    {% if p.description %}
+    <div class="mb-3">
+      <div class="card">
+        <div class="card-body p-3">
+          <h2 class="text-sm font-semibold mb-1">Описание</h2>
+          <div class="text-sm text-base-content/70 whitespace-pre-line">{{ p.description }}</div>
         </div>
       </div>
     </div>
     {% endif %}
-    <dl class="row small">
-      {% if p.country_of_origin %}<dt class="col-4">Страна</dt><dd class="col-8">{{ p.country_of_origin }}</dd>{% endif %}
-      {% if p.material %}<dt class="col-4">Материал</dt><dd class="col-8">{{ p.material }}</dd>{% endif %}
-      {% if p.volume_ml %}<dt class="col-4">Объём</dt><dd class="col-8">{{ p.volume_ml }} мл</dd>{% endif %}
+    <dl class="text-sm grid grid-cols-2 gap-2">
+      {% if p.country_of_origin %}<dt class="font-semibold">Страна</dt><dd>{{ p.country_of_origin }}</dd>{% endif %}
+      {% if p.material %}<dt class="font-semibold">Материал</dt><dd>{{ p.material }}</dd>{% endif %}
+      {% if p.volume_ml %}<dt class="font-semibold">Объём</dt><dd>{{ p.volume_ml }} мл</dd>{% endif %}
     </dl>
   </div>
 </div>

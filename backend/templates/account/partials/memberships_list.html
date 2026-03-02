@@ -1,17 +1,12 @@
 {% if memberships %}
-  <div class="list-group">
+  <ul class="divide-y rounded-box border border-white/10 bg-[#17243d]">
     {% for m in memberships %}
-      <div class="list-group-item">
-        <div class="d-flex justify-content-between">
-          <div>
-            <div class="fw-semibold">{{ m.legal_entity.name }}</div>
-            <div class="small text-muted">ИНН: {{ m.legal_entity.inn }} · Роль: {{ m.role }}</div>
-          </div>
-        </div>
-      </div>
+      <li class="p-3">
+        <div class="font-semibold">{{ m.legal_entity.name }}</div>
+        <div class="text-xs text-base-content/60">ИНН: {{ m.legal_entity.inn }} · Роль: {{ m.role }}</div>
+      </li>
     {% endfor %}
-  </div>
+  </ul>
 {% else %}
-  <div class="alert alert-light border">Пока нет привязанных юр лиц.</div>
+  <div class="alert">Пока нет привязанных юр лиц.</div>
 {% endif %}
-

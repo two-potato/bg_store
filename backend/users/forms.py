@@ -41,33 +41,35 @@ class RegisterForm(forms.ModelForm):
         if commit:
             user.save()
             prof, _ = UserProfile.objects.get_or_create(user=user)
+            prof.full_name = (self.cleaned_data.get("username") or "").strip()
+            prof.contact_email = (self.cleaned_data.get("email") or "").strip()
             phone = self.cleaned_data.get("phone")
             if phone:
-                prof.telegram_username = prof.telegram_username or None
                 setattr(prof, "phone", phone)
             prof.save()
         return user
 
 
 class ProfileForm(forms.ModelForm):
-    phone = forms.CharField(label="Телефон", max_length=32, required=False)
-
     class Meta:
-        model = User
-        fields = ["email", "first_name", "last_name"]
-
-    def __init__(self, *args, **kwargs):
-        user = kwargs.get("instance")
-        super().__init__(*args, **kwargs)
-        if user:
-            self.fields["phone"].initial = getattr(getattr(user, "profile", None), "phone", "")
+        model = UserProfile
+        fields = ["full_name", "contact_email", "phone", "photo"]
+        labels = {
+            "full_name": "Имя",
+            "contact_email": "Email",
+            "phone": "Телефон",
+            "photo": "Фото профиля",
+        }
 
     def save(self, commit=True):
-        user = super().save(commit=commit)
-        prof, _ = UserProfile.objects.get_or_create(user=user)
-        prof.phone = self.cleaned_data.get("phone")
-        prof.save()
-        return user
+        profile: UserProfile = super().save(commit=commit)
+        # Keep auth/login email consistent while profile remains source of truth for account UI.
+        email = (self.cleaned_data.get("contact_email") or "").strip()
+        user = profile.user
+        if user.email != email:
+            user.email = email
+            user.save(update_fields=["email"])
+        return profile
 
 
 class LegalEntityRequestForm(forms.Form):

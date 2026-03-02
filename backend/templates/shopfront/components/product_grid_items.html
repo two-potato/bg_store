@@ -1,0 +1,6 @@
+{% for p in products %}
+  <div class="reveal" data-anim="animate__fadeInUp">
+    {% include "shopfront/components/product_card.html" with p=p %}
+  </div>
+{% endfor %}
+

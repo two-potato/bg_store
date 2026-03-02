@@ -1,0 +1,11 @@
+{% if tags %}
+<div class="chips-scroll -mx-3 px-3 md:mx-0 md:px-0 mb-3">
+  <div class="flex gap-2 overflow-x-auto no-scrollbar py-1">
+    {% for t in tags %}
+      <a class="badge whitespace-nowrap {% if request.GET.tag|default:'' == t.id|stringformat:'s' or request.GET.tag_slug == t.slug %}badge-neutral{% else %}badge-ghost{% endif %}"
+         href="/catalog/?tag={{ t.id }}{% if querystring_base %}&{{ querystring_base|safe }}{% endif %}">{{ t.name }}</a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+

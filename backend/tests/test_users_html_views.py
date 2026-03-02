@@ -1,6 +1,7 @@
 import pytest
 from orders.models import Order
 from commerce.models import LegalEntity, LegalEntityMembership, DeliveryAddress, LegalEntityCreationRequest
+from users.models import UserProfile
 
 pytestmark = pytest.mark.django_db
 
@@ -15,8 +16,19 @@ def test_account_home_auth_and_update(client, client_logged, user):
     r1 = client.get("/account/")
     assert r1.status_code == 200
     # POST update
-    r2 = client.post("/account/", {"email": "new@example.com", "first_name": "A", "last_name": "B"})
+    r2 = client.post("/account/", {"contact_email": "new@example.com", "full_name": "Alice B", "phone": "+79999999999"})
     assert r2.status_code in (302, 303)
+    profile = UserProfile.objects.get(user=user)
+    assert profile.contact_email == "new@example.com"
+    assert profile.full_name == "Alice B"
+    assert profile.phone == "+79999999999"
+
+
+def test_user_profile_created_automatically(client, db):
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    u = User.objects.create_user(username="auto_profile_u", password="pass")
+    assert UserProfile.objects.filter(user=u).exists()
 
 
 def test_account_addresses_htmx_flow(client_logged, user, db):
@@ -84,6 +96,22 @@ def test_account_orders_page(client_logged, user, db):
     Order.objects.create(legal_entity=le, placed_by=user, delivery_address=addr)
     r = client_logged.get("/account/orders/")
     assert r.status_code == 200
+
+
+def test_account_order_detail_owner_only(client, client_logged, user, db):
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    other = User.objects.create_user(username="u2", password="pass")
+    le = LegalEntity.objects.create(name="LE3", inn="7715964180", bik="044525225", checking_account="40702810900000000004")
+    addr = DeliveryAddress.objects.create(legal_entity=le, label="WH", country="RU", city="SPB", street="Nevsky", postcode="190000")
+    own_order = Order.objects.create(legal_entity=le, placed_by=user, delivery_address=addr)
+    other_order = Order.objects.create(legal_entity=le, placed_by=other, delivery_address=addr)
+
+    r1 = client_logged.get(f"/account/orders/{own_order.id}/")
+    assert r1.status_code == 200
+
+    r2 = client_logged.get(f"/account/orders/{other_order.id}/")
+    assert r2.status_code == 404
 
 
 def test_login_register_logout(client, user):

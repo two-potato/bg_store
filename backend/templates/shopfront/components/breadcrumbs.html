@@ -1,0 +1,16 @@
+{# Simple breadcrumbs component. Usage:
+   {% include 'shopfront/components/breadcrumbs.html' with items=br_items %}
+   where br_items is a list of {href,label} with last item possibly having no href (current)
+#}
+<nav aria-label="breadcrumb" class="mb-3 text-sm text-base-content/60">
+  {% if items %}
+    {% for it in items %}
+      {% if forloop.last or not it.href %}
+        <span>{{ it.label }}</span>
+      {% else %}
+        <a class="link" href="{{ it.href }}">{{ it.label }}</a> /
+      {% endif %}
+    {% endfor %}
+  {% endif %}
+</nav>
+

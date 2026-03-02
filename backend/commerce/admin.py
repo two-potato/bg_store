@@ -43,16 +43,17 @@ class MembershipRequestAdmin(admin.ModelAdmin):
         approved = 0
         skipped = 0
         for mr in queryset.select_related("legal_entity", "applicant"):
-            if mr.status != mr.Status.PENDING:
+            if getattr(mr.status, 'code', None) != 'pending':
                 skipped += 1
                 continue
             with transaction.atomic():
                 LegalEntityMembership.objects.get_or_create(
                     user=mr.applicant,
                     legal_entity=mr.legal_entity,
-                    defaults={"role": LegalEntityMembership.Role.MANAGER},
+                    defaults={"role": None},
                 )
-                mr.status = mr.Status.APPROVED
+                from .models import RequestStatus
+                mr.status = RequestStatus.objects.get(code='approved')
                 mr.save(update_fields=["status"])
                 approved += 1
         if approved:
@@ -62,9 +63,8 @@ class MembershipRequestAdmin(admin.ModelAdmin):
 
     @admin.action(description="Отклонить выбранные заявки")
     def reject_requests(self, request, queryset):
-        updated = queryset.filter(status=MembershipRequest.Status.PENDING).update(
-            status=MembershipRequest.Status.REJECTED
-        )
+        from .models import RequestStatus
+        updated = queryset.filter(status__code='pending').update(status=RequestStatus.objects.get(code='rejected'))
         messages.success(request, f"Отклонено: {updated}")
 
 
@@ -80,7 +80,7 @@ class LegalEntityCreationRequestAdmin(admin.ModelAdmin):
         created = 0
         skipped = 0
         for cr in queryset.select_related("applicant"):
-            if cr.status != cr.Status.PENDING:
+            if getattr(cr.status, 'code', None) != 'pending':
                 skipped += 1
                 continue
             with transaction.atomic():
@@ -99,12 +99,10 @@ class LegalEntityCreationRequestAdmin(admin.ModelAdmin):
                     checking_account=cr.checking_account,
                     bank_name=cr.bank_name,
                 )
-                LegalEntityMembership.objects.create(
-                    user=cr.applicant,
-                    legal_entity=le,
-                    role=LegalEntityMembership.Role.OWNER,
-                )
-                cr.status = cr.Status.APPROVED
+                from .models import MembershipRole, RequestStatus
+                owner = MembershipRole.objects.get(code='owner')
+                LegalEntityMembership.objects.create(user=cr.applicant, legal_entity=le, role=owner)
+                cr.status = RequestStatus.objects.get(code='approved')
                 cr.save(update_fields=["status"])
                 created += 1
         if created:
@@ -114,7 +112,6 @@ class LegalEntityCreationRequestAdmin(admin.ModelAdmin):
 
     @admin.action(description="Отклонить создание юрлица")
     def reject_creations(self, request, queryset):
-        updated = queryset.filter(status=LegalEntityCreationRequest.Status.PENDING).update(
-            status=LegalEntityCreationRequest.Status.REJECTED
-        )
+        from .models import RequestStatus
+        updated = queryset.filter(status__code='pending').update(status=RequestStatus.objects.get(code='rejected'))
         messages.success(request, f"Отклонено заявок: {updated}")

@@ -1,43 +1,40 @@
 {% extends "shopfront/base.html" %}
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-12 col-md-6 col-lg-5">
-    <div class="card">
-      <div class="card-body">
-        <h1 class="h5 mb-3">Регистрация</h1>
-        <form method="post">
-          {% csrf_token %}
-          <div class="mb-2">
-            <label class="form-label small">Имя пользователя</label>
-            <input type="text" name="username" class="form-control" required>
-          </div>
-          <div class="mb-2">
-            <label class="form-label small">Email</label>
-            <input type="email" name="email" class="form-control">
-          </div>
-          <div class="mb-2">
-            <label class="form-label small">Телефон</label>
-            <input type="text" name="phone" class="form-control">
-          </div>
-          <div class="mb-2">
-            <label class="form-label small">Пароль</label>
-            <input type="password" name="password1" class="form-control" required>
-          </div>
-          <div class="mb-3">
-            <label class="form-label small">Повторите пароль</label>
-            <input type="password" name="password2" class="form-control" required>
-          </div>
-          {% if form.non_field_errors %}
-            <div class="alert alert-danger py-1 small">{{ form.non_field_errors }}</div>
-          {% endif %}
-          <button class="btn btn-dark w-100">Зарегистрироваться</button>
-        </form>
-        <div class="text-center mt-3 small">
-          Уже есть аккаунт? <a href="/account/login/">Войти</a>
+<div class="max-w-md mx-auto">
+  <div class="card bg-base-100">
+    <div class="card-body p-4">
+      <h1 class="text-lg font-semibold mb-3">Регистрация</h1>
+      <form method="post" class="grid gap-3">
+        {% csrf_token %}
+        <div>
+          <label class="text-xs mb-1 block">Имя пользователя</label>
+          <input type="text" name="username" class="input input-bordered w-full" required>
         </div>
+        <div>
+          <label class="text-xs mb-1 block">Email</label>
+          <input type="email" name="email" class="input input-bordered w-full">
+        </div>
+        <div>
+          <label class="text-xs mb-1 block">Телефон</label>
+          <input type="text" name="phone" class="input input-bordered w-full">
+        </div>
+        <div>
+          <label class="text-xs mb-1 block">Пароль</label>
+          <input type="password" name="password1" class="input input-bordered w-full" required>
+        </div>
+        <div>
+          <label class="text-xs mb-1 block">Повторите пароль</label>
+          <input type="password" name="password2" class="input input-bordered w-full" required>
+        </div>
+        {% if form.non_field_errors %}
+          <div class="alert alert-error text-sm">{{ form.non_field_errors }}</div>
+        {% endif %}
+        <button class="btn btn-primary w-full">Зарегистрироваться</button>
+      </form>
+      <div class="text-center mt-3 text-xs">
+        Уже есть аккаунт? <a href="/account/login/" class="link">Войти</a>
       </div>
     </div>
   </div>
 </div>
 {% endblock %}
-

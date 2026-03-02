@@ -98,6 +98,7 @@ class Product(TimeStampedModel, SeoFieldsMixin):
     attributes = models.JSONField(default=dict, blank=True)
     composition = models.TextField(blank=True)
     shelf_life = models.CharField(max_length=120, blank=True)
+    description = models.TextField(blank=True)
     tags = models.ManyToManyField(Tag, blank=True, related_name="products")
 
     def __str__(self):

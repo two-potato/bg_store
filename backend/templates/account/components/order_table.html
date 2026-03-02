@@ -1,0 +1,35 @@
+{% load tz %}
+<div class="overflow-x-auto">
+  <table class="table table-zebra table-sm">
+    <thead>
+      <tr><th>ID</th><th>Статус</th><th>Сумма</th><th>Дата</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for o in orders %}
+        <tr>
+          <td>
+            <a class="link link-hover font-medium"
+               href="/account/orders/{{ o.id }}/"
+               hx-get="/account/orders/{{ o.id }}/"
+               hx-target="#account-main-content"
+               hx-select="#account-main-content"
+               hx-swap="outerHTML"
+               hx-push-url="true">#{{ o.id }}</a>
+          </td>
+          <td>{{ o.get_status_display }}</td>
+          <td>{{ o.total }} ₽</td>
+          <td>{{ o.created_at|timezone:"Europe/Moscow"|date:"d.m.Y H:i" }}</td>
+          <td class="text-right">
+            <a class="btn btn-ghost btn-xs"
+               href="/account/orders/{{ o.id }}/"
+               hx-get="/account/orders/{{ o.id }}/"
+               hx-target="#account-main-content"
+               hx-select="#account-main-content"
+               hx-swap="outerHTML"
+               hx-push-url="true">Открыть</a>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

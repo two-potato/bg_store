@@ -15,6 +15,8 @@ def _make_product():
 
 def test_order_create_list_and_internal_actions(api_client, user, db):
     p = _make_product()
+    user.profile.discount = 5
+    user.profile.save(update_fields=["discount"])
     le = LegalEntity.objects.create(name="LE", inn="7707083893", bik="044525225", checking_account="40702810900000000001")
     LegalEntityMembership.objects.create(user=user, legal_entity=le)
     addr = DeliveryAddress.objects.create(legal_entity=le, label="Office", country="RU", city="Msk", street="Lenina", postcode="101000")
@@ -27,6 +29,10 @@ def test_order_create_list_and_internal_actions(api_client, user, db):
     r = api_client.post("/api/orders/", data=payload, content_type="application/json")
     assert r.status_code == 201
     order_id = r.json()["id"]
+    body = r.json()
+    assert body["subtotal"] == "200.00"
+    assert body["discount_amount"] == "10.00"
+    assert body["total"] == "190.00"
 
     # List should include order (via membership filter)
     r2 = api_client.get("/api/orders/")

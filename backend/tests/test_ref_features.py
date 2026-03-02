@@ -3,7 +3,6 @@ from django.core.exceptions import ValidationError
 from catalog.models import Product, ProductImage, Brand, Category, Color, Country
 from users.models import Friendship
 from django.contrib.auth import get_user_model
-from rest_framework import serializers
 from catalog.serializers import ProductSerializer
 
 pytestmark = pytest.mark.django_db
@@ -61,4 +60,3 @@ def test_product_serializer_color_country_names():
     data = ProductSerializer(p).data
     assert data["color"] == "Чёрный"
     assert data["country_of_origin"] == "Россия"
-

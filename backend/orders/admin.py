@@ -1,5 +1,6 @@
+from django import forms
 from django.contrib import admin
-from django_fsm import can_proceed
+import logging
 from .models import Order, OrderItem
 
 
@@ -9,9 +10,33 @@ class OrderItemInline(admin.TabularInline):
     readonly_fields = ("name", "price", "qty")
 
 
+class OrderAdminForm(forms.ModelForm):
+    status = forms.ChoiceField(
+        choices=(
+            (Order.Status.NEW, "Новый"),
+            (Order.Status.DELIVERING, "В работе"),
+            (Order.Status.DELIVERED, "Выполнен"),
+        )
+    )
+
+    class Meta:
+        model = Order
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            current = self.instance.status
+            if current not in {Order.Status.NEW, Order.Status.DELIVERING, Order.Status.DELIVERED}:
+                # Legacy statuses are treated as "in progress" in admin UI.
+                current = Order.Status.DELIVERING
+            self.fields["status"].initial = current
+
+
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ("id", "status", "legal_entity", "placed_by", "total", "created_at")
+    form = OrderAdminForm
+    list_display = ("id", "status_label", "legal_entity", "placed_by", "total", "created_at")
     list_filter = ("status", "legal_entity")
     search_fields = ("id", "placed_by__username")
     inlines = [OrderItemInline]
@@ -23,24 +48,54 @@ class OrderAdmin(admin.ModelAdmin):
         "updated_at",
     )
 
-    actions = ["approve_order", "reject_order"]
+    fieldsets = (
+        (None, {
+            "fields": (
+                "status",
+                "customer_type", "payment_method",
+                "legal_entity", "placed_by", "delivery_address",
+                "customer_name", "customer_phone", "address_text",
+            )
+        }),
+        ("Суммы", {"fields": ("subtotal", "discount_amount", "total")}),
+        ("Служебные", {"fields": ("created_at", "updated_at")}),
+    )
 
-    def approve_order(self, request, queryset):
+    actions = [
+        "mark_new",
+        "mark_in_progress",
+        "mark_completed",
+    ]
+
+    def mark_new(self, request, queryset):
+        log = logging.getLogger("orders")
         for order in queryset:
-            if can_proceed(order.approve):
-                order.approve()
-                order.save()
+            order.status = Order.Status.NEW
+            order.save(update_fields=["status", "updated_at"])
+            log.info("order_marked_new", extra={"order_id": order.id})
+    mark_new.short_description = "Отметить как новые"
 
-    approve_order.short_description = "Approve selected orders"
-
-    def reject_order(self, request, queryset):
+    def mark_in_progress(self, request, queryset):
+        log = logging.getLogger("orders")
         for order in queryset:
-            if can_proceed(order.cancel):
-                order.cancel()
-                order.save()
+            # Admin shortcut: direct set to "in progress".
+            order.status = Order.Status.DELIVERING
+            order.save(update_fields=["status", "updated_at"])
+            log.info("order_marked_in_progress", extra={"order_id": order.id})
+    mark_in_progress.short_description = "Перевести в работу"
 
-    reject_order.short_description = "Reject selected orders"
+    def mark_completed(self, request, queryset):
+        log = logging.getLogger("orders")
+        for order in queryset:
+            # Admin shortcut: direct set to "completed".
+            order.status = Order.Status.DELIVERED
+            order.save(update_fields=["status", "updated_at"])
+            log.info("order_marked_completed", extra={"order_id": order.id})
+    mark_completed.short_description = "Отметить как выполненные"
 
+    def status_label(self, obj):
+        return obj.get_status_display()
+    status_label.short_description = "Статус"
 
 @admin.register(OrderItem)
 class OrderItemAdmin(admin.ModelAdmin):

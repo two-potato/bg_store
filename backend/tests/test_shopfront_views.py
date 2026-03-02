@@ -1,6 +1,7 @@
 import pytest
 from catalog.models import Brand, Category, Product, Series, Tag
 from commerce.models import LegalEntity, LegalEntityMembership, DeliveryAddress
+from orders.models import Order
 
 pytestmark = pytest.mark.django_db
 
@@ -34,30 +35,52 @@ def test_product_page(client, db):
 def test_cart_flow(client, db):
     p, *_ = _prod()
     # badge/panel empty
-    assert client.get("/cart/badge/").status_code == 200
+    r_badge0 = client.get("/cart/badge/")
+    assert r_badge0.status_code == 200
+    assert "0" in r_badge0.text
     assert client.get("/cart/panel/").status_code == 200
     # add
     r_add = client.post("/cart/add/", {"product_id": p.id, "qty": 2})
-    assert r_add.status_code == 201
+    assert r_add.status_code == 200
+    assert 'id="cart-badge"' in r_add.text
+    assert 'hx-swap-oob="outerHTML"' in r_add.text
+    assert "cartChanged" in (r_add.headers.get("HX-Trigger") or "")
+    r_badge1 = client.get("/cart/badge/")
+    assert "2" in r_badge1.text
+    assert "30" in r_badge1.text
     # update inc
     r_u1 = client.post("/cart/update/", {"product_id": p.id, "op": "inc"})
     assert r_u1.status_code == 200
+    assert 'hx-swap-oob="outerHTML"' in r_u1.text
+    r_badge2 = client.get("/cart/badge/")
+    assert "3" in r_badge2.text
+    assert "45" in r_badge2.text
     # update set
     r_u2 = client.post("/cart/update/", {"product_id": p.id, "op": "set", "qty": 5})
     assert r_u2.status_code == 200
+    assert 'hx-swap-oob="outerHTML"' in r_u2.text
+    r_badge3 = client.get("/cart/badge/")
+    assert "5" in r_badge3.text
+    assert "75" in r_badge3.text
     # remove
     r_rm = client.post("/cart/remove/", {"product_id": str(p.id)})
     assert r_rm.status_code == 200
+    assert 'hx-swap-oob="outerHTML"' in r_rm.text
+    r_badge4 = client.get("/cart/badge/")
+    assert "0" in r_badge4.text
     # update for non-existing item -> 404 branch
     r_u3 = client.post("/cart/update/", {"product_id": p.id, "op": "inc"})
     assert r_u3.status_code == 404
     # clear
     r_cl = client.post("/cart/clear/")
     assert r_cl.status_code == 200
+    assert 'hx-swap-oob="outerHTML"' in r_cl.text
 
 
 def test_checkout_company_and_individual(client_logged, user, db):
     p, *_ = _prod()
+    user.profile.discount = 10
+    user.profile.save(update_fields=["discount"])
     # Prepare membership and address
     le = LegalEntity.objects.create(name="LE", inn="7707083893", bik="044525225", checking_account="40702810900000000001")
     LegalEntityMembership.objects.create(user=user, legal_entity=le)
@@ -80,6 +103,10 @@ def test_checkout_company_and_individual(client_logged, user, db):
     })
     # redirect to orders page
     assert r_sub.status_code in (302, 303)
+    first = Order.objects.filter(placed_by=user).order_by("-id").first()
+    assert str(first.subtotal) == "15.00"
+    assert str(first.discount_amount) == "1.50"
+    assert str(first.total) == "13.50"
 
     # individual submit
     s = client_logged.session
@@ -93,3 +120,7 @@ def test_checkout_company_and_individual(client_logged, user, db):
         "address_text": "Street 1",
     })
     assert r_sub2.status_code in (302, 303)
+    second = Order.objects.filter(placed_by=user).order_by("-id").first()
+    assert str(second.subtotal) == "30.00"
+    assert str(second.discount_amount) == "3.00"
+    assert str(second.total) == "27.00"

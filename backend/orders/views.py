@@ -38,7 +38,7 @@ class OrderApproveView(LoggedAPIViewMixin, APIView):
         order = get_object_or_404(Order.objects.select_related("legal_entity"), pk=pk)
         if not LegalEntityMembership.objects.filter(
             legal_entity=order.legal_entity, user__profile__telegram_id=admin_tg_id,
-            role__in=[LegalEntityMembership.Role.OWNER, LegalEntityMembership.Role.ADMIN]
+            role__code__in=["owner","admin"]
         ).exists():
             return Response({"detail":"Not entity admin"}, status=403)
         order.approve()
@@ -53,7 +53,7 @@ class OrderRejectView(LoggedAPIViewMixin, APIView):
         order = get_object_or_404(Order.objects.select_related("legal_entity","placed_by__profile"), pk=pk)
         if not LegalEntityMembership.objects.filter(
             legal_entity=order.legal_entity, user__profile__telegram_id=admin_tg_id,
-            role__in=[LegalEntityMembership.Role.OWNER, LegalEntityMembership.Role.ADMIN]
+            role__code__in=["owner","admin"]
         ).exists():
             return Response({"detail":"Not entity admin"}, status=403)
         order.cancel()

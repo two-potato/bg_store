@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Small bridge styles so Tailwind can co-exist with existing Bootstrap templates for now */
+.nav-shadow { box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.btn-icon svg { width: 1.1rem; height: 1.1rem; }
+
+/* Desktop vs Mobile helpers (via body classes set in base.html) */
+body.is-mobile .desktop-only { display: none; }
+body.is-desktop .mobile-only { display: none; }
+
+/* HTMX indicator (hidden by default, show when [aria-busy=true]) */
+#htmx-indicator.htmx-indicator { display: none; }
+[hx-request] #htmx-indicator, .htmx-request #htmx-indicator { display: block; }
+
+/* Prevent layout shift when switching Add button <-> stepper */
+.card-controls-wrap { position: relative; min-height: 2.5rem; /* ~40px */ }
+.card-controls-layer { position: absolute; inset: 0; display: flex; align-items: center; justify-content: space-between; }
+.qty-stepper .btn { min-width: 2rem; }

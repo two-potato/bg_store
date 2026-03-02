@@ -37,7 +37,7 @@ class MembershipRequestViewSet(LoggedViewSetMixin, mixins.CreateModelMixin, view
         log.info("membership_request_created", extra={"legal_entity_id": req.legal_entity_id, "applicant_id": req.applicant_id})
         admins_qs = LegalEntityMembership.objects.filter(
             legal_entity=req.legal_entity,
-            role__in=[LegalEntityMembership.Role.OWNER, LegalEntityMembership.Role.ADMIN]
+            role__code__in=["owner","admin"]
         ).select_related("user__profile")
         admins = list(admins_qs)
         async def send(admins_list):
@@ -71,7 +71,23 @@ class DeliveryAddressViewSet(LoggedViewSetMixin, viewsets.ModelViewSet):
         if not LegalEntityMembership.objects.filter(user=self.request.user, legal_entity_id=le_id).exists():
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Нет доступа к выбранному юрлицу")
-        serializer.save(legal_entity_id=le_id)
+        obj = serializer.save(legal_entity_id=le_id)
+        try:
+            log.info(
+                "address_created",
+                extra={
+                    "user_id": self.request.user.id,
+                    "legal_entity_id": le_id,
+                    "address_id": obj.id,
+                    "city": obj.city,
+                    "street": obj.street,
+                    "lat": float(obj.latitude) if obj.latitude is not None else None,
+                    "lon": float(obj.longitude) if obj.longitude is not None else None,
+                    "is_default": obj.is_default,
+                },
+            )
+        except Exception:
+            pass
 
 
 # -------- External lookups (DaData) --------

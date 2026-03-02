@@ -1,0 +1,28 @@
+<nav class="mobile-only mobile-nav-mint fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur" aria-label="Нижняя навигация">
+  <ul class="grid grid-cols-4">
+    <li>
+      <a href="/" hx-boost="false" class="flex flex-col items-center justify-center py-2 text-xs gap-1 mobile-nav-mint-link">
+        {% include 'shopfront/icons/layout-grid.svg' %}
+        <span>Главная</span>
+      </a>
+    </li>
+    <li>
+      <a href="/catalog/" hx-boost="false" class="flex flex-col items-center justify-center py-2 text-xs gap-1 mobile-nav-mint-link">
+        {% include 'shopfront/icons/category.svg' %}
+        <span>Каталог</span>
+      </a>
+    </li>
+    <li>
+      <a href="/cart/" hx-boost="false" class="flex flex-col items-center justify-center py-2 text-xs gap-1 mobile-nav-mint-link">
+        {% include 'shopfront/icons/shopping-cart.svg' %}
+        <span>Корзина</span>
+      </a>
+    </li>
+    <li>
+      <a href="/account/" hx-boost="false" class="flex flex-col items-center justify-center py-2 text-xs gap-1 mobile-nav-mint-link">
+        {% include 'shopfront/icons/user.svg' %}
+        <span>Профиль</span>
+      </a>
+    </li>
+  </ul>
+</nav>

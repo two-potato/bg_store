@@ -1,0 +1,89 @@
+<div id="checkout-form-block">
+  <div class="card bg-base-100">
+    <div class="card-body">
+    <h2 class="text-sm font-semibold">Данные для заказа</h2>
+    {% if checkout_error %}
+      <div class="alert alert-error text-sm">{{ checkout_error }}</div>
+    {% endif %}
+    <form method="post"
+          action="/checkout/submit/"
+          data-checkout-form
+          hx-post="/checkout/submit/"
+          hx-target="#checkout-form-block"
+          hx-swap="outerHTML"
+          class="grid gap-3 mt-2 pb-14 lg:pb-0">
+      {% csrf_token %}
+      <div>
+        <label class="text-xs mb-1 block">Тип клиента</label>
+        <div class="flex gap-4">
+          <label class="label cursor-pointer gap-2">
+            <input class="radio radio-sm" type="radio" name="customer_type" value="individual"
+                   {% if form_data.customer_type == "individual" or not form_data.customer_type %}checked{% endif %}>
+            <span class="label-text">Физ. лицо</span>
+          </label>
+          <label class="label cursor-pointer gap-2">
+            <input class="radio radio-sm" type="radio" name="customer_type" value="company"
+                   {% if form_data.customer_type == "company" %}checked{% endif %}>
+            <span class="label-text">Юр. лицо</span>
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <label class="text-xs mb-1 block">Способ оплаты</label>
+        <div class="flex gap-4">
+          <label class="label cursor-pointer gap-2">
+            <input class="radio radio-sm" type="radio" name="payment_method" value="cash"
+                   {% if form_data.payment_method == "cash" or not form_data.payment_method %}checked{% endif %}>
+            <span class="label-text">Наличные</span>
+          </label>
+          <label class="label cursor-pointer gap-2">
+            <input class="radio radio-sm" type="radio" name="payment_method" value="invoice"
+                   {% if form_data.payment_method == "invoice" %}checked{% endif %}>
+            <span class="label-text">По счёту</span>
+          </label>
+        </div>
+      </div>
+
+      <div id="company-fields" class="{% if form_data.customer_type == 'company' %}{% else %}hidden{% endif %}">
+        <div>
+          <label class="text-xs mb-1 block">Юр лицо</label>
+          <select class="select select-bordered w-full" name="legal_entity">
+            {% for m in memberships %}
+              <option value="{{ m.legal_entity.id }}" {% if form_data.legal_entity == m.legal_entity.id|stringformat:"s" %}selected{% endif %}>{{ m.legal_entity }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="text-xs mb-1 block">Адрес доставки</label>
+          <select class="select select-bordered w-full" name="delivery_address">
+            {% for a in addresses %}
+              <option value="{{ a.id }}" {% if form_data.delivery_address == a.id|stringformat:"s" %}selected{% endif %}>{{ a.legal_entity.name }} — {{ a.label }} ({{ a.city }}, {{ a.street }})</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div id="individual-fields" class="{% if form_data.customer_type == 'company' %}hidden{% endif %}">
+        <div>
+          <label class="text-xs mb-1 block">Ваше имя</label>
+          <input class="input input-bordered w-full" name="customer_name"
+                 value="{{ form_data.customer_name|default:request.user.get_full_name|default:request.user.username }}">
+        </div>
+        <div>
+          <label class="text-xs mb-1 block">Телефон</label>
+          <input class="input input-bordered w-full" name="customer_phone" placeholder="+7..."
+                 value="{{ form_data.customer_phone|default:'' }}" required>
+        </div>
+        <div>
+          <label class="text-xs mb-1 block">Адрес доставки</label>
+          <input class="input input-bordered w-full" name="address_text" placeholder="Город, улица, дом"
+                 value="{{ form_data.address_text|default:'' }}" required>
+        </div>
+      </div>
+
+      <button class="btn btn-primary lg:w-full fixed lg:static bottom-16 left-3 right-3 z-40" {% if not items %}disabled{% endif %}>Оформить</button>
+    </form>
+    </div>
+  </div>
+</div>

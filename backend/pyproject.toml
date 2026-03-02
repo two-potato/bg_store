@@ -3,6 +3,7 @@ name = "bad-guys-backend"
 version = "1.0.0"
 requires-python = ">=3.12"
 dependencies = [
+  "django-jazzmin>=3.0.1",
   "Django==5.2.*",
   "djangorestframework>=3.15",
   "drf-nested-routers>=0.93",

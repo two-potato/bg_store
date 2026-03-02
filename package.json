@@ -1,0 +1,13 @@
+{
+  "name": "bad-guys-shop-ui",
+  "private": true,
+  "devDependencies": {
+    "tailwindcss": "^3.4.12",
+    "daisyui": "^4.12.10"
+  },
+  "scripts": {
+    "tw:build": "tailwindcss -i ./assets/tw.css -o ./backend/static/css/app.css --minify",
+    "tw:watch": "tailwindcss -i ./assets/tw.css -o ./backend/static/css/app.css --watch"
+  }
+}
+

@@ -1,5 +1,5 @@
 
-.PHONY: dev prod migrate superuser collectstatic loaddata clean rebuild test lint stop stop-metrics status logs logs-metrics setup restart restart-metrics metrics
+.PHONY: dev prod migrate superuser collectstatic loaddata clean rebuild test lint stop stop-metrics status logs logs-metrics setup restart restart-metrics metrics tailwind tailwind-watch
 clean:
 	docker compose down -v
 
@@ -68,3 +68,10 @@ collectstatic:
 
 loaddata:
 	docker compose exec backend python manage.py loaddata catalog/fixtures.json
+
+# Tailwind build helpers (requires Node + dev deps installed locally)
+tailwind:
+	npx tailwindcss -i ./assets/tw.css -o ./backend/static/css/app.css --minify
+
+tailwind-watch:
+	npx tailwindcss -i ./assets/tw.css -o ./backend/static/css/app.css --watch

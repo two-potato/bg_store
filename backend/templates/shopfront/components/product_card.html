@@ -1,0 +1,57 @@
+{% comment %}
+Reusable product card component
+Usage:
+  include "shopfront/components/product_card.html" with p=product show_tags=True
+{% endcomment %}
+<div class="card product-card bg-base-100 shadow-sm hover:shadow-md h-full">
+  <a href="/product/{{ p.id }}/" class="block flex-1" aria-label="Подробнее о товаре {{ p.name }}">
+    {% with img=p.images.first %}
+      {% if img %}
+        <figure class="media">
+          <img src="{{ img.url }}" alt="{{ img.alt|default:p.name }}" loading="lazy"/>
+        </figure>
+      {% else %}
+        <figure class="media">
+          <img src="https://picsum.photos/seed/p-{{ p.id }}/600/400" alt="{{ p.name }}" loading="lazy"/>
+        </figure>
+      {% endif %}
+    {% endwith %}
+    <div class="card-body p-3">
+      <div class="flex items-center justify-between mb-1">
+        <div class="text-xs text-base-content/60 truncate pr-1" title="{{ p.brand }}">{{ p.brand }}</div>
+        <div class="flex gap-1">
+          {% if p.is_new %}<span class="badge badge-success">Новинка</span>{% endif %}
+          {% if p.is_promo %}<span class="badge badge-error">Акция</span>{% endif %}
+        </div>
+      </div>
+      <div class="font-semibold truncate" title="{{ p.name }}">{{ p.name }}</div>
+      <div class="flex justify-between items-end mt-1">
+        <div class="font-bold text-primary text-base">{{ p.price }} ₽</div>
+        <div class="text-xs text-base-content/60">{{ p.pack_qty }} {{ p.unit }}</div>
+      </div>
+      <div class="text-xs mt-1 flex items-center gap-1 {% if p.stock_qty > 0 %}text-success{% else %}text-error{% endif %}">
+        {% if p.stock_qty > 0 %}
+          <span class="inline-block">{% include 'shopfront/icons/circle-check.svg' %}</span>
+          <span class="truncate">В наличии: {{ p.stock_qty }}</span>
+        {% else %}
+          <span class="inline-block">{% include 'shopfront/icons/circle-x.svg' %}</span>
+          <span class="truncate">Нет в наличии</span>
+        {% endif %}
+      </div>
+      {% if show_tags %}
+        {% if p.tags.all %}
+          <div class="mt-1 flex flex-wrap gap-1">
+            {% for t in p.tags.all|slice:":6" %}
+              <span class="badge badge-ghost" title="{{ t.name }}">
+                <span class="mr-1">{% include 'shopfront/icons/tag.svg' %}</span>{{ t.name }}
+              </span>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endif %}
+    </div>
+  </a>
+  <div class="card-footer px-3 pb-3 mt-auto">
+    {% include "shopfront/components/cart_control.html" with pid=p.id in_stock=p.stock_qty %}
+  </div>
+</div>

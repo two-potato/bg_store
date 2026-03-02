@@ -8,6 +8,7 @@ DEBUG = os.getenv("DEBUG", "0") == "1"
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "*").split(",")
 
 INSTALLED_APPS = [
+    "jazzmin",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -33,6 +34,34 @@ INSTALLED_APPS = [
     "orders",
     "shopfront",
 ]
+
+JAZZMIN_SETTINGS = {
+    "site_title": "BG Shop Admin",
+    "site_header": "Bad Guys Shop",
+    "site_brand": "BG Shop",
+    "welcome_sign": "Управление магазином",
+    "copyright": "Bad Guys Shop",
+    "show_sidebar": True,
+    "navigation_expanded": True,
+    "hide_apps": [],
+    "hide_models": [],
+    "order_with_respect_to": [
+        "orders",
+        "commerce",
+        "catalog",
+        "users",
+    ],
+    "icons": {
+        "orders.Order": "fas fa-cart-shopping",
+        "orders.OrderItem": "fas fa-box",
+        "commerce.LegalEntity": "fas fa-building",
+        "commerce.DeliveryAddress": "fas fa-location-dot",
+        "catalog.Product": "fas fa-tags",
+        "users.User": "fas fa-user",
+    },
+    "custom_links": {},
+    "show_ui_builder": False,
+}
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
@@ -61,6 +90,8 @@ DATABASES = {
         "PASSWORD": os.getenv("POSTGRES_PASSWORD", "shop"),
         "HOST": os.getenv("POSTGRES_HOST", "db"),
         "PORT": os.getenv("POSTGRES_PORT", "5432"),
+        # Persistent connections for better performance
+        "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
     }
 }
 
@@ -79,6 +110,7 @@ TEMPLATES = [
                 "django.template.context_processors.csrf",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "shopfront.context_processors.cart_badge",
             ],
         },
     }
@@ -137,12 +169,29 @@ CELERY_TIMEZONE = "Europe/Berlin"
 INTERNAL_TOKEN = os.getenv("INTERNAL_TOKEN", "change-me")
 ORDER_APPROVE_SECRET = os.getenv("ORDER_APPROVE_SECRET", "dev-secret")
 BOT_BASE_URL = os.getenv("BOT_BASE_URL", "http://bot:8080")
+# Separate bots (TWA and notifications)
+BOT_TWA_URL = os.getenv("BOT_TWA_URL", BOT_BASE_URL)
+BOT_NOTIFY_URL = os.getenv("BOT_NOTIFY_URL", BOT_BASE_URL)
 
 # Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # Google Maps
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")
+
+# Admin email notifications (orders lifecycle)
+ADMIN_NOTIFY_EMAILS = [
+    e.strip() for e in os.getenv("ADMIN_NOTIFY_EMAILS", os.getenv("ADMIN_EMAIL", "")).split(",") if e.strip()
+]
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@bgshop.local")
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = os.getenv("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "25"))
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "1") == "1"
+EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "0") == "1"
+EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "30"))
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -160,6 +209,14 @@ CSRF_TRUSTED_ORIGINS = _csrf_env or [
 # -------- Logging configuration --------
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 LOG_JSON = os.getenv("LOG_JSON", "0") == "1"
+
+# File logging configuration
+LOG_FILE_PATH = os.getenv("LOG_FILE_PATH", "/app/logs/app.log")
+try:
+    os.makedirs(os.path.dirname(LOG_FILE_PATH), exist_ok=True)
+except Exception:
+    # If directory creation fails, continue with console logging only
+    pass
 
 _LOG_FORMAT = (
     "%(asctime)s %(levelname)s %(name)s [rid=%(request_id)s user=%(user)s] "
@@ -190,8 +247,17 @@ LOGGING = {
             "filters": ["request_context"],
             "formatter": "json" if LOG_JSON else "plain",
         },
+        "file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": LOG_FILE_PATH,
+            "maxBytes": 10 * 1024 * 1024,  # 10MB
+            "backupCount": 5,
+            "encoding": "utf-8",
+            "filters": ["request_context"],
+            "formatter": "json" if LOG_JSON else "plain",
+        },
     },
-    "root": {"handlers": ["console"], "level": LOG_LEVEL},
+    "root": {"handlers": ["console", "file"], "level": LOG_LEVEL},
     "loggers": {
         "django": {"level": "INFO"},
         "django.request": {"level": "WARNING"},
@@ -199,13 +265,13 @@ LOGGING = {
         "uvicorn": {"level": "INFO"},
         "uvicorn.error": {"level": "INFO"},
         "uvicorn.access": {"level": "INFO"},
-        "django.db.backends": {"handlers": ["console"], "level": os.getenv("DB_LOG_LEVEL", "WARNING"), "propagate": False},
-        "celery": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
-        "request": {"handlers": ["console"], "level": "INFO", "propagate": False},
-        "shopfront": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
-        "commerce": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
-        "users": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
-        "orders": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
-        "catalog": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
+        "django.db.backends": {"handlers": ["console", "file"], "level": os.getenv("DB_LOG_LEVEL", "WARNING"), "propagate": False},
+        "celery": {"handlers": ["console", "file"], "level": LOG_LEVEL, "propagate": False},
+        "request": {"handlers": ["console", "file"], "level": "INFO", "propagate": False},
+        "shopfront": {"handlers": ["console", "file"], "level": LOG_LEVEL, "propagate": False},
+        "commerce": {"handlers": ["console", "file"], "level": LOG_LEVEL, "propagate": False},
+        "users": {"handlers": ["console", "file"], "level": LOG_LEVEL, "propagate": False},
+        "orders": {"handlers": ["console", "file"], "level": LOG_LEVEL, "propagate": False},
+        "catalog": {"handlers": ["console", "file"], "level": LOG_LEVEL, "propagate": False},
     },
 }

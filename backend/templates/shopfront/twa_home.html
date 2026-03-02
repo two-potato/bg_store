@@ -1,0 +1,28 @@
+{% extends "shopfront/base.html" %}
+{% load static %}
+{% block content %}
+<div id="page" class="max-w-screen-sm mx-auto px-3">
+  <div class="flex items-center justify-between mb-3">
+    <h1 class="text-lg font-semibold m-0">Каталог</h1>
+    <button class="btn btn-sm btn-outline" data-twa-haptic="light">Хэптик</button>
+  </div>
+  <div class="grid grid-cols-2 gap-3">
+    {% for p in products %}
+      <div>
+        <a class="card bg-base-100" href="/product/{{ p.id }}/">
+          <figure><img src="{{ p.main_image_url }}" alt="{{ p.name }}" onerror="this.style.display='none'"/></figure>
+          <div class="card-body p-2">
+            <div class="text-xs text-base-content/60">{{ p.category.name }}</div>
+            <div class="font-semibold truncate">{{ p.name }}</div>
+            <div class="font-bold">{{ p.price }} ₽</div>
+          </div>
+        </a>
+        <div class="mt-2">
+          {% include "shopfront/components/cart_control.html" with pid=p.id in_stock=1 %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+<div hidden data-twa-main-button data-twa-main-text="Перейти в корзину" data-twa-main-href="/cart/"></div>
+{% endblock %}

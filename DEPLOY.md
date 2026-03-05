@@ -4,6 +4,11 @@
 
 В репозитории есть workflow `.github/workflows/deploy.yml`, который деплоит `main` на сервер по SSH.
 
+Базовый процесс:
+- разработка и фиксы: ветка `dev`
+- релиз: PR `dev -> main`
+- деплой в прод: автоматически после push в `main` (GitHub Actions)
+
 ### 0. Секреты GitHub (Repository -> Settings -> Secrets and variables -> Actions)
 
 Добавь secrets:

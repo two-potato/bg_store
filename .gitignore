@@ -21,3 +21,9 @@ uv.lock
 .devcontainer/.venv/
 .github_bg_store_key
 .github_bg_store_key.pub
+
+# Runtime logs / local artifacts
+logs/
+backend/logs/
+backend/.coverage
+backend/coverage.xml

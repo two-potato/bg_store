@@ -38,6 +38,19 @@ Open:
 - Prometheus: http://localhost:9090
 - Grafana: http://localhost:3000  (admin / admin)
 
+## Workflow: Dev -> Prod
+
+1. Вся разработка идет в ветке `dev`.
+2. В `dev` запускается GitHub CI (tests/lint).
+3. В `main` попадаем только через PR из `dev`.
+4. `main` автоматически деплоится в production через `.github/workflows/deploy.yml`.
+
+Рекомендуется включить branch protection:
+- для `main`: required checks = `CI`, запрет прямого push;
+- для `dev`: required checks = `CI` (по желанию команды).
+- PR template: `.github/PULL_REQUEST_TEMPLATE.md`
+- Release checklist: `.github/RELEASE_CHECKLIST.md`
+
 ## Google OAuth (real login)
 
 1. Create OAuth 2.0 Client ID in Google Cloud Console.

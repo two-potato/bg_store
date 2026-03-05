@@ -12,6 +12,9 @@ $COMPOSE up -d --build --remove-orphans
 echo "[deploy] Running migrations"
 $COMPOSE exec -T backend /app/.venv/bin/python manage.py migrate --noinput
 
+echo "[deploy] Fixing staticfiles volume permissions"
+$COMPOSE exec -T --user root backend sh -lc "mkdir -p /app/staticfiles && chown -R app:app /app/staticfiles"
+
 echo "[deploy] Collecting static files"
 $COMPOSE exec -T backend /app/.venv/bin/python manage.py collectstatic --noinput
 
@@ -21,4 +24,3 @@ $COMPOSE ps
 echo "[deploy] Health checks"
 curl -fsS http://localhost:8080/health/ >/dev/null
 echo "[deploy] OK"
-

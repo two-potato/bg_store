@@ -39,14 +39,18 @@ def notify_contact_feedback(self, *, name: str, phone: str, message: str, source
 
     recipients = _admin_emails()
     if recipients:
-        send_mail(
-            subject="[BG Shop] Новая заявка с формы контактов",
-            message=text,
-            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-            recipient_list=recipients,
-            fail_silently=False,
-        )
-        log.info("contact_feedback_email_sent", extra={"recipients": recipients})
+        try:
+            send_mail(
+                subject="[BG Shop] Новая заявка с формы контактов",
+                message=text,
+                from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+                recipient_list=recipients,
+                fail_silently=False,
+            )
+            log.info("contact_feedback_email_sent", extra={"recipients": recipients})
+        except Exception:
+            # Email transport issues must not block Telegram notifications.
+            log.exception("contact_feedback_email_send_failed", extra={"recipients": recipients})
     else:
         log.warning("contact_feedback_email_no_recipients")
 
@@ -88,4 +92,3 @@ def notify_contact_feedback(self, *, name: str, phone: str, message: str, source
     log.info("contact_feedback_tg_sent", extra={"recipients": telegram_ids})
 def _notify_headers() -> dict[str, str]:
     return {"X-Internal-Token": str(getattr(settings, "INTERNAL_TOKEN", ""))}
-

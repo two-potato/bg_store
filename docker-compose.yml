@@ -122,7 +122,9 @@ services:
     restart: unless-stopped
 
   nginx:
-    build: ./deploy/nginx
+    build:
+      context: ./deploy/nginx
+      dockerfile: Dockerfile.dev
     container_name: bg-nginx
     # В dev не блокируем старт Nginx ожиданием health бэкенда,
     # чтобы /health/ открывался даже при проблемах миграций

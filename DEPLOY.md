@@ -29,6 +29,10 @@ cp bot/.env.notify.example bot/.env.notify
 
 Заполни реальные значения в `backend/.env`, `bot/.env`, `bot/.env.notify`.
 
+Обязательно:
+- DNS A-записи `potatofarm.ru` и `www.potatofarm.ru` должны указывать на `185.207.65.192`.
+- Открыты входящие порты `80/tcp` и `443/tcp`.
+
 ### 2. Как работает деплой
 
 При push в `main` workflow:
@@ -36,6 +40,11 @@ cp bot/.env.notify.example bot/.env.notify
 2. Делает `git fetch` + `git reset --hard <sha>`
 3. Запускает `scripts/deploy_prod.sh`
 4. Выполняет `migrate`, `collectstatic`, health-check
+
+TLS:
+- `scripts/deploy_prod.sh` автоматически получает Let's Encrypt сертификат при первом деплое.
+- Сертификат сохраняется в `deploy/letsencrypt/`.
+- При сроке действия менее 30 дней сертификат автоматически продлевается во время деплоя.
 
 ## 1. Подготовка секретов
 

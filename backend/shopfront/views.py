@@ -28,9 +28,54 @@ from core.logging_utils import log_calls
 from decimal import Decimal
 from . import search as sf_search
 from urllib.parse import urlencode
+from django.urls import reverse
+from xml.sax.saxutils import escape
 
 log = logging.getLogger("shopfront")
 search_product_ids = sf_search.search_product_ids
+
+
+@log_calls(log)
+def robots_txt(request):
+    host = request.get_host().split(":")[0]
+    lines = [
+        "User-agent: *",
+        "Allow: /",
+        "Disallow: /admin/",
+        "Disallow: /api/",
+        "Disallow: /account/",
+        f"Sitemap: https://{host}/sitemap.xml",
+    ]
+    return HttpResponse("\n".join(lines) + "\n", content_type="text/plain; charset=utf-8")
+
+
+@log_calls(log)
+def sitemap_xml(request):
+    host = request.get_host().split(":")[0]
+    base = f"https://{host}"
+    static_paths = [
+        reverse("home"),
+        reverse("catalog"),
+        reverse("about"),
+        reverse("delivery"),
+        reverse("contacts"),
+        reverse("cart_page"),
+        reverse("checkout"),
+        reverse("twa_home"),
+    ]
+    urls = [base + path for path in static_paths]
+    urls.extend(
+        [base + reverse("product", kwargs={"slug": slug}) for slug in Product.objects.exclude(slug="").values_list("slug", flat=True)[:50000]]
+    )
+    urls.extend(
+        [f"{base}/catalog/?category={escape(slug)}" for slug in Category.objects.exclude(slug="").values_list("slug", flat=True)[:50000]]
+    )
+
+    body = ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>", "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">"]
+    for loc in urls:
+        body.append(f"  <url><loc>{escape(loc)}</loc></url>")
+    body.append("</urlset>")
+    return HttpResponse("\n".join(body), content_type="application/xml; charset=utf-8")
 
 
 def _cache_get(key, default=None):
@@ -324,11 +369,14 @@ class ContactsPageView(TemplateView):
             return self.render_to_response(self.get_context_data(form=form), status=400)
 
         cleaned = form.cleaned_data
-        notify_contact_feedback.delay(
-            name=cleaned["name"],
-            phone=cleaned["phone"],
-            message=cleaned["message"],
-            source=request.build_absolute_uri("/contacts/"),
+        notify_contact_feedback.apply(
+            kwargs={
+                "name": cleaned["name"],
+                "phone": cleaned["phone"],
+                "message": cleaned["message"],
+                "source": request.build_absolute_uri("/contacts/"),
+            },
+            throw=False,
         )
         messages.success(request, "Спасибо. Мы получили заявку и свяжемся с вами.")
         return redirect("/contacts/")

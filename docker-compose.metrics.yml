@@ -1,8 +1,7 @@
-version: "3.9"
 name: bad-guys-shop
 services:
   prometheus:
-    image: prom/prometheus
+    image: mirror.gcr.io/prom/prometheus
     container_name: bg-prom
     volumes:
       - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -11,7 +10,7 @@ services:
     restart: unless-stopped
 
   loki:
-    image: grafana/loki:2.9.0
+    image: mirror.gcr.io/grafana/loki:2.9.0
     container_name: bg-loki
     user: "0:0"
     command: -config.file=/etc/loki/config.yml
@@ -24,13 +23,16 @@ services:
     restart: unless-stopped
 
   nginx-exporter:
-    image: nginx/nginx-prometheus-exporter:0.11.0
+    image: mirror.gcr.io/nginx/nginx-prometheus-exporter:0.11.0
     container_name: bg-nginx-exporter
     command: ["-nginx.scrape-uri", "http://nginx/nginx_status"]
+    depends_on:
+      nginx:
+        condition: service_healthy
     restart: unless-stopped
 
   alertmanager:
-    image: prom/alertmanager
+    image: mirror.gcr.io/prom/alertmanager
     container_name: bg-alertmanager
     volumes:
       - ./deploy/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
@@ -38,17 +40,18 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:11.6.0
+    image: mirror.gcr.io/grafana/grafana:11.6.0
     container_name: bg-grafana
     volumes:
       - grafana:/var/lib/grafana
-      - ./deploy/grafana/provisioning:/etc/grafana/provisioning
+      - ./deploy/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./deploy/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./deploy/grafana/dashboards:/etc/grafana/dashboards:ro
     ports: ["3000:3000"]
     restart: unless-stopped
 
   promtail:
-    image: grafana/promtail:2.9.0
+    image: mirror.gcr.io/grafana/promtail:2.9.0
     container_name: bg-promtail
     volumes:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
@@ -58,14 +61,17 @@ services:
     restart: unless-stopped
 
   postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:v0.15.0
+    image: mirror.gcr.io/prometheuscommunity/postgres-exporter:v0.15.0
     container_name: bg-postgres-exporter
+    command: ["--config.file=/etc/postgres-exporter/postgres_exporter.yml"]
+    volumes:
+      - ./deploy/postgres-exporter/postgres_exporter.yml:/etc/postgres-exporter/postgres_exporter.yml:ro
     environment:
       DATA_SOURCE_NAME: postgresql://shop:shop@db:5432/shop?sslmode=disable
     restart: unless-stopped
 
   redis-exporter:
-    image: oliver006/redis_exporter:v1.61.0
+    image: mirror.gcr.io/oliver006/redis_exporter:v1.61.0
     container_name: bg-redis-exporter
     environment:
       - REDIS_ADDR=redis://redis:6379
@@ -78,7 +84,7 @@ services:
     restart: unless-stopped
 
   node-exporter:
-    image: prom/node-exporter:v1.7.0
+    image: mirror.gcr.io/prom/node-exporter:v1.7.0
     container_name: bg-node-exporter
     command:
       - --path.rootfs=/rootfs
@@ -89,6 +95,7 @@ services:
       - /:/rootfs:ro
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
+      - /run/udev:/run/udev:ro
     restart: unless-stopped
 
   cadvisor:
@@ -102,7 +109,7 @@ services:
     restart: unless-stopped
 
   blackbox:
-    image: prom/blackbox-exporter:v0.24.0
+    image: mirror.gcr.io/prom/blackbox-exporter:v0.24.0
     container_name: bg-blackbox
     volumes:
       - ./deploy/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro

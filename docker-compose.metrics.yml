@@ -16,6 +16,7 @@ services:
     command: -config.file=/etc/loki/config.yml
     volumes:
       - ./deploy/loki/config.yml:/etc/loki/config.yml:ro
+      - ./deploy/loki/rules.yml:/etc/loki/rules/rules.yml:ro
       - loki-wal:/wal
       - loki-data:/loki
     ports:

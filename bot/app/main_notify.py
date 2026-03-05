@@ -6,6 +6,7 @@ import aiohttp
 from aiogram.filters import Command
 from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup
 from fastapi import Depends, FastAPI, HTTPException, status
+from pydantic import BaseModel, Field
 
 from .common import (
     CALLBACKS,
@@ -33,6 +34,46 @@ ALLOWED_DOC_ROOTS = [
     for p in (os.getenv("ALLOWED_DOC_ROOTS", "/app/media,/tmp").split(","))
     if p.strip()
 ]
+
+
+class AlertmanagerAlert(BaseModel):
+    status: str
+    labels: dict[str, str] = Field(default_factory=dict)
+    annotations: dict[str, str] = Field(default_factory=dict)
+    startsAt: str | None = None
+    endsAt: str | None = None
+
+
+class AlertmanagerPayload(BaseModel):
+    status: str
+    alerts: list[AlertmanagerAlert]
+    commonLabels: dict[str, str] = Field(default_factory=dict)
+    commonAnnotations: dict[str, str] = Field(default_factory=dict)
+    externalURL: str | None = None
+    groupKey: str | None = None
+    version: str | None = None
+    receiver: str | None = None
+    truncatedAlerts: int | None = None
+
+
+def _fmt_alert(a: AlertmanagerAlert) -> str:
+    sev = (a.labels.get("severity") or "unknown").upper()
+    name = a.labels.get("alertname") or "Alert"
+    source = a.labels.get("job") or a.labels.get("instance") or "n/a"
+    summary = a.annotations.get("summary") or ""
+    descr = a.annotations.get("description") or ""
+    container = a.labels.get("container") or a.labels.get("name") or ""
+
+    parts = [f"• <b>{name}</b> [{sev}]"]
+    if source:
+        parts.append(f"  source: <code>{source}</code>")
+    if container:
+        parts.append(f"  container: <code>{container}</code>")
+    if summary:
+        parts.append(f"  {summary}")
+    if descr:
+        parts.append(f"  {descr}")
+    return "\n".join(parts)
 
 
 @app.post("/notify/send_kb")
@@ -85,6 +126,26 @@ async def send_group(payload: GroupMsg, _auth: None = Depends(require_internal_t
     await bot.send_message(chat_id=MANAGERS_GROUP_ID, text=payload.text, parse_mode="HTML")
     NOTIFY_SENT.labels(type="group").inc()
     return {"ok": True}
+
+
+@app.post("/notify/alertmanager")
+async def alertmanager_webhook(payload: AlertmanagerPayload):
+    if not MANAGERS_GROUP_ID:
+        return {"ok": False, "error": "MANAGERS_GROUP_ID not set"}
+
+    status_icon = "🚨" if payload.status == "firing" else "✅"
+    title = "ALERT FIRING" if payload.status == "firing" else "ALERT RESOLVED"
+    lines = [f"{status_icon} <b>{title}</b>"]
+
+    alerts = payload.alerts[:8]
+    for alert in alerts:
+        lines.append(_fmt_alert(alert))
+    if len(payload.alerts) > len(alerts):
+        lines.append(f"… and {len(payload.alerts) - len(alerts)} more alerts")
+
+    await bot.send_message(chat_id=MANAGERS_GROUP_ID, text="\n\n".join(lines), parse_mode="HTML")
+    NOTIFY_SENT.labels(type="group").inc()
+    return {"ok": True, "sent": len(alerts), "total": len(payload.alerts)}
 
 
 @dp.message(Command("start"))

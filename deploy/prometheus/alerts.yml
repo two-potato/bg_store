@@ -36,3 +36,57 @@ groups:
         annotations:
           summary: "Loki is down"
           description: "No metrics from Loki for 1m"
+
+      - alert: CriticalServiceDown
+        expr: up{job=~"backend|bot|postgres|redis|nginx"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical service is down"
+          description: "Service {{ $labels.job }} on {{ $labels.instance }} is down"
+
+      - alert: HostHighCPU
+        expr: (100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High host CPU usage"
+          description: "CPU usage on {{ $labels.instance }} is {{ printf \"%.1f\" $value }}% for 5m"
+
+      - alert: HostHighMemory
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High host memory usage"
+          description: "Memory usage on {{ $labels.instance }} is {{ printf \"%.1f\" $value }}% for 5m"
+
+      - alert: HostDiskLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}) * 100 < 15
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on root filesystem"
+          description: "Only {{ printf \"%.1f\" $value }}% disk space left on {{ $labels.instance }}"
+
+      - alert: ContainerHighCPU
+        expr: (sum by (name) (rate(container_cpu_usage_seconds_total{name=~".*(bg-|bad-guys-shop-backend).*", image!=""}[5m])) / scalar(count(node_cpu_seconds_total{mode="idle"}))) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High container CPU usage"
+          description: "Container {{ $labels.name }} CPU usage is {{ printf \"%.1f\" $value }}% for 5m"
+
+      - alert: BlackboxProbeFailed
+        expr: probe_success == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Blackbox HTTP probe failed"
+          description: "Probe to {{ $labels.instance }} is failing"

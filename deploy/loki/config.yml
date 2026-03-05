@@ -1,6 +1,12 @@
 auth_enabled: false
 server:
   http_listen_port: 3100
+frontend:
+  max_outstanding_per_tenant: 65535
+querier:
+  max_concurrent: 256
+query_scheduler:
+  max_outstanding_requests_per_tenant: 65535
 ingester:
   lifecycler:
     ring:
@@ -38,3 +44,14 @@ chunk_store_config:
 table_manager:
   retention_deletes_enabled: true
   retention_period: 168h
+ruler:
+  alertmanager_url: http://alertmanager:9093
+  enable_api: true
+  ring:
+    kvstore:
+      store: inmemory
+  rule_path: /tmp/loki/rules-temp
+  storage:
+    type: local
+    local:
+      directory: /etc/loki/rules

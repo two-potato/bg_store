@@ -1,0 +1,32 @@
+groups:
+  - name: log-alerts
+    rules:
+      - alert: LogErrorsSpike
+        expr: |
+          sum by (container) (
+            count_over_time(
+              {job="docker"} |~ "(?i)(error|exception|traceback|panic|fatal)"
+              [5m]
+            )
+          ) > 20
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Error spike in logs"
+          description: "{{ $labels.container }} produced {{ printf \"%.0f\" $value }} error-like log lines in 5m"
+
+      - alert: LogErrorsCritical
+        expr: |
+          sum by (container) (
+            count_over_time(
+              {job="docker"} |~ "(?i)(panic|fatal|segmentation fault|database is locked)"
+              [5m]
+            )
+          ) > 3
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical errors in logs"
+          description: "{{ $labels.container }} has critical log errors in last 5m"

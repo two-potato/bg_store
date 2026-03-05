@@ -1,0 +1,57 @@
+name: Deploy Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to potatofarm.ru
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+        run: |
+          set -eu
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$SSH_HOST"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Run remote deploy
+        env:
+          SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          SSH_PORT: ${{ secrets.PROD_SSH_PORT }}
+          SSH_USER: ${{ secrets.PROD_SSH_USER }}
+          APP_DIR: ${{ secrets.PROD_APP_DIR }}
+          DEPLOY_REF: ${{ github.sha }}
+        run: |
+          set -eu
+          : "${SSH_PORT:=22}"
+          : "${SSH_USER:=root}"
+          : "${APP_DIR:=/opt/bg_shop_full}"
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "APP_DIR='$APP_DIR' DEPLOY_REF='$DEPLOY_REF' bash -s" <<'EOSSH'
+          set -euo pipefail
+          cd "$APP_DIR"
+          git fetch --all --prune
+          git checkout main
+          git reset --hard "$DEPLOY_REF"
+          bash ./scripts/deploy_prod.sh
+          EOSSH
+

@@ -1,4 +1,4 @@
-ARG PYTHON_IMAGE=python:3.12-slim
+ARG PYTHON_IMAGE=public.ecr.aws/docker/library/python:3.12-slim
 
 # Builder
 FROM ${PYTHON_IMAGE} AS builder

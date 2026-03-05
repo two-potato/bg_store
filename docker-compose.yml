@@ -90,7 +90,7 @@ services:
     restart: unless-stopped
 
   db:
-    image: postgres:16
+    image: public.ecr.aws/docker/library/postgres:16
     container_name: bg-db
     command: ["postgres", "-c", "max_connections=1000", "-c", "shared_buffers=256MB"]
     env_file: ./backend/.env
@@ -99,7 +99,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:7
+    image: public.ecr.aws/docker/library/redis:7
     container_name: bg-redis
     restart: unless-stopped
 

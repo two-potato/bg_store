@@ -1,4 +1,4 @@
-ARG PYTHON_IMAGE=python:3.12-slim
+ARG PYTHON_IMAGE=public.ecr.aws/docker/library/python:3.12-slim
 
 # -----------------------------
 # Builder: ставим зависимости
@@ -34,6 +34,7 @@ ENV PATH="/app/.venv/bin:${PATH}"
 # Некорневой пользователь
 RUN useradd -ms /bin/bash app
 COPY --chown=app:app . .
+RUN chown -R app:app /app
 USER app
 EXPOSE 8000
 # Стартуем через интерпретатор из venv

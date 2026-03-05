@@ -76,6 +76,36 @@ def _fmt_alert(a: AlertmanagerAlert) -> str:
     return "\n".join(parts)
 
 
+async def _send_to_managers_chat(text: str) -> int | None:
+    candidates: list[int] = []
+    if MANAGERS_GROUP_ID:
+        candidates.append(MANAGERS_GROUP_ID)
+
+    # Fallback: last active chat from bot updates (private/group/channel).
+    try:
+        updates = await bot.get_updates(limit=30, timeout=0)
+    except Exception:
+        updates = []
+    for upd in updates:
+        chat_id = None
+        if upd.message and upd.message.chat:
+            chat_id = upd.message.chat.id
+        elif upd.channel_post and upd.channel_post.chat:
+            chat_id = upd.channel_post.chat.id
+        elif upd.callback_query and upd.callback_query.message and upd.callback_query.message.chat:
+            chat_id = upd.callback_query.message.chat.id
+        if chat_id and chat_id not in candidates:
+            candidates.append(chat_id)
+
+    for chat_id in candidates:
+        try:
+            await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
+            return chat_id
+        except Exception:
+            continue
+    return None
+
+
 @app.post("/notify/send_kb")
 async def send_kb(payload: MsgKb, _auth: None = Depends(require_internal_token)):
     kb = InlineKeyboardMarkup(
@@ -121,18 +151,15 @@ async def send_text(payload: TextMsg, _auth: None = Depends(require_internal_tok
 
 @app.post("/notify/send_group")
 async def send_group(payload: GroupMsg, _auth: None = Depends(require_internal_token)):
-    if not MANAGERS_GROUP_ID:
-        return {"ok": False, "error": "MANAGERS_GROUP_ID not set"}
-    await bot.send_message(chat_id=MANAGERS_GROUP_ID, text=payload.text, parse_mode="HTML")
+    sent_chat = await _send_to_managers_chat(payload.text)
+    if sent_chat is None:
+        return {"ok": False, "error": "No reachable chat for notifications"}
     NOTIFY_SENT.labels(type="group").inc()
-    return {"ok": True}
+    return {"ok": True, "chat_id": sent_chat}
 
 
 @app.post("/notify/alertmanager")
 async def alertmanager_webhook(payload: AlertmanagerPayload):
-    if not MANAGERS_GROUP_ID:
-        return {"ok": False, "error": "MANAGERS_GROUP_ID not set"}
-
     status_icon = "🚨" if payload.status == "firing" else "✅"
     title = "ALERT FIRING" if payload.status == "firing" else "ALERT RESOLVED"
     lines = [f"{status_icon} <b>{title}</b>"]
@@ -143,9 +170,11 @@ async def alertmanager_webhook(payload: AlertmanagerPayload):
     if len(payload.alerts) > len(alerts):
         lines.append(f"… and {len(payload.alerts) - len(alerts)} more alerts")
 
-    await bot.send_message(chat_id=MANAGERS_GROUP_ID, text="\n\n".join(lines), parse_mode="HTML")
+    sent_chat = await _send_to_managers_chat("\n\n".join(lines))
+    if sent_chat is None:
+        return {"ok": False, "error": "No reachable chat for notifications"}
     NOTIFY_SENT.labels(type="group").inc()
-    return {"ok": True, "sent": len(alerts), "total": len(payload.alerts)}
+    return {"ok": True, "sent": len(alerts), "total": len(payload.alerts), "chat_id": sent_chat}
 
 
 @dp.message(Command("start"))

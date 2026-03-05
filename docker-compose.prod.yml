@@ -30,6 +30,8 @@ services:
     build:
       context: ./deploy/nginx
       dockerfile: Dockerfile
+    ports:
+      - "80:80"
     depends_on:
       backend:
         condition: service_healthy

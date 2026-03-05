@@ -22,5 +22,5 @@ echo "[deploy] Service status"
 $COMPOSE ps
 
 echo "[deploy] Health checks"
-curl -fsS http://localhost:8080/health/ >/dev/null
+curl -fsS http://localhost/health/ >/dev/null
 echo "[deploy] OK"

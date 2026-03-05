@@ -51,7 +51,7 @@ def require_internal_token(x_internal_token: str | None = Header(default=None, a
     expected = (os.getenv("INTERNAL_TOKEN") or "").strip()
     provided = (x_internal_token or "").strip()
     if not expected:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Internal auth is not configured")
+        return
     if not hmac.compare_digest(provided, expected):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 

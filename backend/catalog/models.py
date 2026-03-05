@@ -3,6 +3,7 @@ from django.core.validators import RegexValidator
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.core.exceptions import ValidationError
 from django.conf import settings
+from django.utils.text import slugify
 from core.models import TimeStampedModel
 
 class SeoFieldsMixin(models.Model):
@@ -52,12 +53,26 @@ class Series(TimeStampedModel, SeoFieldsMixin):
 
 class Category(TimeStampedModel, SeoFieldsMixin):
     name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=255, unique=True, blank=True, db_index=False)
     parent = models.ForeignKey("self", on_delete=models.CASCADE, null=True, blank=True, related_name="children")
     description = models.TextField(blank=True)
     photo = models.ImageField(upload_to='category_photos/', null=True, blank=True)
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(self.name)
+            if not base or base.isdigit():
+                base = f"category-{self.pk}" if self.pk else "category"
+            candidate = base
+            suffix = 2
+            while Category.objects.filter(slug=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base}-{suffix}"
+                suffix += 1
+            self.slug = candidate
+        return super().save(*args, **kwargs)
 
 class Tag(TimeStampedModel):
     name = models.CharField(max_length=64, unique=True)
@@ -76,6 +91,7 @@ class Product(TimeStampedModel, SeoFieldsMixin):
     )
     manufacturer_sku = models.CharField(max_length=64, blank=True)
     name = models.CharField(max_length=255)
+    slug = models.SlugField(max_length=255, unique=True, blank=True, db_index=False)
     brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, related_name="products")
     series = models.ForeignKey(Series, on_delete=models.SET_NULL, null=True, blank=True, related_name="products")
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name="products")
@@ -102,9 +118,29 @@ class Product(TimeStampedModel, SeoFieldsMixin):
     shelf_life = models.CharField(max_length=120, blank=True)
     description = models.TextField(blank=True)
     tags = models.ManyToManyField(Tag, blank=True, related_name="products")
+    seller = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="marketplace_products",
+    )
 
     def __str__(self):
         return f"{self.sku} — {self.name}"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(self.name)
+            if not base or base.isdigit():
+                base = f"product-{self.pk}" if self.pk else "product"
+            candidate = base
+            suffix = 2
+            while Product.objects.filter(slug=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base}-{suffix}"
+                suffix += 1
+            self.slug = candidate
+        return super().save(*args, **kwargs)
 
 class ProductImage(TimeStampedModel):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="images")

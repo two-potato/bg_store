@@ -89,3 +89,18 @@ class LegalEntityCreationRequest(TimeStampedModel):
         if self.status_id is None:
             self.status, _ = RequestStatus.objects.get_or_create(code="pending", defaults={"name": "На рассмотрении"})
         super().save(*args, **kwargs)
+
+
+class SellerStore(TimeStampedModel):
+    owner = models.OneToOneField(User, on_delete=models.CASCADE, related_name="seller_store")
+    legal_entity = models.ForeignKey(LegalEntity, on_delete=models.PROTECT, related_name="seller_stores")
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    photo = models.ImageField(upload_to="seller_store_photos/", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Магазин продавца"
+        verbose_name_plural = "Магазины продавцов"
+
+    def __str__(self):
+        return f"{self.name} — {self.owner}"

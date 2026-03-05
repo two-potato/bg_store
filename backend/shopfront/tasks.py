@@ -66,12 +66,19 @@ def notify_contact_feedback(self, *, name: str, phone: str, message: str, source
     async def _send():
         async with httpx.AsyncClient(timeout=10) as client:
             for tg in telegram_ids:
-                resp = await client.post(
-                    f"{settings.BOT_NOTIFY_URL}/notify/send_text",
-                    json={"telegram_id": tg, "text": tg_text},
-                    headers=_notify_headers(),
-                )
-                resp.raise_for_status()
+                try:
+                    resp = await client.post(
+                        f"{settings.BOT_NOTIFY_URL}/notify/send_text",
+                        json={"telegram_id": tg, "text": tg_text},
+                        headers=_notify_headers(),
+                    )
+                    if resp.is_error:
+                        log.warning(
+                            "contact_feedback_send_text_failed",
+                            extra={"telegram_id": tg, "status_code": resp.status_code, "body": resp.text[:500]},
+                        )
+                except Exception:
+                    log.exception("contact_feedback_send_text_exception", extra={"telegram_id": tg})
             group_resp = await client.post(
                 f"{settings.BOT_NOTIFY_URL}/notify/send_group",
                 json={"text": tg_text},

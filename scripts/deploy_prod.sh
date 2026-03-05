@@ -8,11 +8,31 @@ COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-admin@potatofarm.ru}"
 LETSENCRYPT_DOMAIN="${LETSENCRYPT_DOMAIN:-potatofarm.ru}"
 LETSENCRYPT_DOMAIN_WWW="${LETSENCRYPT_DOMAIN_WWW:-www.potatofarm.ru}"
+LETSENCRYPT_EXTRA_DOMAINS="${LETSENCRYPT_EXTRA_DOMAINS:-grafana.potatofarm.ru}"
 LETSENCRYPT_CERT_PATH="$ROOT_DIR/deploy/letsencrypt/live/$LETSENCRYPT_DOMAIN/fullchain.pem"
 
 mkdir -p "$ROOT_DIR/deploy/letsencrypt" "$ROOT_DIR/deploy/letsencrypt-lib" "$ROOT_DIR/deploy/certbot-www"
 
 issue_or_renew_cert_standalone() {
+  local domains=("$LETSENCRYPT_DOMAIN" "$LETSENCRYPT_DOMAIN_WWW")
+  local d
+  local certbot_domain_args=()
+
+  IFS=',' read -ra extra_domains <<< "$LETSENCRYPT_EXTRA_DOMAINS"
+  for d in "${extra_domains[@]}"; do
+    d="$(echo "$d" | xargs)"
+    [ -z "$d" ] && continue
+    if getent hosts "$d" >/dev/null 2>&1; then
+      domains+=("$d")
+    else
+      echo "[deploy] Skipping LE domain '$d' (DNS record not found yet)"
+    fi
+  done
+
+  for d in "${domains[@]}"; do
+    certbot_domain_args+=("-d" "$d")
+  done
+
   echo "[deploy] Requesting/renewing Let's Encrypt certificate for $LETSENCRYPT_DOMAIN"
   $COMPOSE stop nginx || true
   docker run --rm \
@@ -25,8 +45,7 @@ issue_or_renew_cert_standalone() {
       --agree-tos \
       --email "$LETSENCRYPT_EMAIL" \
       --keep-until-expiring \
-      -d "$LETSENCRYPT_DOMAIN" \
-      -d "$LETSENCRYPT_DOMAIN_WWW"
+      "${certbot_domain_args[@]}"
 }
 
 if [ ! -f "$LETSENCRYPT_CERT_PATH" ]; then

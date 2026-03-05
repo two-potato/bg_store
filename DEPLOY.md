@@ -31,6 +31,7 @@ cp bot/.env.notify.example bot/.env.notify
 
 Обязательно:
 - DNS A-записи `potatofarm.ru` и `www.potatofarm.ru` должны указывать на `185.207.65.192`.
+- Для отдельного входа в Grafana добавь A-запись `grafana.potatofarm.ru` -> `185.207.65.192`.
 - Открыты входящие порты `80/tcp` и `443/tcp`.
 
 ### 2. Как работает деплой

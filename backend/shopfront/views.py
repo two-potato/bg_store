@@ -7,14 +7,17 @@ from django.views import View
 from django.views.generic import TemplateView
 from django.utils.decorators import method_decorator
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.middleware.csrf import get_token
+from django.core.cache import cache
 from django.contrib import messages
 from django.db.models import Avg, Count, Case, When, IntegerField, Value, FloatField
+from django.db.models import Q
 from django.db.models.functions import Coalesce
 from orders.models import Order, OrderItem, FakeAcquiringPayment
-from commerce.models import LegalEntityMembership, DeliveryAddress
+from commerce.models import LegalEntityMembership, DeliveryAddress, SellerStore
 from .forms import ContactFeedbackForm
 from .tasks import notify_contact_feedback
 import logging
@@ -23,10 +26,26 @@ from uuid import uuid4
 from django.utils import timezone
 from core.logging_utils import log_calls
 from decimal import Decimal
-from .search import search_product_ids
+from . import search as sf_search
 from urllib.parse import urlencode
 
 log = logging.getLogger("shopfront")
+search_product_ids = sf_search.search_product_ids
+
+
+def _cache_get(key, default=None):
+    try:
+        return cache.get(key, default)
+    except Exception:
+        log.warning("cache_get_failed", extra={"cache_key": key}, exc_info=True)
+        return default
+
+
+def _cache_set(key, value, timeout):
+    try:
+        cache.set(key, value, timeout=timeout)
+    except Exception:
+        log.warning("cache_set_failed", extra={"cache_key": key}, exc_info=True)
 
 
 def _with_rating(qs):
@@ -34,6 +53,64 @@ def _with_rating(qs):
         rating_avg=Coalesce(Avg("reviews__rating"), Value(0.0), output_field=FloatField()),
         rating_count=Count("reviews", distinct=True),
     )
+
+
+def _ordered_products_with_related(product_ids, include_rating: bool = True):
+    if not product_ids:
+        return []
+    order_case = Case(
+        *[When(id=pid, then=pos) for pos, pid in enumerate(product_ids)],
+        default=len(product_ids),
+        output_field=IntegerField(),
+    )
+    base_qs = (
+        Product.objects.filter(id__in=product_ids)
+        .select_related("brand", "series", "category", "seller", "seller__seller_store")
+        .prefetch_related("images", "tags")
+    )
+    if include_rating:
+        base_qs = _with_rating(base_qs)
+    return list(base_qs.order_by(order_case))
+
+
+def _cached_home_product_ids(limit: int = 12):
+    key = f"shopfront:home:product_ids:v1:{limit}"
+    ids = _cache_get(key)
+    if ids is None:
+        ids = list(Product.objects.order_by("-is_new", "name").values_list("id", flat=True)[:limit])
+        _cache_set(key, ids, timeout=getattr(settings, "CACHE_TTL_HOME", 180))
+    return ids
+
+
+def _cached_home_category_ids(limit: int = 8):
+    key = f"shopfront:home:category_ids:v1:{limit}"
+    ids = _cache_get(key)
+    if ids is None:
+        ids = list(Category.objects.order_by("name").values_list("id", flat=True)[:limit])
+        _cache_set(key, ids, timeout=getattr(settings, "CACHE_TTL_HOME", 180))
+    return ids
+
+
+def _cached_catalog_default_page_ids(page: int, page_size: int):
+    key = f"shopfront:catalog:default_page_ids:v2:{page}:{page_size}"
+    ids = _cache_get(key)
+    if ids is None:
+        offset = max(0, page - 1) * page_size
+        ids = list(
+            Product.objects.order_by("-is_new", "name")
+            .values_list("id", flat=True)[offset : offset + page_size]
+        )
+        _cache_set(key, ids, timeout=getattr(settings, "CACHE_TTL_CATALOG_API", 120))
+    return ids
+
+
+def _cached_catalog_default_total_count():
+    key = "shopfront:catalog:default_total_count:v2"
+    count = _cache_get(key)
+    if count is None:
+        count = Product.objects.count()
+        _cache_set(key, count, timeout=getattr(settings, "CACHE_TTL_CATALOG_API", 120))
+    return count
 
 
 def _payment_event_label(event_code: str) -> str:
@@ -123,7 +200,7 @@ def _cart_summary(req):
     """Build cart items and totals for templates."""
     c = _cart(req)
     ids = [int(i) for i in c.keys()]
-    prods = {p.id: p for p in Product.objects.filter(id__in=ids)}
+    prods = {p.id: p for p in Product.objects.select_related("seller", "seller__seller_store").filter(id__in=ids)}
     items = []
     subtotal = Decimal("0.00")
     for pid, item in c.items():
@@ -199,10 +276,10 @@ class HomeView(TemplateView):
         return super().get(request, *args, **kwargs)
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["cats"] = Category.objects.all().order_by("name")[:8]
-        ctx["products"] = _with_rating(
-            Product.objects.prefetch_related("images", "tags").order_by("-is_new", "name")
-        )[:12]
+        cat_ids = _cached_home_category_ids(limit=8)
+        ctx["cats"] = list(Category.objects.filter(id__in=cat_ids).order_by("name"))
+        product_ids = _cached_home_product_ids(limit=12)
+        ctx["products"] = _ordered_products_with_related(product_ids)
         return ctx
 
 
@@ -261,20 +338,29 @@ class CatalogView(View):
     @log_calls(log)
     def get(self, request):
         get_token(request)
-        qs = _with_rating(
-            Product.objects.select_related("brand", "series", "category").prefetch_related("images", "tags").all()
-        )
+        qs = Product.objects.all()
         brand = request.GET.get("brand")
         category = request.GET.get("category")
         q = request.GET.get("q","")
         tag = request.GET.get("tag") or request.GET.get("tag_slug")
         sort = (request.GET.get("sort") or "").strip()
-        page = int(request.GET.get("page") or 1)
+        try:
+            page = int(request.GET.get("page") or 1)
+        except (TypeError, ValueError):
+            page = 1
+        if page < 1:
+            page = 1
         page_size = 24
         if brand:
-            qs = qs.filter(brand_id=brand)
+            if str(brand).isdigit():
+                qs = qs.filter(brand_id=int(brand))
+            else:
+                qs = qs.none()
         if category:
-            qs = qs.filter(category_id=category)
+            if str(category).isdigit():
+                qs = qs.filter(category_id=int(category))
+            else:
+                qs = qs.filter(category__slug=category)
         es_ranked_ids = []
         if q:
             max_hits = int(getattr(settings, "ES_CATALOG_MAX_HITS", 2000))
@@ -296,7 +382,11 @@ class CatalogView(View):
             "promo": ["-is_promo", "name"],
             "rating_desc": ["-rating_avg", "-rating_count", "name"],
         }
-        if q and es_ranked_ids and not sort:
+        include_rating = bool(getattr(settings, "ENABLE_CATALOG_RATING", settings.DEBUG))
+        default_catalog = not any([brand, category, q, tag]) and (not sort or sort == "new")
+        if sort == "rating_desc":
+            qs = _with_rating(qs).order_by(*sort_map["rating_desc"])
+        elif q and es_ranked_ids and not sort:
             rank_order = Case(
                 *[When(id=pid, then=pos) for pos, pid in enumerate(es_ranked_ids)],
                 default=len(es_ranked_ids),
@@ -305,12 +395,27 @@ class CatalogView(View):
             qs = qs.order_by(rank_order)
         else:
             qs = qs.order_by(*sort_map.get(sort, ["-is_new", "name"]))
-        paginator = Paginator(qs, page_size)
-        try:
-            page_obj = paginator.page(page)
-        except EmptyPage:
-            page_obj = paginator.page(paginator.num_pages or 1)
-        products_page = list(page_obj.object_list)
+        if default_catalog:
+            total_count = _cached_catalog_default_total_count()
+            num_pages = max(1, (total_count + page_size - 1) // page_size)
+            safe_page = min(page, num_pages)
+            page_ids = _cached_catalog_default_page_ids(page=safe_page, page_size=page_size)
+            products_page = _ordered_products_with_related(page_ids, include_rating=include_rating)
+            has_next = safe_page < num_pages
+            next_page = safe_page + 1 if has_next else None
+            current_page = safe_page
+        else:
+            paginator = Paginator(qs.values_list("id", flat=True), page_size)
+            try:
+                page_obj = paginator.page(page)
+            except EmptyPage:
+                page_obj = paginator.page(paginator.num_pages or 1)
+            page_ids = list(page_obj.object_list)
+            products_page = _ordered_products_with_related(page_ids, include_rating=include_rating)
+            total_count = paginator.count
+            has_next = page_obj.has_next()
+            next_page = page_obj.next_page_number() if page_obj.has_next() else None
+            current_page = page_obj.number
         base_params = {}
         if q:
             base_params["q"] = q
@@ -329,15 +434,31 @@ class CatalogView(View):
         if request.headers.get("HX-Request") and request.GET.get("fragment") == "grid_append":
             return render(request, "shopfront/partials/catalog_grid_append.html", {
                 "products": products_page,
-                "has_next": page_obj.has_next(),
-                "next_page": page_obj.next_page_number() if page_obj.has_next() else None,
+                "has_next": has_next,
+                "next_page": next_page,
                 "querystring_base": querystring_base,
             })
-        brands = Brand.objects.all()
-        cats = Category.objects.all()
-        tags = Tag.objects.all().order_by("name")[:50]
-        sel_brand = brands.filter(id=int(brand)).first() if brand and str(brand).isdigit() else None
-        sel_category = cats.filter(id=int(category)).first() if category and str(category).isdigit() else None
+        brands = _cache_get("shopfront:catalog:brands:v1")
+        if brands is None:
+            brands = list(Brand.objects.all())
+            _cache_set("shopfront:catalog:brands:v1", brands, timeout=getattr(settings, "CACHE_TTL_CATALOG_FILTERS", 900))
+        cats = _cache_get("shopfront:catalog:categories:v1")
+        if cats is None:
+            cats = list(Category.objects.all())
+            _cache_set("shopfront:catalog:categories:v1", cats, timeout=getattr(settings, "CACHE_TTL_CATALOG_FILTERS", 900))
+        tags = _cache_get("shopfront:catalog:tags:v1")
+        if tags is None:
+            tags = list(Tag.objects.all().order_by("name")[:50])
+            _cache_set("shopfront:catalog:tags:v1", tags, timeout=getattr(settings, "CACHE_TTL_CATALOG_FILTERS", 900))
+        brand_id = int(brand) if brand and str(brand).isdigit() else None
+        sel_brand = next((b for b in brands if brand_id is not None and b.id == brand_id), None)
+        if category:
+            if str(category).isdigit():
+                sel_category = next((c for c in cats if c.id == int(category)), None)
+            else:
+                sel_category = next((c for c in cats if c.slug == category), None)
+        else:
+            sel_category = None
         return render(request, "shopfront/catalog.html", {
             "products": products_page,
             "brands": brands,
@@ -348,11 +469,11 @@ class CatalogView(View):
             "brand": brand,
             "category": category,
             "tag": tag,
-            "has_next": page_obj.has_next(),
-            "next_page": page_obj.next_page_number() if page_obj.has_next() else None,
+            "has_next": has_next,
+            "next_page": next_page,
             "querystring_base": querystring_base,
-            "total_count": paginator.count,
-            "page": page_obj.number,
+            "total_count": total_count,
+            "page": current_page,
             "page_size": page_size,
             "sel_brand": sel_brand,
             "sel_category": sel_category,
@@ -371,18 +492,43 @@ class LiveSearchView(View):
                 {"q": q, "products": [], "show": False},
             )
 
-        ids = search_product_ids(query=q, limit=8)
-        products = (
-            Product.objects.select_related("brand")
+        es_failed = False
+        try:
+            ids, countries = sf_search.live_search_bundle(query=q, limit=8, country_limit=6)
+        except sf_search.ESSearchUnavailable as exc:
+            log.warning("live_search_es_unavailable", extra={"query": q, "reason": str(exc)})
+            es_failed = True
+            ids, countries = [], []
+        log.info("live_search_result_ids", extra={"query": q, "count": len(ids), "country_count": len(countries)})
+        base_qs = (
+            Product.objects.select_related("brand", "seller", "seller__seller_store")
             .prefetch_related("images")
-            .filter(id__in=ids)
         )
-        order = {pid: idx for idx, pid in enumerate(ids)}
-        products = sorted(products, key=lambda p: order.get(p.id, 9999))
+        if ids:
+            products = base_qs.filter(id__in=ids)
+            order = {pid: idx for idx, pid in enumerate(ids)}
+            products = sorted(products, key=lambda p: order.get(p.id, 9999))
+        elif not es_failed:
+            products = list(
+                base_qs.filter(
+                    Q(name__icontains=q)
+                    | Q(sku__icontains=q)
+                    | Q(brand__name__icontains=q)
+                    | Q(category__name__icontains=q)
+                    | Q(seller__username__icontains=q)
+                    | Q(seller__seller_store__name__icontains=q)
+                    | Q(country_of_origin__name__icontains=q)
+                )
+                .distinct()
+                .order_by("-is_new", "name")[:8]
+            )
+            log.info("live_search_fallback_db", extra={"query": q, "count": len(products)})
+        else:
+            products = []
         return render(
             request,
             "shopfront/partials/live_search_results.html",
-            {"q": q, "products": products, "show": True},
+            {"q": q, "products": products, "countries": countries, "show": True},
         )
 
 
@@ -421,16 +567,80 @@ class ProductDetailView(TemplateView):
         return super().get(request, *args, **kwargs)
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        pk = kwargs.get("pk")
-        p = get_object_or_404(Product.objects.prefetch_related("images", "tags"), pk=pk)
+        slug = kwargs.get("slug")
+        p = get_object_or_404(
+            Product.objects.select_related("seller", "seller__seller_store").prefetch_related("images", "tags"),
+            slug=slug,
+        )
         ctx.update(_reviews_context(p, self.request.user))
+        ctx["seller_store"] = getattr(p.seller, "seller_store", None) if p.seller_id else None
         return ctx
+
+
+@method_decorator(ensure_csrf_cookie, name="dispatch")
+class SellerStoreDetailView(TemplateView):
+    template_name = "shopfront/store_detail.html"
+
+    @log_calls(log)
+    def get(self, request, *args, **kwargs):
+        get_token(request)
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        store = get_object_or_404(
+            SellerStore.objects.select_related("owner", "owner__profile", "legal_entity"),
+            pk=kwargs.get("store_id"),
+        )
+        product_ids = list(
+            Product.objects.filter(seller=store.owner).order_by("-is_new", "name").values_list("id", flat=True)[:60]
+        )
+        products = _ordered_products_with_related(product_ids, include_rating=True)
+        ctx.update({"store": store, "products": products})
+        return ctx
+
+
+@method_decorator(ensure_csrf_cookie, name="dispatch")
+class SellerProfileView(TemplateView):
+    template_name = "shopfront/seller_profile.html"
+
+    @log_calls(log)
+    def get(self, request, *args, **kwargs):
+        get_token(request)
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        User = get_user_model()
+        seller_user = get_object_or_404(
+            User.objects.select_related("profile"),
+            username=kwargs.get("username"),
+            profile__role="seller",
+        )
+        memberships = LegalEntityMembership.objects.select_related("legal_entity", "role").filter(user=seller_user)
+        stores = SellerStore.objects.select_related("legal_entity").filter(owner=seller_user).order_by("name")
+        ctx.update(
+            {
+                "seller_user": seller_user,
+                "seller_profile": seller_user.profile,
+                "memberships": memberships,
+                "stores": stores,
+            }
+        )
+        return ctx
+
+
+class ProductPkRedirectView(View):
+    @log_calls(log)
+    def get(self, request, pk):
+        p = get_object_or_404(Product, pk=pk)
+        return redirect(f"/product/{p.slug}/", permanent=True)
 
 
 class ProductReviewUpsertView(LoginRequiredMixin, View):
     @log_calls(log)
-    def post(self, request, pk):
-        p = get_object_or_404(Product, pk=pk)
+    def post(self, request, slug):
+        p = get_object_or_404(Product, slug=slug)
         raw_rating = (request.POST.get("rating") or "").strip()
         text = (request.POST.get("text") or "").strip()
         try:
@@ -441,7 +651,7 @@ class ProductReviewUpsertView(LoginRequiredMixin, View):
             if request.headers.get("HX-Request"):
                 return _render_reviews_partial(request, p, status=400)
             messages.error(request, "Рейтинг должен быть от 1 до 5")
-            return redirect(f"/product/{pk}/#reviews")
+            return redirect(f"/product/{p.slug}/#reviews")
 
         ProductReview.objects.update_or_create(
             product=p,
@@ -453,43 +663,43 @@ class ProductReviewUpsertView(LoginRequiredMixin, View):
         if request.headers.get("HX-Request"):
             return render(request, "shopfront/partials/product_reviews.html", context)
         messages.success(request, "Отзыв сохранен")
-        return redirect(f"/product/{pk}/#reviews")
+        return redirect(f"/product/{p.slug}/#reviews")
 
 
 class ProductReviewDeleteView(LoginRequiredMixin, View):
     @log_calls(log)
-    def post(self, request, pk):
-        p = get_object_or_404(Product, pk=pk)
+    def post(self, request, slug):
+        p = get_object_or_404(Product, slug=slug)
         deleted, _ = ProductReview.objects.filter(product=p, user=request.user).delete()
         if deleted:
             messages.success(request, "Отзыв удален")
         context = _reviews_context(p, request.user)
         if request.headers.get("HX-Request"):
             return render(request, "shopfront/partials/product_reviews.html", context)
-        return redirect(f"/product/{pk}/#reviews")
+        return redirect(f"/product/{p.slug}/#reviews")
 
 
 class ProductReviewCommentCreateView(LoginRequiredMixin, View):
     @log_calls(log)
-    def post(self, request, pk, review_id):
-        p = get_object_or_404(Product, pk=pk)
+    def post(self, request, slug, review_id):
+        p = get_object_or_404(Product, slug=slug)
         review = get_object_or_404(ProductReview, pk=review_id, product=p)
         text = (request.POST.get("text") or "").strip()
         if not text:
             if request.headers.get("HX-Request"):
                 return _render_reviews_partial(request, p, status=400)
-            return redirect(f"/product/{pk}/#reviews")
+            return redirect(f"/product/{p.slug}/#reviews")
         ProductReviewComment.objects.create(review=review, user=request.user, text=text)
         context = _reviews_context(p, request.user)
         if request.headers.get("HX-Request"):
             return render(request, "shopfront/partials/product_reviews.html", context)
-        return redirect(f"/product/{pk}/#reviews")
+        return redirect(f"/product/{p.slug}/#reviews")
 
 
 class ProductReviewCommentUpdateView(LoginRequiredMixin, View):
     @log_calls(log)
-    def post(self, request, pk, comment_id):
-        p = get_object_or_404(Product, pk=pk)
+    def post(self, request, slug, comment_id):
+        p = get_object_or_404(Product, slug=slug)
         comment = get_object_or_404(ProductReviewComment.objects.select_related("review"), pk=comment_id, review__product=p)
         if comment.user_id != request.user.id:
             if request.headers.get("HX-Request"):
@@ -499,19 +709,19 @@ class ProductReviewCommentUpdateView(LoginRequiredMixin, View):
         if not text:
             if request.headers.get("HX-Request"):
                 return _render_reviews_partial(request, p, status=400)
-            return redirect(f"/product/{pk}/#reviews")
+            return redirect(f"/product/{p.slug}/#reviews")
         comment.text = text
         comment.save(update_fields=["text", "updated_at"])
         context = _reviews_context(p, request.user)
         if request.headers.get("HX-Request"):
             return render(request, "shopfront/partials/product_reviews.html", context)
-        return redirect(f"/product/{pk}/#reviews")
+        return redirect(f"/product/{p.slug}/#reviews")
 
 
 class ProductReviewCommentDeleteView(LoginRequiredMixin, View):
     @log_calls(log)
-    def post(self, request, pk, comment_id):
-        p = get_object_or_404(Product, pk=pk)
+    def post(self, request, slug, comment_id):
+        p = get_object_or_404(Product, slug=slug)
         comment = get_object_or_404(ProductReviewComment.objects.select_related("review"), pk=comment_id, review__product=p)
         if comment.user_id != request.user.id:
             if request.headers.get("HX-Request"):
@@ -521,7 +731,7 @@ class ProductReviewCommentDeleteView(LoginRequiredMixin, View):
         context = _reviews_context(p, request.user)
         if request.headers.get("HX-Request"):
             return render(request, "shopfront/partials/product_reviews.html", context)
-        return redirect(f"/product/{pk}/#reviews")
+        return redirect(f"/product/{p.slug}/#reviews")
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class TwaHomeView(TemplateView):
@@ -532,9 +742,8 @@ class TwaHomeView(TemplateView):
         return super().get(request, *args, **kwargs)
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["products"] = _with_rating(
-            Product.objects.prefetch_related("images", "tags").order_by("-is_new", "name")
-        )[:12]
+        product_ids = _cached_home_product_ids(limit=12)
+        ctx["products"] = _ordered_products_with_related(product_ids)
         return ctx
 
 class CartBadgeView(TemplateView):
@@ -747,7 +956,7 @@ class CheckoutSubmitView(LoginRequiredMixin, View):
         if not cart:
             return fail("Корзина пуста")
         ids = [int(i) for i in cart.keys()]
-        products = {p.id: p for p in Product.objects.filter(id__in=ids)}
+        products = {p.id: p for p in Product.objects.select_related("seller", "seller__seller_store").filter(id__in=ids)}
         if not products:
             return fail("Товары не найдены")
         # Stock validation

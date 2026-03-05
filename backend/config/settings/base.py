@@ -1,11 +1,21 @@
 from pathlib import Path
 import os
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev")
-DEBUG = os.getenv("DEBUG", "0") == "1"
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "*").split(",")
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+DEBUG = _env_bool("DEBUG", False)
 
 INSTALLED_APPS = [
     "jazzmin",
@@ -57,12 +67,14 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-    # Request logging after auth to have user context
     "core.middleware.RequestContextMiddleware",
-    "core.middleware.RequestLoggingMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+if _env_bool("ENABLE_REQUEST_ACCESS_LOG", True):  # pragma: no cover - env-driven toggle
+    # Keep this optional for high-load runs to reduce I/O bottlenecks.
+    MIDDLEWARE.insert(-2, "core.middleware.RequestLoggingMiddleware")
 
 ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
@@ -80,6 +92,33 @@ DATABASES = {
         "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
     }
 }
+
+# Cache
+_cache_backend = (os.getenv("CACHE_BACKEND", "locmem") or "locmem").strip().lower()
+if _cache_backend == "dummy":  # pragma: no cover - env-specific branch
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.dummy.DummyCache",
+        }
+    }
+elif _cache_backend == "locmem":  # pragma: no cover - env-specific branch
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": os.getenv("CACHE_LOCATION", "bg-shop-cache"),
+            "TIMEOUT": int(os.getenv("CACHE_DEFAULT_TIMEOUT", "300")),
+            "KEY_PREFIX": os.getenv("CACHE_KEY_PREFIX", "bgshop"),
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": os.getenv("CACHE_URL", os.getenv("REDIS_URL", "redis://redis:6379/1")),
+            "TIMEOUT": int(os.getenv("CACHE_DEFAULT_TIMEOUT", "300")),
+            "KEY_PREFIX": os.getenv("CACHE_KEY_PREFIX", "bgshop"),
+        }
+    }
 
 AUTH_USER_MODEL = "users.User"
 SITE_ID = 1
@@ -110,6 +149,14 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": os.getenv("DRF_THROTTLE_ANON", "30/min"),
+        "user": os.getenv("DRF_THROTTLE_USER", "120/min"),
+    },
 }
 
 SPECTACULAR_SETTINGS = {
@@ -129,6 +176,13 @@ ACCOUNT_EMAIL_VERIFICATION = "none"
 LOGIN_REDIRECT_URL = "/account/"
 LOGOUT_REDIRECT_URL = "/"
 LOGIN_URL = "/account/login/"
+
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 10}},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
 
 # Google provider keys (set in environment for production)
 SOCIALACCOUNT_PROVIDERS = {
@@ -166,6 +220,12 @@ BOT_NOTIFY_URL = os.getenv("BOT_NOTIFY_URL", BOT_BASE_URL)
 
 # Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TG_INIT_DATA_MAX_AGE_SECONDS = int(os.getenv("TG_INIT_DATA_MAX_AGE_SECONDS", "300"))
+
+# Public observability/docs toggles
+ENABLE_API_DOCS = _env_bool("ENABLE_API_DOCS", DEBUG)
+METRICS_TOKEN = os.getenv("METRICS_TOKEN", "")
+ENABLE_CATALOG_RATING = _env_bool("ENABLE_CATALOG_RATING", DEBUG)
 
 # Google Maps
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")
@@ -174,6 +234,15 @@ GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")
 ES_URL = os.getenv("ES_URL", "http://es:9200")
 ES_PRODUCTS_INDEX = os.getenv("ES_PRODUCTS_INDEX", "products")
 ES_TIMEOUT_SECONDS = float(os.getenv("ES_TIMEOUT_SECONDS", "0.8"))
+
+# Cache TTLs (seconds)
+CACHE_TTL_HEADER_CATEGORIES = int(os.getenv("CACHE_TTL_HEADER_CATEGORIES", "900"))
+CACHE_TTL_HOME = int(os.getenv("CACHE_TTL_HOME", "180"))
+CACHE_TTL_CATALOG_FILTERS = int(os.getenv("CACHE_TTL_CATALOG_FILTERS", "900"))
+CACHE_TTL_LIVE_SEARCH = int(os.getenv("CACHE_TTL_LIVE_SEARCH", "60"))
+CACHE_TTL_ES_SEARCH = int(os.getenv("CACHE_TTL_ES_SEARCH", "120"))
+CACHE_TTL_CATALOG_API = int(os.getenv("CACHE_TTL_CATALOG_API", "120"))
+CACHE_TTL_COMMERCE_LOOKUPS = int(os.getenv("CACHE_TTL_COMMERCE_LOOKUPS", "600"))
 
 # Admin email notifications (orders lifecycle)
 ADMIN_NOTIFY_EMAILS = [
@@ -213,17 +282,37 @@ CSRF_TRUSTED_ORIGINS = _csrf_env or [
     "http://127.0.0.1:8080",
 ]
 
+if not DEBUG:  # pragma: no cover - primarily exercised in production runtime
+    _settings_module = os.getenv("DJANGO_SETTINGS_MODULE", "")
+    _strict_settings = _env_bool(
+        "ENFORCE_STRICT_SETTINGS",
+        _settings_module.endswith(".prod"),
+    )
+    if _strict_settings:
+        if SECRET_KEY in {"", "dev", "change-me"}:
+            raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set to a strong value when DEBUG=0")
+        if INTERNAL_TOKEN in {"", "change-me", "dev", "dev-secret"}:
+            raise ImproperlyConfigured("INTERNAL_TOKEN must be set to a strong value when DEBUG=0")
+        if ORDER_APPROVE_SECRET in {"", "change-me", "dev", "dev-secret"}:
+            raise ImproperlyConfigured("ORDER_APPROVE_SECRET must be set to a strong value when DEBUG=0")
+        if not TELEGRAM_BOT_TOKEN:
+            raise ImproperlyConfigured("TELEGRAM_BOT_TOKEN must be configured when DEBUG=0")
+        if "*" in ALLOWED_HOSTS:
+            raise ImproperlyConfigured("ALLOWED_HOSTS must not contain '*' when DEBUG=0")
+
 # -------- Logging configuration --------
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 LOG_JSON = os.getenv("LOG_JSON", "0") == "1"
 
 # File logging configuration
 LOG_FILE_PATH = os.getenv("LOG_FILE_PATH", "/app/logs/app.log")
+_log_handlers = ["console", "file"]
+_log_dir = os.path.dirname(LOG_FILE_PATH) or "."
 try:
-    os.makedirs(os.path.dirname(LOG_FILE_PATH), exist_ok=True)
-except Exception:
-    # If directory creation fails, continue with console logging only
-    pass
+    os.makedirs(_log_dir, exist_ok=True)
+except Exception:  # pragma: no cover - filesystem edge-case
+    # Fall back to console-only logging when the file path is unavailable.
+    _log_handlers = ["console"]
 
 _LOG_FORMAT = (
     "%(asctime)s %(levelname)s %(name)s [rid=%(request_id)s user=%(user)s] "
@@ -264,7 +353,7 @@ LOGGING = {
             "formatter": "json" if LOG_JSON else "plain",
         },
     },
-    "root": {"handlers": ["console", "file"], "level": LOG_LEVEL},
+    "root": {"handlers": _log_handlers, "level": LOG_LEVEL},
     "loggers": {
         "django": {"level": "INFO"},
         "django.request": {"level": "WARNING"},
@@ -273,44 +362,47 @@ LOGGING = {
         "uvicorn.error": {"level": "INFO"},
         "uvicorn.access": {"level": "INFO"},
         "django.db.backends": {
-            "handlers": ["console", "file"],
+            "handlers": _log_handlers,
             "level": os.getenv("DB_LOG_LEVEL", "WARNING"),
             "propagate": False,
         },
         "celery": {
-            "handlers": ["console", "file"],
+            "handlers": _log_handlers,
             "level": LOG_LEVEL,
             "propagate": False,
         },
         "request": {
-            "handlers": ["console", "file"],
-            "level": "INFO",
+            "handlers": _log_handlers,
+            "level": os.getenv("REQUEST_LOG_LEVEL", "INFO"),
             "propagate": False,
         },
         "shopfront": {
-            "handlers": ["console", "file"],
+            "handlers": _log_handlers,
             "level": LOG_LEVEL,
             "propagate": False,
         },
         "commerce": {
-            "handlers": ["console", "file"],
+            "handlers": _log_handlers,
             "level": LOG_LEVEL,
             "propagate": False,
         },
         "users": {
-            "handlers": ["console", "file"],
+            "handlers": _log_handlers,
             "level": LOG_LEVEL,
             "propagate": False,
         },
         "orders": {
-            "handlers": ["console", "file"],
+            "handlers": _log_handlers,
             "level": LOG_LEVEL,
             "propagate": False,
         },
         "catalog": {
-            "handlers": ["console", "file"],
+            "handlers": _log_handlers,
             "level": LOG_LEVEL,
             "propagate": False,
         },
     },
 }
+
+if "file" not in _log_handlers:  # pragma: no cover - fallback when file handler unavailable
+    LOGGING["handlers"].pop("file", None)

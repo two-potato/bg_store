@@ -23,7 +23,7 @@ services:
       - "8000"
     command: ["sh", "-lc", "until /app/.venv/bin/python manage.py migrate --noinput; do echo 'Waiting for DB...'; sleep 2; done; exec /app/.venv/bin/gunicorn config.asgi:application -c config/gunicorn.py"]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      test: ["CMD-SHELL", "curl -fsS -H 'Host: potatofarm.ru' http://127.0.0.1:8000/health/ >/dev/null"]
       interval: 10s
       timeout: 3s
       retries: 20

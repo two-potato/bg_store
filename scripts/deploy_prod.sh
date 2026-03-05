@@ -72,7 +72,12 @@ echo "[deploy] Running migrations"
 $COMPOSE exec -T backend /app/.venv/bin/python manage.py migrate --noinput
 
 echo "[deploy] Restoring sellers/stores links when missing"
-$COMPOSE exec -T backend /app/.venv/bin/python manage.py seed_sellers >/dev/null 2>&1 || true
+if ! $COMPOSE exec -T backend /app/.venv/bin/python manage.py seed_sellers; then
+  echo "[deploy] WARNING: seed_sellers failed, continuing deploy"
+fi
+
+echo "[deploy] Clearing application cache"
+$COMPOSE exec -T backend /app/.venv/bin/python manage.py shell -c "from django.core.cache import cache; cache.clear()"
 
 echo "[deploy] Fixing staticfiles volume permissions"
 $COMPOSE exec -T --user root backend sh -lc "mkdir -p /app/staticfiles && chown -R app:app /app/staticfiles"

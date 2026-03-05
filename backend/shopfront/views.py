@@ -1,4 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
+from django.http import Http404
 from django.http import JsonResponse, HttpResponse
 from django.template.loader import render_to_string
 from catalog.models import Product, Category, Brand, Tag, ProductReview, ProductReviewComment
@@ -636,10 +637,14 @@ class SellerStoreDetailView(TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        store = get_object_or_404(
-            SellerStore.objects.select_related("owner", "owner__profile", "legal_entity"),
-            pk=kwargs.get("store_id"),
-        )
+        store_id = kwargs.get("store_id")
+        store_qs = SellerStore.objects.select_related("owner", "owner__profile", "legal_entity")
+        store = store_qs.filter(pk=store_id).first()
+        if store is None:
+            # Backward compatibility for links that used seller id instead of store id.
+            store = store_qs.filter(owner_id=store_id).first()
+        if store is None:
+            raise Http404("Store not found")
         product_ids = list(
             Product.objects.filter(seller=store.owner).order_by("-is_new", "name").values_list("id", flat=True)[:60]
         )
@@ -660,11 +665,7 @@ class SellerProfileView(TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         User = get_user_model()
-        seller_user = get_object_or_404(
-            User.objects.select_related("profile"),
-            username=kwargs.get("username"),
-            profile__role="seller",
-        )
+        seller_user = get_object_or_404(User.objects.select_related("profile"), username=kwargs.get("username"))
         memberships = LegalEntityMembership.objects.select_related("legal_entity", "role").filter(user=seller_user)
         stores = SellerStore.objects.select_related("legal_entity").filter(owner=seller_user).order_by("name")
         ctx.update(

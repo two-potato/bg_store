@@ -172,7 +172,11 @@ async def alertmanager_webhook(payload: AlertmanagerPayload):
 
     sent_chat = await _send_to_managers_chat("\n\n".join(lines))
     if sent_chat is None:
-        return {"ok": False, "error": "No reachable chat for notifications"}
+        log.error(
+            "alertmanager_delivery_failed",
+            extra={"alerts_total": len(payload.alerts), "managers_group_id": MANAGERS_GROUP_ID},
+        )
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="No reachable chat for alerts")
     NOTIFY_SENT.labels(type="group").inc()
     return {"ok": True, "sent": len(alerts), "total": len(payload.alerts), "chat_id": sent_chat}
 

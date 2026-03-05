@@ -1,22 +1,27 @@
-version: "3.9"
 name: bad-guys-shop
 services:
   backend:
     build: ./backend
-    container_name: bg-backend
     env_file: ./backend/.env
+    environment:
+      CACHE_BACKEND: redis
+      ENABLE_REQUEST_ACCESS_LOG: "0"
+      LOG_CALLS_ENABLED: "0"
+      REQUEST_LOG_LEVEL: WARNING
+      ENABLE_CATALOG_RATING: "0"
+      GUNICORN_WORKERS: "4"
+      GUNICORN_TIMEOUT: "180"
     depends_on:
       - db
       - redis
       - bot
-      - mailpit
     volumes:
       - ./backend/media:/app/media
       - staticfiles:/app/staticfiles
       - ./logs:/app/logs
-    ports:
-      - "8000:8000"
-    command: ["sh", "-lc", "until /app/.venv/bin/python manage.py migrate --noinput; do echo 'Waiting for DB...'; sleep 2; done; exec /app/.venv/bin/python -m uvicorn config.asgi:application --host 0.0.0.0 --port 8000"]
+    expose:
+      - "8000"
+    command: ["sh", "-lc", "until /app/.venv/bin/python manage.py migrate --noinput; do echo 'Waiting for DB...'; sleep 2; done; exec /app/.venv/bin/gunicorn config.asgi:application -c config/gunicorn.py"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
       interval: 10s
@@ -48,6 +53,7 @@ services:
     build: ./bot
     container_name: bg-bot
     env_file: ./bot/.env
+    command: ["python", "-m", "uvicorn", "app.main_shop:app", "--host", "0.0.0.0", "--port", "8080"]
     expose: ["8080"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -61,6 +67,7 @@ services:
     container_name: bg-bot-twa
     profiles: ["bots-extra"]
     env_file: ./bot/.env.twa
+    command: ["python", "-m", "uvicorn", "app.main_shop:app", "--host", "0.0.0.0", "--port", "8080"]
     expose: ["8080"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -73,6 +80,7 @@ services:
     build: ./bot
     container_name: bg-bot-notify
     env_file: ./bot/.env.notify
+    command: ["python", "-m", "uvicorn", "app.main_notify:app", "--host", "0.0.0.0", "--port", "8080"]
     expose: ["8080"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -84,6 +92,7 @@ services:
   db:
     image: postgres:16
     container_name: bg-db
+    command: ["postgres", "-c", "max_connections=1000", "-c", "shared_buffers=256MB"]
     env_file: ./backend/.env
     volumes:
       - pgdata:/var/lib/postgresql/data

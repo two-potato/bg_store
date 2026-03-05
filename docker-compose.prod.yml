@@ -2,12 +2,38 @@ services:
   backend:
     environment:
       DEBUG: "0"
-    command: ["python", "-m", "gunicorn", "-k", "uvicorn.workers.UvicornWorker", "-c", "python:config.gunicorn", "config.asgi:application"]
-  nginx:
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+      ENABLE_API_DOCS: "0"
+      CACHE_BACKEND: redis
+      ENABLE_REQUEST_ACCESS_LOG: "0"
+      LOG_CALLS_ENABLED: "0"
+      REQUEST_LOG_LEVEL: WARNING
+      ENABLE_CATALOG_RATING: "0"
+      GUNICORN_WORKERS: "4"
+      GUNICORN_TIMEOUT: "180"
     depends_on:
-      backend:
-        condition: service_healthy
+      - db
+      - redis
+      - bot
+    ports: []
+    command:
+      - python
+      - -m
+      - gunicorn
+      - -k
+      - uvicorn.workers.UvicornWorker
+      - -c
+      - python:config.gunicorn
+      - config.asgi:application
+
   nginx:
     build:
       context: ./deploy/nginx
       dockerfile: Dockerfile
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  mailpit:
+    profiles: ["dev-only"]
+    ports: []

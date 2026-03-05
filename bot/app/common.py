@@ -50,7 +50,7 @@ def verify_sig(order_id: int, admin_tg_id: int, ts: int, sig: str, secret: str, 
 def require_internal_token(x_internal_token: str | None = Header(default=None, alias="X-Internal-Token")) -> None:
     expected = (os.getenv("INTERNAL_TOKEN") or "").strip()
     provided = (x_internal_token or "").strip()
-    if not expected or expected in {"change-me", "dev", "dev-secret"}:
+    if not expected:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Internal auth is not configured")
     if not hmac.compare_digest(provided, expected):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")

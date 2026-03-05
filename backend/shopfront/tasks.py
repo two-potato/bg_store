@@ -50,11 +50,6 @@ def notify_contact_feedback(self, *, name: str, phone: str, message: str, source
     else:
         log.warning("contact_feedback_email_no_recipients")
 
-    telegram_ids = _admin_telegram_ids()
-    if not telegram_ids:
-        log.warning("contact_feedback_tg_no_recipients")
-        return
-
     tg_text = (
         "📩 Новая заявка с формы контактов\n"
         f"Имя: {name}\n"
@@ -62,6 +57,7 @@ def notify_contact_feedback(self, *, name: str, phone: str, message: str, source
         f"Источник: {source}\n\n"
         f"{message}"
     )
+    telegram_ids = _admin_telegram_ids()
 
     async def _send():
         async with httpx.AsyncClient(timeout=10) as client:
@@ -69,9 +65,27 @@ def notify_contact_feedback(self, *, name: str, phone: str, message: str, source
                 resp = await client.post(
                     f"{settings.BOT_NOTIFY_URL}/notify/send_text",
                     json={"telegram_id": tg, "text": tg_text},
+                    headers=_notify_headers(),
                 )
                 resp.raise_for_status()
+            group_resp = await client.post(
+                f"{settings.BOT_NOTIFY_URL}/notify/send_group",
+                json={"text": tg_text},
+                headers=_notify_headers(),
+            )
+            # Group delivery is a fallback channel. Keep task successful even if this path is not configured.
+            if group_resp.is_error:
+                log.warning(
+                    "contact_feedback_group_send_failed",
+                    extra={"status_code": group_resp.status_code, "body": group_resp.text[:500]},
+                )
 
-    asyncio.run(_send())
+    try:
+        asyncio.run(_send())
+    except Exception:
+        log.exception("contact_feedback_tg_send_failed", extra={"recipients": telegram_ids})
+        raise
     log.info("contact_feedback_tg_sent", extra={"recipients": telegram_ids})
+def _notify_headers() -> dict[str, str]:
+    return {"X-Internal-Token": str(getattr(settings, "INTERNAL_TOKEN", ""))}
 

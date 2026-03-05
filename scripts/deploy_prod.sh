@@ -71,6 +71,9 @@ $COMPOSE up -d --build --remove-orphans
 echo "[deploy] Running migrations"
 $COMPOSE exec -T backend /app/.venv/bin/python manage.py migrate --noinput
 
+echo "[deploy] Restoring sellers/stores links when missing"
+$COMPOSE exec -T backend /app/.venv/bin/python manage.py seed_sellers >/dev/null 2>&1 || true
+
 echo "[deploy] Fixing staticfiles volume permissions"
 $COMPOSE exec -T --user root backend sh -lc "mkdir -p /app/staticfiles && chown -R app:app /app/staticfiles"
 

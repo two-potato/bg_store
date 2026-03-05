@@ -4,18 +4,18 @@ Usage:
   include "shopfront/components/product_card.html" with p=product show_tags=True
 {% endcomment %}
 <div class="card product-card bg-base-100 shadow-sm hover:shadow-md h-full">
-  <a href="/product/{{ p.id }}/" class="block flex-1" aria-label="Подробнее о товаре {{ p.name }}">
+  <a href="{% if p.slug %}/product/{{ p.slug }}/{% else %}/product/{{ p.id }}/{% endif %}" class="block flex-1" aria-label="Подробнее о товаре {{ p.name }}">
     {% with images=p.images.all|slice:":5" %}
       {% with slide_count=images|length %}
         <figure class="media product-card-carousel" data-carousel-id="{{ p.id }}">
           <div class="product-card-carousel__track" id="pc-track-{{ p.id }}" data-index="0" data-count="{{ slide_count }}">
             {% for img in images %}
               <div class="product-card-carousel__slide">
-                <img src="{{ img.url }}" alt="{{ img.alt|default:p.name }}" loading="lazy"/>
+                <img src="{{ img.url }}" alt="{{ img.alt|default:p.name }}" loading="lazy" onerror="this.onerror=null;this.src='/media/user_photos/image017.jpg';"/>
               </div>
             {% empty %}
               <div class="product-card-carousel__slide">
-                <img src="https://picsum.photos/seed/p-{{ p.id }}-fallback/600/400" alt="{{ p.name }}" loading="lazy"/>
+                <img src="/media/user_photos/image017.jpg" alt="{{ p.name }}" loading="lazy"/>
               </div>
             {% endfor %}
           </div>
@@ -75,6 +75,18 @@ Usage:
       {% endif %}
     </div>
   </a>
+  {% if p.seller %}
+    <div class="px-3 pt-2 text-xs space-y-1">
+      {% if p.seller.seller_store %}
+        <a class="link link-primary block" href="/stores/{{ p.seller.seller_store.id }}/" hx-boost="false">
+          Магазин: {{ p.seller.seller_store.name }}
+        </a>
+      {% endif %}
+      <a class="link block" href="/sellers/{{ p.seller.username }}/" hx-boost="false">
+        Продавец: {{ p.seller.profile.full_name|default:p.seller.username }}
+      </a>
+    </div>
+  {% endif %}
   <div class="card-footer px-3 pb-3 mt-auto">
     {% include "shopfront/components/cart_control.html" with pid=p.id in_stock=p.stock_qty %}
   </div>

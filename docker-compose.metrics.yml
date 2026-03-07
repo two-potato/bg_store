@@ -6,7 +6,6 @@ services:
     volumes:
       - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
-    ports: ["9090:9090"]
     restart: unless-stopped
 
   loki:
@@ -19,8 +18,6 @@ services:
       - ./deploy/loki/rules/fake/rules.yml:/etc/loki/rules/fake/rules.yml:ro
       - loki-wal:/wal
       - loki-data:/loki
-    ports:
-      - "3100:3100"
     restart: unless-stopped
 
   nginx-exporter:
@@ -37,7 +34,6 @@ services:
     container_name: bg-alertmanager
     volumes:
       - ./deploy/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-    ports: ["9093:9093"]
     restart: unless-stopped
 
   grafana:
@@ -52,7 +48,6 @@ services:
       - ./deploy/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./deploy/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./deploy/grafana/dashboards:/etc/grafana/dashboards:ro
-    ports: ["3000:3000"]
     restart: unless-stopped
 
   promtail:

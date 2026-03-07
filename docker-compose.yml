@@ -129,7 +129,7 @@ services:
     # В dev не блокируем старт Nginx ожиданием health бэкенда,
     # чтобы /health/ открывался даже при проблемах миграций
     depends_on: [backend]
-    ports: ["8080:80"]
+    ports: ["${NGINX_HTTP_PORT:-8080}:80"]
     volumes:
       - staticfiles:/staticfiles:ro
       - ./backend/media:/media:ro

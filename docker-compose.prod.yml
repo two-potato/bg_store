@@ -31,7 +31,6 @@ services:
       context: ./deploy/nginx
       dockerfile: Dockerfile
     ports:
-      - "80:80"
       - "443:443"
     volumes:
       - ./deploy/letsencrypt:/etc/letsencrypt:ro

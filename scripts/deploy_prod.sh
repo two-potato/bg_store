@@ -10,8 +10,25 @@ LETSENCRYPT_DOMAIN="${LETSENCRYPT_DOMAIN:-potatofarm.ru}"
 LETSENCRYPT_DOMAIN_WWW="${LETSENCRYPT_DOMAIN_WWW:-www.potatofarm.ru}"
 LETSENCRYPT_EXTRA_DOMAINS="${LETSENCRYPT_EXTRA_DOMAINS:-grafana.potatofarm.ru}"
 LETSENCRYPT_CERT_PATH="$ROOT_DIR/deploy/letsencrypt/live/$LETSENCRYPT_DOMAIN/fullchain.pem"
+ALLOWED_SSH_PORT="${ALLOWED_SSH_PORT:-22}"
+export NGINX_HTTP_PORT="${NGINX_HTTP_PORT:-80}"
 
 mkdir -p "$ROOT_DIR/deploy/letsencrypt" "$ROOT_DIR/deploy/letsencrypt-lib" "$ROOT_DIR/deploy/certbot-www"
+
+configure_firewall() {
+  if ! command -v ufw >/dev/null 2>&1; then
+    echo "[deploy] ufw not found, skipping firewall hardening"
+    return
+  fi
+
+  echo "[deploy] Applying UFW inbound policy (allow only SSH/HTTP/HTTPS)"
+  ufw --force default deny incoming
+  ufw --force default allow outgoing
+  ufw --force allow "${ALLOWED_SSH_PORT}/tcp"
+  ufw --force allow 80/tcp
+  ufw --force allow 443/tcp
+  ufw --force enable || true
+}
 
 issue_or_renew_cert_standalone() {
   local domains=("$LETSENCRYPT_DOMAIN" "$LETSENCRYPT_DOMAIN_WWW")
@@ -95,3 +112,5 @@ $COMPOSE ps
 echo "[deploy] Health checks"
 curl -fsS http://localhost/health/ >/dev/null
 echo "[deploy] OK"
+
+configure_firewall

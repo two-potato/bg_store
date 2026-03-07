@@ -28,6 +28,7 @@ configure_firewall() {
   fi
 
   echo "[deploy] Applying UFW inbound policy (allow only SSH/HTTP/HTTPS)"
+  ufw --force reset
   ufw default deny incoming
   ufw default allow outgoing
   ufw allow "${ALLOWED_SSH_PORT}/tcp"

@@ -1,5 +1,5 @@
 {% if show %}
-  <div class="live-search-panel live-search-panel--glass" role="listbox" aria-label="Результаты поиска">
+  <div class="live-search-panel live-search-panel--glass live-search-panel--neo" role="listbox" aria-label="Результаты поиска">
     <div class="live-search-head live-search-head--v2">
       <span class="live-search-head__label">Результаты</span>
       <span class="live-search-head__query">«{{ q }}»</span>
@@ -25,7 +25,7 @@
       </div>
     {% endif %}
     {% if products %}
-      <ul class="live-search-list">
+      <ul class="live-search-list live-search-list--neo">
         {% for p in products %}
           <li class="live-search-row">
             <a href="/product/{{ p.slug }}/" hx-boost="false" class="live-search-item live-search-item--v2 live-search-item--h">

@@ -98,60 +98,146 @@ body.app-theme #product-grid .cart-control--icon.is-in-cart .stepper {
   display: inline-flex !important;
 }
 
-/* Live search 2026: compact horizontal product cards */
-body.app-theme .live-search-panel {
+/* Live search dropdown redesign (scoped and conflict-safe) */
+body.app-theme #live-search-results,
+body.app-theme #live-search-results-mobile {
+  z-index: 120 !important;
+}
+
+body.app-theme #live-search-results .live-search-panel,
+body.app-theme #live-search-results-mobile .live-search-panel {
+  border: 1px solid #c8dcff !important;
   border-radius: 16px !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  box-shadow: 0 18px 42px rgba(18, 41, 92, 0.18) !important;
+  backdrop-filter: blur(8px);
   overflow: hidden !important;
 }
 
-body.app-theme .live-search-list {
-  padding: 0.45rem !important;
-  margin: 0 !important;
-  display: grid !important;
-  gap: 0.36rem !important;
+body.app-theme #live-search-results .live-search-head--v2,
+body.app-theme #live-search-results-mobile .live-search-head--v2 {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.55rem !important;
+  padding: 0.62rem 0.8rem !important;
+  border-bottom: 1px solid #d7e5ff !important;
+  background: linear-gradient(180deg, #f7fbff 0%, #edf4ff 100%) !important;
 }
 
-body.app-theme .live-search-item--h {
+body.app-theme #live-search-results .live-search-head__label,
+body.app-theme #live-search-results-mobile .live-search-head__label {
+  font-size: 0.72rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  color: #1f4ca7 !important;
+}
+
+body.app-theme #live-search-results .live-search-head__query,
+body.app-theme #live-search-results-mobile .live-search-head__query {
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+  color: #0f213e !important;
+}
+
+body.app-theme #live-search-results .live-search-countries,
+body.app-theme #live-search-results-mobile .live-search-countries {
+  padding: 0.5rem 0.75rem 0.35rem !important;
+  border-bottom: 1px solid #e5efff !important;
+  background: #ffffff !important;
+}
+
+body.app-theme #live-search-results .live-search-countries__title,
+body.app-theme #live-search-results-mobile .live-search-countries__title {
+  font-size: 0.69rem !important;
+  font-weight: 700 !important;
+  color: #59729a !important;
+  margin-bottom: 0.34rem !important;
+}
+
+body.app-theme #live-search-results .live-search-countries__list,
+body.app-theme #live-search-results-mobile .live-search-countries__list {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 0.3rem !important;
+}
+
+body.app-theme #live-search-results .live-search-country-chip,
+body.app-theme #live-search-results-mobile .live-search-country-chip {
+  font-size: 0.72rem !important;
+  font-weight: 600 !important;
+  border: 1px solid #cde1ff !important;
+  border-radius: 999px !important;
+  background: #f3f8ff !important;
+  color: #284e95 !important;
+  padding: 0.2rem 0.52rem !important;
+}
+
+body.app-theme #live-search-results .live-search-list,
+body.app-theme #live-search-results-mobile .live-search-list {
+  margin: 0 !important;
+  padding: 0.44rem !important;
   display: grid !important;
-  grid-template-columns: 56px minmax(0, 1fr) auto !important;
+  gap: 0.34rem !important;
+}
+
+body.app-theme #live-search-results .live-search-row,
+body.app-theme #live-search-results-mobile .live-search-row {
+  list-style: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+body.app-theme #live-search-results .live-search-item--h,
+body.app-theme #live-search-results-mobile .live-search-item--h {
+  display: grid !important;
+  grid-template-columns: 58px minmax(0, 1fr) auto !important;
   align-items: center !important;
   gap: 0.62rem !important;
-  padding: 0.52rem 0.56rem !important;
-  border-radius: 12px !important;
+  padding: 0.52rem !important;
   border: 1px solid transparent !important;
-  transition: background-color .16s ease, border-color .16s ease, transform .16s ease !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  text-decoration: none !important;
+  transition: border-color .16s ease, background-color .16s ease, transform .16s ease !important;
 }
 
-body.app-theme .live-search-item--h:hover {
+body.app-theme #live-search-results .live-search-item--h:hover,
+body.app-theme #live-search-results-mobile .live-search-item--h:hover {
   background: #eff5ff !important;
   border-color: #c8dcff !important;
   transform: translateY(-1px);
 }
 
-body.app-theme .live-search-thumb--sm {
-  width: 56px !important;
-  height: 56px !important;
+body.app-theme #live-search-results .live-search-thumb--sm,
+body.app-theme #live-search-results-mobile .live-search-thumb--sm {
+  width: 58px !important;
+  height: 58px !important;
   border-radius: 10px !important;
   overflow: hidden !important;
   border: 1px solid #d7e5ff !important;
   background: #ffffff !important;
 }
 
-body.app-theme .live-search-main {
+body.app-theme #live-search-results .live-search-main,
+body.app-theme #live-search-results-mobile .live-search-main {
   min-width: 0 !important;
   display: grid !important;
   gap: 0.16rem !important;
 }
 
-body.app-theme .live-search-topline {
+body.app-theme #live-search-results .live-search-topline,
+body.app-theme #live-search-results-mobile .live-search-topline {
   display: flex !important;
   align-items: center !important;
   gap: 0.38rem !important;
   min-width: 0 !important;
 }
 
-body.app-theme .live-search-title {
-  font-size: 0.87rem !important;
+body.app-theme #live-search-results .live-search-title,
+body.app-theme #live-search-results-mobile .live-search-title {
+  font-size: 0.86rem !important;
   font-weight: 700 !important;
   color: #0f213e !important;
   white-space: nowrap !important;
@@ -159,70 +245,100 @@ body.app-theme .live-search-title {
   text-overflow: ellipsis !important;
 }
 
-body.app-theme .live-search-store {
-  max-width: 46% !important;
-  font-size: 0.68rem !important;
-  font-weight: 600 !important;
+body.app-theme #live-search-results .live-search-store,
+body.app-theme #live-search-results-mobile .live-search-store {
+  max-width: 44% !important;
+  font-size: 0.67rem !important;
+  font-weight: 700 !important;
   color: #1f4ca7 !important;
   background: #eaf3ff !important;
   border: 1px solid #cde1ff !important;
   border-radius: 999px !important;
-  padding: 0.11rem 0.45rem !important;
+  padding: 0.12rem 0.46rem !important;
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
 }
 
-body.app-theme .live-search-subtitle {
-  font-size: 0.73rem !important;
+body.app-theme #live-search-results .live-search-subtitle,
+body.app-theme #live-search-results-mobile .live-search-subtitle {
+  font-size: 0.72rem !important;
   color: #5a7096 !important;
-  line-height: 1.25 !important;
+  line-height: 1.24 !important;
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
 }
 
-body.app-theme .live-search-aside {
+body.app-theme #live-search-results .live-search-aside,
+body.app-theme #live-search-results-mobile .live-search-aside {
   display: grid !important;
   justify-items: end !important;
   align-items: center !important;
-  gap: 0.2rem !important;
+  gap: 0.22rem !important;
   min-width: max-content !important;
 }
 
-body.app-theme .live-search-price {
+body.app-theme #live-search-results .live-search-price,
+body.app-theme #live-search-results-mobile .live-search-price {
   font-size: 0.88rem !important;
   font-weight: 800 !important;
-  color: #12306e !important;
   letter-spacing: 0.01em !important;
+  color: #12306e !important;
 }
 
-body.app-theme .live-search-open {
+body.app-theme #live-search-results .live-search-open,
+body.app-theme #live-search-results-mobile .live-search-open {
   font-size: 0.66rem !important;
   font-weight: 700 !important;
-  color: #ffffff !important;
-  background: linear-gradient(135deg, #20c6ff 0%, #1569ff 60%, #7a2cf6 100%) !important;
+  color: #fff !important;
   border-radius: 999px !important;
-  padding: 0.1rem 0.42rem !important;
+  padding: 0.11rem 0.42rem !important;
+  background: linear-gradient(135deg, #20c6ff 0%, #1569ff 60%, #7a2cf6 100%) !important;
+}
+
+body.app-theme #live-search-results .live-search-all--v2,
+body.app-theme #live-search-results-mobile .live-search-all--v2 {
+  display: block !important;
+  margin: 0.12rem 0.44rem 0.45rem !important;
+  padding: 0.44rem 0.66rem !important;
+  border-radius: 11px !important;
+  text-align: center !important;
+  font-size: 0.76rem !important;
+  font-weight: 700 !important;
+  color: #1d4a9a !important;
+  background: #edf4ff !important;
+  border: 1px solid #cfe0ff !important;
+}
+
+body.app-theme #live-search-results .live-search-empty,
+body.app-theme #live-search-results-mobile .live-search-empty {
+  margin: 0.44rem !important;
+  padding: 0.7rem !important;
+  border-radius: 11px !important;
+  border: 1px solid #d7e5ff !important;
+  background: #f7fbff !important;
+  font-size: 0.77rem !important;
+  color: #4c6489 !important;
 }
 
 @media (max-width: 767.98px) {
-  body.app-theme .live-search-item--h {
-    grid-template-columns: 48px minmax(0, 1fr) auto !important;
+  body.app-theme #live-search-results-mobile .live-search-item--h {
+    grid-template-columns: 50px minmax(0, 1fr) auto !important;
     gap: 0.5rem !important;
-    padding: 0.45rem 0.46rem !important;
+    padding: 0.46rem !important;
   }
 
-  body.app-theme .live-search-thumb--sm {
-    width: 48px !important;
-    height: 48px !important;
+  body.app-theme #live-search-results-mobile .live-search-thumb--sm {
+    width: 50px !important;
+    height: 50px !important;
   }
 
-  body.app-theme .live-search-open {
+  body.app-theme #live-search-results-mobile .live-search-open {
     display: none !important;
   }
 
-  body.app-theme .live-search-store {
+  body.app-theme #live-search-results-mobile .live-search-store {
     max-width: 58% !important;
   }
 }

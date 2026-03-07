@@ -50,8 +50,10 @@ jobs:
           set -euo pipefail
           cd "$APP_DIR"
           git fetch --all --prune
-          git checkout main
+          git reset --hard
+          git clean -fd
+          git checkout -f main
           git reset --hard "$DEPLOY_REF"
+          git clean -fd
           bash ./scripts/deploy_prod.sh
           EOSSH
-

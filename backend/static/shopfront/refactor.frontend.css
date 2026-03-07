@@ -97,3 +97,132 @@ body.app-theme .products-grid .cart-control--icon.is-in-cart .stepper,
 body.app-theme #product-grid .cart-control--icon.is-in-cart .stepper {
   display: inline-flex !important;
 }
+
+/* Live search 2026: compact horizontal product cards */
+body.app-theme .live-search-panel {
+  border-radius: 16px !important;
+  overflow: hidden !important;
+}
+
+body.app-theme .live-search-list {
+  padding: 0.45rem !important;
+  margin: 0 !important;
+  display: grid !important;
+  gap: 0.36rem !important;
+}
+
+body.app-theme .live-search-item--h {
+  display: grid !important;
+  grid-template-columns: 56px minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 0.62rem !important;
+  padding: 0.52rem 0.56rem !important;
+  border-radius: 12px !important;
+  border: 1px solid transparent !important;
+  transition: background-color .16s ease, border-color .16s ease, transform .16s ease !important;
+}
+
+body.app-theme .live-search-item--h:hover {
+  background: #eff5ff !important;
+  border-color: #c8dcff !important;
+  transform: translateY(-1px);
+}
+
+body.app-theme .live-search-thumb--sm {
+  width: 56px !important;
+  height: 56px !important;
+  border-radius: 10px !important;
+  overflow: hidden !important;
+  border: 1px solid #d7e5ff !important;
+  background: #ffffff !important;
+}
+
+body.app-theme .live-search-main {
+  min-width: 0 !important;
+  display: grid !important;
+  gap: 0.16rem !important;
+}
+
+body.app-theme .live-search-topline {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.38rem !important;
+  min-width: 0 !important;
+}
+
+body.app-theme .live-search-title {
+  font-size: 0.87rem !important;
+  font-weight: 700 !important;
+  color: #0f213e !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+body.app-theme .live-search-store {
+  max-width: 46% !important;
+  font-size: 0.68rem !important;
+  font-weight: 600 !important;
+  color: #1f4ca7 !important;
+  background: #eaf3ff !important;
+  border: 1px solid #cde1ff !important;
+  border-radius: 999px !important;
+  padding: 0.11rem 0.45rem !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+body.app-theme .live-search-subtitle {
+  font-size: 0.73rem !important;
+  color: #5a7096 !important;
+  line-height: 1.25 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+body.app-theme .live-search-aside {
+  display: grid !important;
+  justify-items: end !important;
+  align-items: center !important;
+  gap: 0.2rem !important;
+  min-width: max-content !important;
+}
+
+body.app-theme .live-search-price {
+  font-size: 0.88rem !important;
+  font-weight: 800 !important;
+  color: #12306e !important;
+  letter-spacing: 0.01em !important;
+}
+
+body.app-theme .live-search-open {
+  font-size: 0.66rem !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #20c6ff 0%, #1569ff 60%, #7a2cf6 100%) !important;
+  border-radius: 999px !important;
+  padding: 0.1rem 0.42rem !important;
+}
+
+@media (max-width: 767.98px) {
+  body.app-theme .live-search-item--h {
+    grid-template-columns: 48px minmax(0, 1fr) auto !important;
+    gap: 0.5rem !important;
+    padding: 0.45rem 0.46rem !important;
+  }
+
+  body.app-theme .live-search-thumb--sm {
+    width: 48px !important;
+    height: 48px !important;
+  }
+
+  body.app-theme .live-search-open {
+    display: none !important;
+  }
+
+  body.app-theme .live-search-store {
+    max-width: 58% !important;
+  }
+}

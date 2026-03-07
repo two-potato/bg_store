@@ -28,8 +28,8 @@
       <ul class="live-search-list">
         {% for p in products %}
           <li class="live-search-row">
-            <a href="/product/{{ p.slug }}/" hx-boost="false" class="live-search-item live-search-item--v2">
-              <span class="live-search-thumb">
+            <a href="/product/{{ p.slug }}/" hx-boost="false" class="live-search-item live-search-item--v2 live-search-item--h">
+              <span class="live-search-thumb live-search-thumb--sm">
                 {% with img=p.images.first %}
                   {% if img %}
                     <img src="{{ img.url }}" alt="{{ img.alt|default:p.name }}" loading="lazy" onerror="this.onerror=null;this.src='/media/user_photos/image017.jpg';">
@@ -38,14 +38,21 @@
                   {% endif %}
                 {% endwith %}
               </span>
-              <span class="live-search-meta">
-                <span class="live-search-title">{{ p.name }}</span>
+              <span class="live-search-main">
+                <span class="live-search-topline">
+                  <span class="live-search-title">{{ p.name }}</span>
+                  {% if p.seller and p.seller.seller_store %}
+                    <span class="live-search-store">{{ p.seller.seller_store.name }}</span>
+                  {% endif %}
+                </span>
                 <span class="live-search-subtitle">
                   {{ p.brand|default:"Без бренда" }}{% if p.category %} · {{ p.category.name }}{% endif %}
-                  {% if p.seller and p.seller.seller_store %} · Магазин: {{ p.seller.seller_store.name }}{% endif %}
                 </span>
               </span>
-              <span class="live-search-price">{{ p.price }} ₽</span>
+              <span class="live-search-aside">
+                <span class="live-search-price">{{ p.price }} ₽</span>
+                <span class="live-search-open">Открыть</span>
+              </span>
             </a>
           </li>
         {% endfor %}

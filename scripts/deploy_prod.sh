@@ -10,7 +10,13 @@ LETSENCRYPT_DOMAIN="${LETSENCRYPT_DOMAIN:-potatofarm.ru}"
 LETSENCRYPT_DOMAIN_WWW="${LETSENCRYPT_DOMAIN_WWW:-www.potatofarm.ru}"
 LETSENCRYPT_EXTRA_DOMAINS="${LETSENCRYPT_EXTRA_DOMAINS:-grafana.potatofarm.ru}"
 LETSENCRYPT_CERT_PATH="$ROOT_DIR/deploy/letsencrypt/live/$LETSENCRYPT_DOMAIN/fullchain.pem"
-ALLOWED_SSH_PORT="${ALLOWED_SSH_PORT:-22}"
+ALLOWED_SSH_PORT_RAW="${ALLOWED_SSH_PORT:-22}"
+if [[ "$ALLOWED_SSH_PORT_RAW" =~ ^[0-9]{1,5}$ ]] && [ "$ALLOWED_SSH_PORT_RAW" -ge 1 ] && [ "$ALLOWED_SSH_PORT_RAW" -le 65535 ]; then
+  ALLOWED_SSH_PORT="$ALLOWED_SSH_PORT_RAW"
+else
+  echo "[deploy] Invalid ALLOWED_SSH_PORT='$ALLOWED_SSH_PORT_RAW', fallback to 22"
+  ALLOWED_SSH_PORT="22"
+fi
 export NGINX_HTTP_PORT="${NGINX_HTTP_PORT:-80}"
 
 mkdir -p "$ROOT_DIR/deploy/letsencrypt" "$ROOT_DIR/deploy/letsencrypt-lib" "$ROOT_DIR/deploy/certbot-www"

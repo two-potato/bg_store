@@ -1,19 +1,30 @@
-<div class="cart-control min-h-10 flex items-center justify-center" data-pid="{{ pid }}" aria-live="polite">
-  <button class="add btn btn-accent btn-sm w-full {% if in_stock|default:0 <= 0 %}btn-disabled{% endif %}"
+<div class="cart-control {% if icon_only %}cart-control--icon{% endif %} {% if pid in cart_product_ids %}is-in-cart{% endif %} min-h-10 flex items-center justify-center" data-pid="{{ pid }}" aria-live="polite">
+  <button class="add btn btn-accent btn-sm {% if pid in cart_product_ids %}hidden{% endif %} {% if not icon_only %}w-full{% endif %} {% if in_stock|default:0 <= 0 %}btn-disabled{% endif %}"
+          {% if pid in cart_product_ids %}style="display:none"{% endif %}
           {% if in_stock|default:0 <= 0 %}disabled aria-disabled="true" title="Нет в наличии"{% endif %}
           hx-post="/cart/add/"
           hx-vals='{"product_id":"{{ pid }}","qty":1}'
           hx-swap="none">
-    {% include 'shopfront/icons/shopping-bag.svg' %}
-    <span class="ml-1">{% if in_stock|default:0 <= 0 %}Нет в наличии{% else %}В корзину{% endif %}</span>
+    {% if icon_only %}
+      {% include 'shopfront/icons/shopping-cart.svg' %}
+      <span class="sr-only">{% if in_stock|default:0 <= 0 %}Нет в наличии{% else %}В корзину{% endif %}</span>
+    {% else %}
+      {% include 'shopfront/icons/shopping-bag.svg' %}
+      <span class="ml-1">{% if in_stock|default:0 <= 0 %}Нет в наличии{% else %}В корзину{% endif %}</span>
+    {% endif %}
   </button>
-  <div class="stepper hidden flex flex-nowrap items-center gap-2">
+  <div class="stepper {% if pid not in cart_product_ids %}hidden{% endif %} flex-nowrap items-center gap-2"
+       {% if pid not in cart_product_ids %}style="display:none"{% endif %}>
     <form class="shrink-0" hx-post="/cart/update/" hx-vals='{"product_id":"{{ pid }}","op":"dec"}' hx-swap="none">
-      <button class="btn btn-outline btn-sm" type="submit">{% include 'shopfront/icons/shopping-cart.svg' %}</button>
+      <button class="btn btn-outline btn-sm cart-step-btn" type="submit" aria-label="Уменьшить количество">
+        <span aria-hidden="true">−</span>
+      </button>
     </form>
-    <span class="qty text-sm font-semibold inline-block w-8 text-center shrink-0">1</span>
+    <span class="qty text-sm font-semibold inline-block w-8 text-center shrink-0">{% if pid in cart_product_ids %}1{% else %}0{% endif %}</span>
     <form class="shrink-0" hx-post="/cart/update/" hx-vals='{"product_id":"{{ pid }}","op":"inc"}' hx-swap="none">
-      <button class="btn btn-outline btn-sm" type="submit">{% include 'shopfront/icons/plus.svg' %}</button>
+      <button class="btn btn-outline btn-sm cart-step-btn" type="submit" aria-label="Увеличить количество">
+        <span aria-hidden="true">+</span>
+      </button>
     </form>
   </div>
 </div>

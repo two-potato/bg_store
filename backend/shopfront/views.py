@@ -2,7 +2,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.http import Http404
 from django.http import JsonResponse, HttpResponse
 from django.template.loader import render_to_string
-from catalog.models import Product, Category, Brand, Tag, ProductReview, ProductReviewComment
+from catalog.models import Product, Category, Brand, Tag, ProductImage, ProductReview, ProductReviewComment
 from django.core.paginator import Paginator, EmptyPage
 from django.views import View
 from django.views.generic import TemplateView
@@ -14,12 +14,13 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.middleware.csrf import get_token
 from django.core.cache import cache
 from django.contrib import messages
-from django.db.models import Avg, Count, Case, When, IntegerField, Value, FloatField
+from django.db.models import Avg, Count, Case, When, IntegerField, Value, FloatField, Prefetch
 from django.db.models import Q
 from django.db.models.functions import Coalesce
 from orders.models import Order, OrderItem, FakeAcquiringPayment
 from commerce.models import LegalEntityMembership, DeliveryAddress, SellerStore
 from .forms import ContactFeedbackForm
+from .models import FavoriteProduct, SavedSearch
 from .tasks import notify_contact_feedback
 import logging
 import json
@@ -31,6 +32,7 @@ from . import search as sf_search
 from urllib.parse import urlencode
 from django.urls import reverse
 from xml.sax.saxutils import escape
+from users.models import UserProfile
 
 log = logging.getLogger("shopfront")
 search_product_ids = sf_search.search_product_ids
@@ -57,6 +59,9 @@ def sitemap_xml(request):
     static_paths = [
         reverse("home"),
         reverse("catalog"),
+        reverse("brands"),
+        reverse("promotions"),
+        reverse("blog"),
         reverse("about"),
         reverse("delivery"),
         reverse("contacts"),
@@ -71,12 +76,126 @@ def sitemap_xml(request):
     urls.extend(
         [f"{base}/catalog/?category={escape(slug)}" for slug in Category.objects.exclude(slug="").values_list("slug", flat=True)[:50000]]
     )
+    urls.extend(
+        [base + reverse("seller_store_detail", kwargs={"store_slug": slug}) for slug in SellerStore.objects.exclude(slug="").values_list("slug", flat=True)[:50000]]
+    )
+    urls.extend(
+        [base + reverse("seller_profile", kwargs={"seller_slug": slug}) for slug in UserProfile.objects.exclude(slug="").values_list("slug", flat=True)[:50000]]
+    )
+    urls.extend(
+        [base + reverse("brand_detail", kwargs={"brand_id": bid}) for bid in Brand.objects.values_list("id", flat=True)[:50000]]
+    )
 
     body = ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>", "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">"]
     for loc in urls:
         body.append(f"  <url><loc>{escape(loc)}</loc></url>")
     body.append("</urlset>")
     return HttpResponse("\n".join(body), content_type="application/xml; charset=utf-8")
+
+
+def _absolute_url(request, path: str) -> str:
+    return request.build_absolute_uri(path)
+
+
+def _truncate_text(value: str, limit: int = 160) -> str:
+    text = (value or "").strip().replace("\n", " ")
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "…"
+
+
+def _default_og_image(request) -> str:
+    return _absolute_url(request, "/media/user_photos/image017.jpg")
+
+
+def _seo_context(
+    request,
+    *,
+    title: str,
+    description: str,
+    canonical: str | None = None,
+    robots: str = "index,follow",
+    og_type: str = "website",
+    og_image: str | None = None,
+    json_ld: dict | list | None = None,
+):
+    canonical_url = canonical or _absolute_url(request, request.path)
+    context = {
+        "seo_title": title,
+        "seo_description": _truncate_text(description, 170),
+        "seo_canonical": canonical_url,
+        "seo_robots": robots,
+        "seo_og_type": og_type,
+        "seo_og_image": og_image or _default_og_image(request),
+    }
+    if json_ld is not None:
+        context["seo_json_ld"] = json.dumps(json_ld, ensure_ascii=False)
+    return context
+
+
+def _website_json_ld(request):
+    base = _absolute_url(request, "/")
+    return {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "PotatoFarm",
+        "url": base,
+        "potentialAction": {
+            "@type": "SearchAction",
+            "target": f"{base}catalog/?q={{search_term_string}}",
+            "query-input": "required name=search_term_string",
+        },
+    }
+
+
+def _organization_json_ld(request):
+    return {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "PotatoFarm",
+        "url": _absolute_url(request, "/"),
+        "logo": _absolute_url(request, "/static/shopfront/favicon.svg"),
+        "contactPoint": [
+            {
+                "@type": "ContactPoint",
+                "contactType": "customer support",
+                "email": "support@badguys.shop",
+                "telephone": "+7-800-000-00-00",
+                "availableLanguage": ["ru"],
+            }
+        ],
+    }
+
+
+def _product_json_ld(request, product: Product, seller_store: SellerStore | None = None):
+    images = []
+    for img in product.images.all():
+        try:
+            images.append(_absolute_url(request, img.url))
+        except Exception:
+            continue
+    if not images:
+        images.append(_default_og_image(request))
+    availability = "https://schema.org/InStock" if (product.stock_qty or 0) > 0 else "https://schema.org/OutOfStock"
+    data = {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        "name": product.name,
+        "sku": product.sku or "",
+        "image": images,
+        "description": _truncate_text(product.description or f"Купить {product.name} в интернет-магазине PotatoFarm.", 300),
+        "brand": {"@type": "Brand", "name": getattr(product.brand, "name", "") or ""},
+        "offers": {
+            "@type": "Offer",
+            "priceCurrency": "RUB",
+            "price": str(product.price),
+            "availability": availability,
+            "url": _absolute_url(request, f"/product/{product.slug}/"),
+        },
+    }
+    if seller_store:
+        data["seller"] = {"@type": "Organization", "name": seller_store.name}
+    return data
 
 
 def _cache_get(key, default=None):
@@ -111,8 +230,27 @@ def _ordered_products_with_related(product_ids, include_rating: bool = True):
     )
     base_qs = (
         Product.objects.filter(id__in=product_ids)
-        .select_related("brand", "series", "category", "seller", "seller__seller_store")
-        .prefetch_related("images", "tags")
+        .only(
+            "id",
+            "slug",
+            "name",
+            "price",
+            "stock_qty",
+            "pack_qty",
+            "unit",
+            "is_new",
+            "is_promo",
+            "brand__name",
+            "seller__seller_store__slug",
+            "seller__seller_store__name",
+        )
+        .select_related("brand", "seller", "seller__seller_store")
+        .prefetch_related(
+            Prefetch(
+                "images",
+                queryset=ProductImage.objects.only("id", "product_id", "url", "alt", "ordering").order_by("ordering", "id"),
+            ),
+        )
     )
     if include_rating:
         base_qs = _with_rating(base_qs)
@@ -120,10 +258,10 @@ def _ordered_products_with_related(product_ids, include_rating: bool = True):
 
 
 def _cached_home_product_ids(limit: int = 12):
-    key = f"shopfront:home:product_ids:v1:{limit}"
+    key = f"shopfront:home:product_ids:v2:{limit}"
     ids = _cache_get(key)
     if ids is None:
-        ids = list(Product.objects.order_by("-is_new", "name").values_list("id", flat=True)[:limit])
+        ids = list(Product.objects.order_by("-is_new", "name", "id").values_list("id", flat=True)[:limit])
         _cache_set(key, ids, timeout=getattr(settings, "CACHE_TTL_HOME", 180))
     return ids
 
@@ -138,12 +276,12 @@ def _cached_home_category_ids(limit: int = 8):
 
 
 def _cached_catalog_default_page_ids(page: int, page_size: int):
-    key = f"shopfront:catalog:default_page_ids:v2:{page}:{page_size}"
+    key = f"shopfront:catalog:default_page_ids:v3:{page}:{page_size}"
     ids = _cache_get(key)
     if ids is None:
         offset = max(0, page - 1) * page_size
         ids = list(
-            Product.objects.order_by("-is_new", "name")
+            Product.objects.order_by("-is_new", "name", "id")
             .values_list("id", flat=True)[offset : offset + page_size]
         )
         _cache_set(key, ids, timeout=getattr(settings, "CACHE_TTL_CATALOG_API", 120))
@@ -151,7 +289,7 @@ def _cached_catalog_default_page_ids(page: int, page_size: int):
 
 
 def _cached_catalog_default_total_count():
-    key = "shopfront:catalog:default_total_count:v2"
+    key = "shopfront:catalog:default_total_count:v3"
     count = _cache_get(key)
     if count is None:
         count = Product.objects.count()
@@ -326,6 +464,14 @@ class HomeView(TemplateView):
         ctx["cats"] = list(Category.objects.filter(id__in=cat_ids).order_by("name"))
         product_ids = _cached_home_product_ids(limit=12)
         ctx["products"] = _ordered_products_with_related(product_ids)
+        ctx.update(
+            _seo_context(
+                self.request,
+                title="PotatoFarm - B2B маркетплейс товаров для HoReCa",
+                description="PotatoFarm: оптовый каталог напитков, сиропов, кофе и аксессуаров для бизнеса с быстрым заказом и доставкой.",
+                json_ld=[_website_json_ld(self.request), _organization_json_ld(self.request)],
+            )
+        )
         return ctx
 
 
@@ -338,6 +484,17 @@ class AboutPageView(TemplateView):
         get_token(request)
         return super().get(request, *args, **kwargs)
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx.update(
+            _seo_context(
+                self.request,
+                title="О компании PotatoFarm",
+                description="Информация о компании PotatoFarm, формате работы и преимуществах B2B платформы.",
+            )
+        )
+        return ctx
+
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class DeliveryPageView(TemplateView):
@@ -347,6 +504,17 @@ class DeliveryPageView(TemplateView):
     def get(self, request, *args, **kwargs):
         get_token(request)
         return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx.update(
+            _seo_context(
+                self.request,
+                title="Доставка и оплата - PotatoFarm",
+                description="Условия доставки и оплаты заказов на PotatoFarm: сроки, способы, география и детали получения.",
+            )
+        )
+        return ctx
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
@@ -361,6 +529,13 @@ class ContactsPageView(TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["form"] = kwargs.get("form") or ContactFeedbackForm()
+        ctx.update(
+            _seo_context(
+                self.request,
+                title="Контакты PotatoFarm",
+                description="Контакты PotatoFarm: служба поддержки, формы обратной связи и каналы коммуникации с клиентами.",
+            )
+        )
         return ctx
 
     @log_calls(log)
@@ -382,6 +557,208 @@ class ContactsPageView(TemplateView):
         messages.success(request, "Спасибо. Мы получили заявку и свяжемся с вами.")
         return redirect("/contacts/")
 
+
+@method_decorator(ensure_csrf_cookie, name="dispatch")
+class BrandsPageView(TemplateView):
+    template_name = "shopfront/brands.html"
+
+    @log_calls(log)
+    def get(self, request, *args, **kwargs):
+        get_token(request)
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        brands = list(
+            Brand.objects.annotate(products_count=Count("products"))
+            .only("id", "name", "description", "photo")
+            .order_by("-products_count", "name")
+        )
+        ctx["brands"] = brands
+        ctx.update(
+            _seo_context(
+                self.request,
+                title="Бренды - PotatoFarm",
+                description="Витрина брендов маркетплейса PotatoFarm.",
+            )
+        )
+        return ctx
+
+
+@method_decorator(ensure_csrf_cookie, name="dispatch")
+class BrandDetailPageView(TemplateView):
+    template_name = "shopfront/brand_detail.html"
+
+    @log_calls(log)
+    def get(self, request, *args, **kwargs):
+        get_token(request)
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        brand = get_object_or_404(Brand, pk=kwargs["brand_id"])
+        product_ids = list(
+            Product.objects.filter(brand=brand).order_by("-is_new", "name").values_list("id", flat=True)[:60]
+        )
+        ctx["brand"] = brand
+        ctx["products"] = _ordered_products_with_related(product_ids, include_rating=True)
+        ctx.update(
+            _seo_context(
+                self.request,
+                title=f"Бренд {brand.name} - PotatoFarm",
+                description=_truncate_text(brand.description or f"Каталог товаров бренда {brand.name} в PotatoFarm.", 160),
+            )
+        )
+        return ctx
+
+
+@method_decorator(ensure_csrf_cookie, name="dispatch")
+class PromotionsPageView(TemplateView):
+    template_name = "shopfront/promotions.html"
+
+    @log_calls(log)
+    def get(self, request, *args, **kwargs):
+        get_token(request)
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        product_ids = list(
+            Product.objects.filter(is_promo=True).order_by("-is_new", "name").values_list("id", flat=True)[:40]
+        )
+        ctx["products"] = _ordered_products_with_related(product_ids, include_rating=True)
+        ctx.update(
+            _seo_context(
+                self.request,
+                title="Акции - PotatoFarm",
+                description="Актуальные промо-товары и спецпредложения PotatoFarm.",
+            )
+        )
+        return ctx
+
+
+@method_decorator(ensure_csrf_cookie, name="dispatch")
+class BlogPageView(TemplateView):
+    template_name = "shopfront/blog.html"
+
+    @log_calls(log)
+    def get(self, request, *args, **kwargs):
+        get_token(request)
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["posts"] = [
+            {
+                "title": "Как закупать расходники для HoReCa без каскада ручных таблиц",
+                "slug": "horeca-procurement-playbook",
+                "excerpt": "Практический подход к планированию закупок, который снижает простои и out-of-stock.",
+                "tag": "Операции",
+            },
+            {
+                "title": "Чек-лист контроля ассортимента для b2b-магазина",
+                "slug": "assortment-control-checklist",
+                "excerpt": "Какие показатели отслеживать в первую очередь: маржа, оборачиваемость, SLA поставки.",
+                "tag": "Аналитика",
+            },
+            {
+                "title": "Как выстроить политику скидок без просадки маржи",
+                "slug": "promo-margin-guide",
+                "excerpt": "Сценарии промо-кампаний, которые дают рост повторных заказов без демпинга.",
+                "tag": "Маркетинг",
+            },
+        ]
+        ctx.update(
+            _seo_context(
+                self.request,
+                title="Блог PotatoFarm",
+                description="Практические материалы по закупкам, каталогу и развитию b2b-маркетплейса.",
+            )
+        )
+        return ctx
+
+
+class FavoriteToggleView(LoginRequiredMixin, View):
+    @log_calls(log)
+    def post(self, request):
+        product_id = request.POST.get("product_id")
+        if not str(product_id or "").isdigit():
+            return JsonResponse({"ok": False, "error": "invalid product_id"}, status=400)
+        product = get_object_or_404(Product, pk=int(product_id))
+        obj, created = FavoriteProduct.objects.get_or_create(user=request.user, product=product)
+        if not created:
+            obj.delete()
+        return JsonResponse({"ok": True, "favorited": created})
+
+
+class FavoritesPageView(LoginRequiredMixin, TemplateView):
+    template_name = "shopfront/favorites.html"
+
+    @log_calls(log)
+    def get(self, request, *args, **kwargs):
+        get_token(request)
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        product_ids = list(
+            FavoriteProduct.objects.filter(user=self.request.user)
+            .order_by("-created_at")
+            .values_list("product_id", flat=True)[:300]
+        )
+        ctx["products"] = _ordered_products_with_related(product_ids, include_rating=True)
+        ctx.update(
+            _seo_context(
+                self.request,
+                title="Избранные товары - PotatoFarm",
+                description="Избранные товары вашего аккаунта PotatoFarm.",
+                robots="noindex,nofollow",
+            )
+        )
+        return ctx
+
+
+class SavedSearchesPageView(LoginRequiredMixin, TemplateView):
+    template_name = "shopfront/saved_searches.html"
+
+    @log_calls(log)
+    def get(self, request, *args, **kwargs):
+        get_token(request)
+        return super().get(request, *args, **kwargs)
+
+    @log_calls(log)
+    def post(self, request, *args, **kwargs):
+        action = (request.POST.get("action") or "").strip()
+        if action == "save":
+            querystring = (request.POST.get("querystring") or "").strip()
+            name = (request.POST.get("name") or "").strip() or "Мой фильтр"
+            if querystring:
+                SavedSearch.objects.create(
+                    user=request.user,
+                    name=name[:120],
+                    querystring=querystring[:512],
+                )
+                messages.success(request, "Поиск сохранён")
+        elif action == "delete":
+            sid = request.POST.get("id")
+            if str(sid or "").isdigit():
+                SavedSearch.objects.filter(user=request.user, id=int(sid)).delete()
+                messages.success(request, "Сохранённый поиск удалён")
+        return redirect("saved_searches")
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["saved_searches"] = SavedSearch.objects.filter(user=self.request.user).order_by("-created_at")[:200]
+        ctx.update(
+            _seo_context(
+                self.request,
+                title="Сохранённые поиски - PotatoFarm",
+                description="Ваши сохранённые фильтры и поисковые запросы.",
+                robots="noindex,nofollow",
+            )
+        )
+        return ctx
+
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class CatalogView(View):
     @log_calls(log)
@@ -399,7 +776,7 @@ class CatalogView(View):
             page = 1
         if page < 1:
             page = 1
-        page_size = 24
+        page_size = 16
         if brand:
             if str(brand).isdigit():
                 qs = qs.filter(brand_id=int(brand))
@@ -424,15 +801,25 @@ class CatalogView(View):
             else:
                 qs = qs.filter(tags__slug=tag)
         sort_map = {
-            "new": ["-is_new", "name"],
-            "price_asc": ["price", "name"],
-            "price_desc": ["-price", "name"],
-            "name": ["name"],
-            "promo": ["-is_promo", "name"],
-            "rating_desc": ["-rating_avg", "-rating_count", "name"],
+            "new": ["-is_new", "name", "id"],
+            "price_asc": ["price", "name", "id"],
+            "price_desc": ["-price", "name", "id"],
+            "name": ["name", "id"],
+            "promo": ["-is_promo", "name", "id"],
+            "rating_desc": ["-rating_avg", "-rating_count", "name", "id"],
         }
         include_rating = bool(getattr(settings, "ENABLE_CATALOG_RATING", settings.DEBUG))
         default_catalog = not any([brand, category, q, tag]) and (not sort or sort == "new")
+        cacheable_default_catalog = (
+            default_catalog
+            and page == 1
+            and not request.user.is_authenticated
+            and not request.headers.get("HX-Request")
+        )
+        if cacheable_default_catalog:
+            cached_html = _cache_get("shopfront:catalog:html:v1:default")
+            if cached_html:
+                return HttpResponse(cached_html)
         if sort == "rating_desc":
             qs = _with_rating(qs).order_by(*sort_map["rating_desc"])
         elif q and es_ranked_ids and not sort:
@@ -443,7 +830,7 @@ class CatalogView(View):
             )
             qs = qs.order_by(rank_order)
         else:
-            qs = qs.order_by(*sort_map.get(sort, ["-is_new", "name"]))
+            qs = qs.order_by(*sort_map.get(sort, ["-is_new", "name", "id"]))
         if default_catalog:
             total_count = _cached_catalog_default_total_count()
             num_pages = max(1, (total_count + page_size - 1) // page_size)
@@ -489,15 +876,15 @@ class CatalogView(View):
             })
         brands = _cache_get("shopfront:catalog:brands:v1")
         if brands is None:
-            brands = list(Brand.objects.all())
+            brands = list(Brand.objects.only("id", "name").order_by("name"))
             _cache_set("shopfront:catalog:brands:v1", brands, timeout=getattr(settings, "CACHE_TTL_CATALOG_FILTERS", 900))
         cats = _cache_get("shopfront:catalog:categories:v1")
         if cats is None:
-            cats = list(Category.objects.all())
+            cats = list(Category.objects.only("id", "name", "slug").order_by("name"))
             _cache_set("shopfront:catalog:categories:v1", cats, timeout=getattr(settings, "CACHE_TTL_CATALOG_FILTERS", 900))
         tags = _cache_get("shopfront:catalog:tags:v1")
         if tags is None:
-            tags = list(Tag.objects.all().order_by("name")[:50])
+            tags = list(Tag.objects.only("id", "name", "slug").order_by("name")[:50])
             _cache_set("shopfront:catalog:tags:v1", tags, timeout=getattr(settings, "CACHE_TTL_CATALOG_FILTERS", 900))
         brand_id = int(brand) if brand and str(brand).isdigit() else None
         sel_brand = next((b for b in brands if brand_id is not None and b.id == brand_id), None)
@@ -508,7 +895,18 @@ class CatalogView(View):
                 sel_category = next((c for c in cats if c.slug == category), None)
         else:
             sel_category = None
-        return render(request, "shopfront/catalog.html", {
+        is_category_only = bool(category) and not any([q, brand, tag, sort]) and page == 1
+        seo_robots = "index,follow" if (not any([q, brand, tag, sort]) and page == 1) or is_category_only else "noindex,follow"
+        if is_category_only:
+            seo_canonical = _absolute_url(request, f"/catalog/?{urlencode({'category': category})}")
+            category_name = sel_category.name if sel_category else str(category)
+            seo_title = f"Каталог: {category_name} - PotatoFarm"
+            seo_description = f"Товары категории «{category_name}» в каталоге PotatoFarm."
+        else:
+            seo_canonical = _absolute_url(request, "/catalog/")
+            seo_title = "Каталог товаров - PotatoFarm"
+            seo_description = "Каталог PotatoFarm: напитки, сиропы, кофе, расходники и товары для бизнеса."
+        context = {
             "products": products_page,
             "brands": brands,
             "cats": cats,
@@ -527,28 +925,51 @@ class CatalogView(View):
             "sel_brand": sel_brand,
             "sel_category": sel_category,
             "category_reset_url": category_reset_url,
-        })
+            **_seo_context(
+                request,
+                title=seo_title,
+                description=seo_description,
+                canonical=seo_canonical,
+                robots=seo_robots,
+            ),
+        }
+        if cacheable_default_catalog:
+            html = render_to_string("shopfront/catalog.html", context, request=request)
+            _cache_set("shopfront:catalog:html:v1:default", html, timeout=20)
+            return HttpResponse(html)
+        return render(request, "shopfront/catalog.html", context)
 
 
 class LiveSearchView(View):
     @log_calls(log)
     def get(self, request):
         q = (request.GET.get("q") or "").strip()
-        if len(q) < 3:
+        if len(q) < 2:
             return render(
                 request,
                 "shopfront/partials/live_search_results.html",
-                {"q": q, "products": [], "show": False},
+                {"q": q, "products": [], "countries": [], "suggestions": [], "show": False},
             )
 
         es_failed = False
+        suggestions = []
         try:
-            ids, countries = sf_search.live_search_bundle(query=q, limit=8, country_limit=6)
+            bundle = sf_search.live_search_bundle(query=q, limit=8, country_limit=6)
+            if isinstance(bundle, (list, tuple)) and len(bundle) == 3:
+                ids, countries, suggestions = bundle
+            elif isinstance(bundle, (list, tuple)) and len(bundle) == 2:
+                ids, countries = bundle
+                suggestions = []
+            else:
+                ids, countries, suggestions = [], [], []
         except sf_search.ESSearchUnavailable as exc:
             log.warning("live_search_es_unavailable", extra={"query": q, "reason": str(exc)})
             es_failed = True
-            ids, countries = [], []
-        log.info("live_search_result_ids", extra={"query": q, "count": len(ids), "country_count": len(countries)})
+            ids, countries, suggestions = [], [], []
+        log.info(
+            "live_search_result_ids",
+            extra={"query": q, "count": len(ids), "country_count": len(countries), "suggestions_count": len(suggestions)},
+        )
         base_qs = (
             Product.objects.select_related("brand", "seller", "seller__seller_store")
             .prefetch_related("images")
@@ -572,12 +993,26 @@ class LiveSearchView(View):
                 .order_by("-is_new", "name")[:8]
             )
             log.info("live_search_fallback_db", extra={"query": q, "count": len(products)})
+            if not suggestions:
+                seen = set()
+                generated = []
+                for p in products[:8]:
+                    for candidate in (p.name, f"{p.brand.name} {p.name}" if p.brand else "", p.sku):
+                        txt = " ".join(str(candidate or "").split())
+                        if not txt:
+                            continue
+                        key = txt.casefold()
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        generated.append(txt)
+                suggestions = generated[:8]
         else:
             products = []
         return render(
             request,
             "shopfront/partials/live_search_results.html",
-            {"q": q, "products": products, "countries": countries, "show": True},
+            {"q": q, "products": products, "countries": countries, "suggestions": suggestions[:8], "show": True},
         )
 
 
@@ -622,7 +1057,43 @@ class ProductDetailView(TemplateView):
             slug=slug,
         )
         ctx.update(_reviews_context(p, self.request.user))
-        ctx["seller_store"] = getattr(p.seller, "seller_store", None) if p.seller_id else None
+        seller_store = getattr(p.seller, "seller_store", None) if p.seller_id else None
+        ctx["seller_store"] = seller_store
+        similar_ids: list[int] = []
+        if p.category_id:
+            similar_ids.extend(
+                list(
+                    Product.objects.filter(category_id=p.category_id)
+                    .exclude(id=p.id)
+                    .order_by("-is_promo", "-is_new", "name", "id")
+                    .values_list("id", flat=True)[:12]
+                )
+            )
+        if len(similar_ids) < 12 and p.brand_id:
+            more_ids = list(
+                Product.objects.filter(brand_id=p.brand_id)
+                .exclude(id=p.id)
+                .exclude(id__in=similar_ids)
+                .order_by("-is_promo", "-is_new", "name", "id")
+                .values_list("id", flat=True)[: 12 - len(similar_ids)]
+            )
+            similar_ids.extend(more_ids)
+        ctx["similar_products"] = _ordered_products_with_related(similar_ids[:12], include_rating=True)
+        ctx["is_favorite"] = bool(
+            self.request.user.is_authenticated
+            and FavoriteProduct.objects.filter(user=self.request.user, product=p).exists()
+        )
+        ctx.update(
+            _seo_context(
+                self.request,
+                title=f"{p.name} - {getattr(p.brand, 'name', 'товар')} | PotatoFarm",
+                description=_truncate_text(p.description or f"Купить {p.name} по выгодной цене в PotatoFarm.", 170),
+                canonical=_absolute_url(self.request, f"/product/{p.slug}/"),
+                og_type="product",
+                og_image=_absolute_url(self.request, p.images.first().url) if p.images.exists() else _default_og_image(self.request),
+                json_ld=_product_json_ld(self.request, p, seller_store=seller_store),
+            )
+        )
         return ctx
 
 
@@ -637,12 +1108,9 @@ class SellerStoreDetailView(TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        store_id = kwargs.get("store_id")
+        store_slug = kwargs.get("store_slug")
         store_qs = SellerStore.objects.select_related("owner", "owner__profile", "legal_entity")
-        store = store_qs.filter(pk=store_id).first()
-        if store is None:
-            # Backward compatibility for links that used seller id instead of store id.
-            store = store_qs.filter(owner_id=store_id).first()
+        store = store_qs.filter(slug=store_slug).first()
         if store is None:
             raise Http404("Store not found")
         product_ids = list(
@@ -650,22 +1118,40 @@ class SellerStoreDetailView(TemplateView):
         )
         products = _ordered_products_with_related(product_ids, include_rating=True)
         ctx.update({"store": store, "products": products})
+        ctx.update(
+            _seo_context(
+                self.request,
+                title=f"Магазин {store.name} - PotatoFarm",
+                description=f"Витрина магазина {store.name} на PotatoFarm: товары, ассортимент и актуальные позиции.",
+            )
+        )
         return ctx
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class SellerProfileView(TemplateView):
     template_name = "shopfront/seller_profile.html"
+    seller_user = None
 
     @log_calls(log)
     def get(self, request, *args, **kwargs):
         get_token(request)
+        User = get_user_model()
+        seller_slug = kwargs.get("seller_slug")
+        seller_user = User.objects.select_related("profile").filter(profile__slug=seller_slug).first()
+        if seller_user is None:
+            legacy_user = User.objects.select_related("profile").filter(username=seller_slug).first()
+            if legacy_user is not None:
+                return redirect("seller_profile", seller_slug=legacy_user.profile.slug, permanent=True)
+            raise Http404("Seller not found")
+        self.seller_user = seller_user
         return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        User = get_user_model()
-        seller_user = get_object_or_404(User.objects.select_related("profile"), username=kwargs.get("username"))
+        seller_user = self.seller_user
+        if seller_user is None:
+            raise Http404("Seller not found")
         memberships = LegalEntityMembership.objects.select_related("legal_entity", "role").filter(user=seller_user)
         stores = SellerStore.objects.select_related("legal_entity").filter(owner=seller_user).order_by("name")
         ctx.update(
@@ -676,7 +1162,32 @@ class SellerProfileView(TemplateView):
                 "stores": stores,
             }
         )
+        display_name = seller_user.profile.full_name or seller_user.username
+        ctx.update(
+            _seo_context(
+                self.request,
+                title=f"Профиль продавца {display_name} - PotatoFarm",
+                description=f"Профиль продавца {display_name} на PotatoFarm: магазины, юр. данные и ассортимент.",
+            )
+        )
         return ctx
+
+
+class SellerStoreLegacyRedirectView(View):
+    @log_calls(log)
+    def get(self, request, store_id: int):
+        store = get_object_or_404(SellerStore, pk=store_id)
+        return redirect("seller_store_detail", store_slug=store.slug, permanent=True)
+
+
+class SellerProfileLegacyRedirectView(View):
+    @log_calls(log)
+    def get(self, request, username: str):
+        User = get_user_model()
+        seller_user = User.objects.select_related("profile").filter(username=username).first()
+        if seller_user is None:
+            raise Http404("Seller not found")
+        return redirect("seller_profile", seller_slug=seller_user.profile.slug, permanent=True)
 
 
 class ProductPkRedirectView(View):
@@ -793,6 +1304,14 @@ class TwaHomeView(TemplateView):
         ctx = super().get_context_data(**kwargs)
         product_ids = _cached_home_product_ids(limit=12)
         ctx["products"] = _ordered_products_with_related(product_ids)
+        ctx.update(
+            _seo_context(
+                self.request,
+                title="Telegram Web App - PotatoFarm",
+                description="Веб-приложение PotatoFarm для Telegram.",
+                robots="noindex,nofollow",
+            )
+        )
         return ctx
 
 class CartBadgeView(TemplateView):
@@ -874,6 +1393,14 @@ class CartPageView(TemplateView):
                 "discount_amount": discount_amount,
                 "total": total,
             }
+        )
+        ctx.update(
+            _seo_context(
+                self.request,
+                title="Корзина - PotatoFarm",
+                description="Корзина пользователя PotatoFarm.",
+                robots="noindex,nofollow",
+            )
         )
         return ctx
 
@@ -972,6 +1499,14 @@ class CheckoutPageView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx.update(_checkout_context(self.request))
+        ctx.update(
+            _seo_context(
+                self.request,
+                title="Оформление заказа - PotatoFarm",
+                description="Оформление заказа на PotatoFarm.",
+                robots="noindex,nofollow",
+            )
+        )
         return ctx
 
 

@@ -1,0 +1,69 @@
+{% extends "account/layout.html" %}
+{% block account_main %}
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero">
+    <div class="account-2026__hero-title">Кабинет продавца</div>
+    <div class="account-2026__hero-sub">Управляйте магазином и публикуйте товары в маркетплейсе.</div>
+  </div>
+
+  <section class="account-2026__panel">
+    <h2 class="account-2026__panel-title">Сводка продавца</h2>
+    <div class="account-2026__metrics">
+      <article class="account-2026__metric">
+        <div class="account-2026__metric-label">Магазин</div>
+        <div class="account-2026__metric-value">{{ store.name|default:"Не создан" }}</div>
+      </article>
+      <article class="account-2026__metric">
+        <div class="account-2026__metric-label">Товаров всего</div>
+        <div class="account-2026__metric-value">{{ seller_metrics.products_count }}</div>
+      </article>
+      <article class="account-2026__metric">
+        <div class="account-2026__metric-label">В наличии</div>
+        <div class="account-2026__metric-value">{{ seller_metrics.in_stock_count }}</div>
+      </article>
+    </div>
+  </section>
+
+  <section class="account-2026__panel">
+    <h2 class="account-2026__panel-title">Магазин продавца</h2>
+    <form method="post" enctype="multipart/form-data" class="account-2026__form">
+      {% csrf_token %}
+      <div class="grid md:grid-cols-2 gap-3">
+        <div>
+          <label class="label" for="id_name"><span class="label-text">Название магазина</span></label>
+          <input id="id_name" type="text" name="name" class="input input-bordered w-full" value="{{ store_form.name.value|default_if_none:'' }}" required>
+        </div>
+        <div>
+          <label class="label" for="id_description"><span class="label-text">Описание магазина</span></label>
+          <textarea id="id_description" name="description" rows="3" class="textarea textarea-bordered w-full">{{ store_form.description.value|default_if_none:'' }}</textarea>
+        </div>
+        <div>
+          <label class="label" for="id_legal_entity"><span class="label-text">Юридическое лицо</span></label>
+          <select id="id_legal_entity" name="legal_entity" class="select select-bordered w-full" required>
+            <option value="">Выберите юрлицо</option>
+            {% for le in store_form.fields.legal_entity.queryset %}
+              <option value="{{ le.id }}" {% if store_form.legal_entity.value|stringformat:"s" == le.id|stringformat:"s" %}selected{% endif %}>
+                {{ le.name }} (ИНН {{ le.inn }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="id_photo"><span class="label-text">Аватар магазина</span></label>
+          <input id="id_photo" type="file" name="photo" class="file-input file-input-bordered w-full" accept="image/*">
+        </div>
+      </div>
+      {% if store and store.photo %}
+        <div class="text-sm text-base-content/70">Текущий аватар магазина: {{ store.photo.name }}</div>
+      {% endif %}
+      {% if store_form.errors %}
+        <div class="alert alert-error text-sm"><span>Проверьте поля формы магазина.</span></div>
+      {% endif %}
+      <div class="flex gap-2">
+        <button class="btn btn-primary">Сохранить магазин</button>
+        <a class="btn btn-primary" href="/account/seller/products/add/" hx-boost="false">Перейти к добавлению товаров</a>
+      </div>
+    </form>
+  </section>
+</section>
+{% endblock %}

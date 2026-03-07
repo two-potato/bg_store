@@ -1,0 +1,28 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<section class="page-2026">
+  <header class="page-2026__header">
+    <h1>Бренды</h1>
+    <p>Выберите бренд и переходите к товарам с нужной номенклатурой.</p>
+  </header>
+
+  <div class="page-2026__grid page-2026__grid--brands">
+    {% for b in brands %}
+      <article class="page-2026__card">
+        <div class="page-2026__card-head">
+          <h2>{{ b.name }}</h2>
+          <span class="badge">{{ b.products_count }} товаров</span>
+        </div>
+        {% if b.description %}
+          <p>{{ b.description|truncatechars:150 }}</p>
+        {% else %}
+          <p>Бренд доступен в каталоге PotatoFarm.</p>
+        {% endif %}
+        <a href="/brands/{{ b.id }}/" class="btn btn-sm btn-primary" hx-boost="false">Страница бренда</a>
+      </article>
+    {% empty %}
+      <div class="page-2026__empty">Бренды пока не добавлены.</div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

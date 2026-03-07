@@ -15672,7 +15672,7 @@
       "type": "row"
     }
   ],
-  "refresh": "1m",
+  "refresh": "30s",
   "schemaVersion": 41,
   "tags": [
     "linux"
@@ -15753,7 +15753,7 @@
     ]
   },
   "time": {
-    "from": "now-24h",
+    "from": "now-1h",
     "to": "now"
   },
   "timepicker": {},

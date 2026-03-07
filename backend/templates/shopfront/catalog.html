@@ -3,43 +3,38 @@
 {% include "shopfront/components/catalog_header.html" %}
 {% include "shopfront/components/tag_chips.html" %}
 
-<div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-  <aside class="md:col-span-1 md:sticky md:top-3 self-start">
-    {% include "shopfront/components/catalog_filters.html" %}
-  </aside>
-  <section class="md:col-span-3">
-    {% include "shopfront/components/product_grid.html" with products=products %}
-      {% if has_next %}
-        <div id="load-more"
-           class="mt-3"
-           hx-get="/catalog/?{% if querystring_base %}{{ querystring_base }}&{% endif %}page={{ next_page }}&fragment=grid_append"
-           hx-trigger="revealed"
-           hx-target="#product-grid"
-           hx-swap="beforeend">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 py-2" aria-hidden="true">
-          <div class="card bg-base-100 p-3 animate-pulse">
-            <div class="h-40 rounded bg-base-200"></div>
-            <div class="h-3 mt-3 rounded bg-base-200"></div>
-            <div class="h-3 mt-2 rounded bg-base-200"></div>
-          </div>
-          <div class="card bg-base-100 p-3 animate-pulse hidden md:block">
-            <div class="h-40 rounded bg-base-200"></div>
-            <div class="h-3 mt-3 rounded bg-base-200"></div>
-            <div class="h-3 mt-2 rounded bg-base-200"></div>
-          </div>
-          <div class="card bg-base-100 p-3 animate-pulse hidden md:block">
-            <div class="h-40 rounded bg-base-200"></div>
-            <div class="h-3 mt-3 rounded bg-base-200"></div>
-            <div class="h-3 mt-2 rounded bg-base-200"></div>
-          </div>
-          <div class="card bg-base-100 p-3 animate-pulse hidden md:block">
-            <div class="h-40 rounded bg-base-200"></div>
-            <div class="h-3 mt-3 rounded bg-base-200"></div>
-            <div class="h-3 mt-2 rounded bg-base-200"></div>
-          </div>
+<section class="catalog-layout-neo">
+  {% include "shopfront/components/product_grid.html" with products=products %}
+    {% if has_next %}
+      <div id="load-more"
+         class="mt-3"
+         hx-get="/catalog/?{% if querystring_base %}{{ querystring_base }}&{% endif %}page={{ next_page }}&fragment=grid_append"
+         hx-trigger="revealed"
+         hx-target="#product-grid"
+         hx-swap="beforeend">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 py-2 catalog-skeleton" aria-hidden="true">
+        <div class="card bg-base-100 p-3 animate-pulse">
+          <div class="h-40 rounded bg-base-200"></div>
+          <div class="h-3 mt-3 rounded bg-base-200"></div>
+          <div class="h-3 mt-2 rounded bg-base-200"></div>
+        </div>
+        <div class="card bg-base-100 p-3 animate-pulse">
+          <div class="h-40 rounded bg-base-200"></div>
+          <div class="h-3 mt-3 rounded bg-base-200"></div>
+          <div class="h-3 mt-2 rounded bg-base-200"></div>
+        </div>
+        <div class="card bg-base-100 p-3 animate-pulse">
+          <div class="h-40 rounded bg-base-200"></div>
+          <div class="h-3 mt-3 rounded bg-base-200"></div>
+          <div class="h-3 mt-2 rounded bg-base-200"></div>
+        </div>
+        <div class="card bg-base-100 p-3 animate-pulse">
+          <div class="h-40 rounded bg-base-200"></div>
+          <div class="h-3 mt-3 rounded bg-base-200"></div>
+          <div class="h-3 mt-2 rounded bg-base-200"></div>
         </div>
       </div>
-    {% endif %}
-  </section>
-</div>
+    </div>
+  {% endif %}
+</section>
 {% endblock %}

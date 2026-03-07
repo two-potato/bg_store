@@ -1,10 +1,11 @@
 import pytest
 from django.contrib.auth import get_user_model
-from catalog.models import Brand, Category, Product, ProductReview, ProductReviewComment, Series, Tag
+from catalog.models import Brand, Category, Country, Product, ProductReview, ProductReviewComment, Series, Tag
 from shopfront import search as sf_search
-from commerce.models import LegalEntity, LegalEntityMembership, DeliveryAddress
+from commerce.models import LegalEntity, LegalEntityMembership, DeliveryAddress, SellerStore
 from orders.models import Order, FakeAcquiringPayment
 from shopfront.tasks import notify_contact_feedback
+from users.models import UserProfile
 
 pytestmark = pytest.mark.django_db
 
@@ -25,14 +26,91 @@ def test_home_and_catalog_pages(client, db):
     r1 = client.get("/")
     assert r1.status_code == 200
     # catalog with filters
-    r2 = client.get(f"/catalog/?brand={b.id}&category={c.id}&q=P&tag={t.slug}")
+    r2 = client.get(f"/catalog/?brand={b.id}&category={c.slug}&q=P&tag={t.slug}")
     assert r2.status_code == 200
+
+
+def test_home_with_malformed_cart_entries(client, db):
+    p, *_ = _prod()
+    s = client.session
+    s["cart"] = {
+        "bad-id": {"qty": "oops"},
+        str(p.id): {"qty": 1},
+    }
+    s.save()
+    r = client.get("/")
+    assert r.status_code == 200
 
 
 def test_product_page(client, db):
     p, *_ = _prod()
-    r = client.get(f"/product/{p.id}/")
+    r = client.get(f"/product/{p.slug}/")
     assert r.status_code == 200
+
+
+def test_product_page_contains_store_link(client, db):
+    p, *_ = _prod()
+    User = get_user_model()
+    seller = User.objects.create_user(username="seller_page", password="pass")
+    prof = UserProfile.objects.get(user=seller)
+    prof.role = UserProfile.Role.SELLER
+    prof.save(update_fields=["role"])
+    le = LegalEntity.objects.create(name="LE Seller Page", inn="7707083893", bik="044525225", checking_account="40702810900000001001")
+    store = SellerStore.objects.create(owner=seller, legal_entity=le, name="Store Page")
+    p.seller = seller
+    p.save(update_fields=["seller"])
+
+    r = client.get(f"/product/{p.slug}/")
+    assert r.status_code == 200
+    assert f"/stores/{store.slug}/" in r.text
+
+
+def test_store_and_seller_profile_pages(client, db):
+    p, *_ = _prod()
+    User = get_user_model()
+    seller = User.objects.create_user(username="seller_profile_page", password="pass")
+    prof = UserProfile.objects.get(user=seller)
+    prof.role = UserProfile.Role.SELLER
+    prof.full_name = "Продавец Тестовый"
+    prof.save(update_fields=["role", "full_name"])
+    le = LegalEntity.objects.create(name="LE Seller Profile", inn="7715964180", bik="044525225", checking_account="40702810900000001002")
+    LegalEntityMembership.objects.create(user=seller, legal_entity=le)
+    store = SellerStore.objects.create(owner=seller, legal_entity=le, name="Store Seller Profile", description="Store description")
+    p.seller = seller
+    p.save(update_fields=["seller"])
+
+    r_store = client.get(f"/stores/{store.slug}/")
+    assert r_store.status_code == 200
+    assert "Store description" in r_store.text
+    assert p.name in r_store.text
+    assert f"/sellers/{seller.profile.slug}/" in r_store.text
+
+    r_seller = client.get(f"/sellers/{seller.profile.slug}/")
+    assert r_seller.status_code == 200
+    assert le.name in r_seller.text
+    assert store.name in r_seller.text
+
+
+def test_product_legacy_pk_redirects_to_slug(client, db):
+    p, *_ = _prod()
+    r = client.get(f"/product/{p.id}/")
+    assert r.status_code in (301, 302)
+    assert r.headers.get("Location", "").endswith(f"/product/{p.slug}/")
+
+
+def test_store_and_seller_legacy_redirects_to_slug(client, db):
+    User = get_user_model()
+    seller = User.objects.create_user(username="legacy_slug_seller", password="pass")
+    le = LegalEntity.objects.create(name="Legacy LE", inn="7707083894", bik="044525225", checking_account="40702810900000001003")
+    store = SellerStore.objects.create(owner=seller, legal_entity=le, name="Legacy Store")
+
+    r_store_legacy = client.get(f"/stores/{store.id}/")
+    assert r_store_legacy.status_code in (301, 302)
+    assert r_store_legacy.headers.get("Location", "").endswith(f"/stores/{store.slug}/")
+
+    r_seller_legacy = client.get(f"/sellers/{seller.username}/")
+    assert r_seller_legacy.status_code in (301, 302)
+    assert r_seller_legacy.headers.get("Location", "").endswith(f"/sellers/{seller.profile.slug}/")
 
 def test_live_search_htmx_from_three_symbols(client, monkeypatch, db):
     b = Brand.objects.create(name="LiveBrand")
@@ -53,7 +131,7 @@ def test_live_search_htmx_from_three_symbols(client, monkeypatch, db):
         price=49,
         stock_qty=3,
     )
-    monkeypatch.setattr(sf_search, "_es_search_ids", lambda query, limit: [p1.id, p2.id])
+    monkeypatch.setattr(sf_search, "live_search_bundle", lambda query, limit, country_limit: ([p1.id, p2.id], []))
 
     short_resp = client.get("/search/live/?q=me", HTTP_HX_REQUEST="true")
     assert short_resp.status_code == 200
@@ -69,6 +147,53 @@ def test_live_search_htmx_from_three_symbols(client, monkeypatch, db):
     assert "/product/" in live_resp.text
 
 
+def test_live_search_matches_store_name(client, monkeypatch, db):
+    b = Brand.objects.create(name="StoreBrand")
+    c = Category.objects.create(name="StoreCategory")
+    p = Product.objects.create(
+        sku="22334455",
+        name="Store linked product",
+        brand=b,
+        category=c,
+        price=10,
+        stock_qty=2,
+    )
+    User = get_user_model()
+    seller = User.objects.create_user(username="store_search_seller", password="pass")
+    prof = UserProfile.objects.get(user=seller)
+    prof.role = UserProfile.Role.SELLER
+    prof.save(update_fields=["role"])
+    le = LegalEntity.objects.create(name="Store Search LE", inn="500100012001", bik="044525225", checking_account="40702810900000002001")
+    SellerStore.objects.create(owner=seller, legal_entity=le, name="Aurora Storehouse")
+    p.seller = seller
+    p.save(update_fields=["seller"])
+
+    monkeypatch.setattr(sf_search, "live_search_bundle", lambda query, limit, country_limit: ([], []))
+    r = client.get("/search/live/?q=Aurora", HTTP_HX_REQUEST="true")
+    assert r.status_code == 200
+    assert "Store linked product" in r.text
+
+
+def test_live_search_country_popular_suggestions(client, monkeypatch, db):
+    country = Country.objects.create(name="Аргентина", iso_code="ARG")
+    b = Brand.objects.create(name="CountryBrand")
+    c = Category.objects.create(name="CountryCategory")
+    Product.objects.create(
+        sku="55667788",
+        name="Country product",
+        brand=b,
+        category=c,
+        country_of_origin=country,
+        price=11,
+        stock_qty=1,
+    )
+    monkeypatch.setattr(sf_search, "live_search_bundle", lambda query, limit, country_limit: ([], ["Аргентина"]))
+    r = client.get("/search/live/?q=арг", HTTP_HX_REQUEST="true")
+    assert r.status_code == 200
+    assert "Популярные страны" in r.text
+    assert "Аргентина" in r.text
+
+
 def test_live_search_partial_uses_fallback_image_when_product_has_no_images(client, monkeypatch, db):
     b = Brand.objects.create(name="NoImgBrand")
     c = Category.objects.create(name="NoImgCategory")
@@ -80,7 +205,7 @@ def test_live_search_partial_uses_fallback_image_when_product_has_no_images(clie
         price=10,
         stock_qty=1,
     )
-    monkeypatch.setattr(sf_search, "_es_search_ids", lambda query, limit: [p.id])
+    monkeypatch.setattr(sf_search, "live_search_bundle", lambda query, limit, country_limit: ([p.id], []))
     r = client.get("/search/live/?q=noi", HTTP_HX_REQUEST="true")
     assert r.status_code == 200
     assert f"https://picsum.photos/seed/live-{p.id}/96/96" in r.text
@@ -91,7 +216,7 @@ def test_live_search_uses_es_results_when_available(client, monkeypatch, db):
     p1 = Product.objects.create(sku="10000001", name="AAA", brand=b, category=c, price=1, stock_qty=1)
     p2 = Product.objects.create(sku="10000002", name="BBB", brand=b, category=c, price=2, stock_qty=1)
 
-    monkeypatch.setattr(sf_search, "_es_search_ids", lambda query, limit: [p2.id, p1.id])
+    monkeypatch.setattr(sf_search, "live_search_bundle", lambda query, limit, country_limit: ([p2.id, p1.id], []))
     r = client.get("/search/live/?q=bbb", HTTP_HX_REQUEST="true")
     assert r.status_code == 200
     assert r.text.find("BBB") < r.text.find("AAA")
@@ -100,7 +225,7 @@ def test_live_search_uses_es_results_when_available(client, monkeypatch, db):
 def test_catalog_q_uses_es_ids_only(client, monkeypatch, db):
     b = Brand.objects.create(name="CatESBrand")
     c = Category.objects.create(name="CatESCategory")
-    p1 = Product.objects.create(sku="10010001", name="Alpha", brand=b, category=c, price=1, stock_qty=1)
+    Product.objects.create(sku="10010001", name="Alpha", brand=b, category=c, price=1, stock_qty=1)
     p2 = Product.objects.create(sku="10010002", name="Beta", brand=b, category=c, price=2, stock_qty=1)
 
     monkeypatch.setattr("shopfront.views.search_product_ids", lambda query, limit: [p2.id])
@@ -131,10 +256,22 @@ def test_catalog_category_reset_link_preserves_sort_and_brand(client, db):
     b = Brand.objects.create(name="B1")
     c = Category.objects.create(name="ReviewCategory")
     Product.objects.create(sku="11112222", name="P1", brand=b, category=c, price=10, stock_qty=2)
-    r = client.get(f"/catalog/?category={c.id}&brand={b.id}&sort=price_desc")
+    r = client.get(f"/catalog/?category={c.slug}&brand={b.id}&sort=price_desc")
     assert r.status_code == 200
     assert "Сбросить категорию" in r.text
     assert f'href="/catalog/?brand={b.id}&amp;sort=price_desc"' in r.text
+
+
+def test_catalog_invalid_page_falls_back_to_first_page(client, db):
+    _prod()
+    r = client.get("/catalog/?page=not-a-number")
+    assert r.status_code == 200
+
+
+def test_catalog_invalid_brand_does_not_error(client, db):
+    _prod()
+    r = client.get("/catalog/?brand=oops")
+    assert r.status_code == 200
 
 
 def test_live_search_es_unavailable_returns_empty(client, monkeypatch, db):
@@ -155,7 +292,7 @@ def test_live_search_es_unavailable_returns_empty(client, monkeypatch, db):
     def _boom(*args, **kwargs):
         raise sf_search.ESSearchUnavailable("es down")
 
-    monkeypatch.setattr(sf_search, "_es_search_ids", _boom)
+    monkeypatch.setattr(sf_search, "live_search_bundle", _boom)
 
     r_country = client.get("/search/live/?q=italy", HTTP_HX_REQUEST="true")
     assert r_country.status_code == 200
@@ -352,7 +489,7 @@ def test_product_review_upsert_create_and_update(client_logged, user, db):
     p, *_ = _prod()
 
     r1 = client_logged.post(
-        f"/product/{p.id}/review/",
+        f"/product/{p.slug}/review/",
         {"rating": "5", "text": "Отличный товар"},
     )
     assert r1.status_code in (302, 303)
@@ -362,7 +499,7 @@ def test_product_review_upsert_create_and_update(client_logged, user, db):
     assert review.text == "Отличный товар"
 
     r2 = client_logged.post(
-        f"/product/{p.id}/review/",
+        f"/product/{p.slug}/review/",
         {"rating": "3", "text": "Нормально"},
     )
     assert r2.status_code in (302, 303)
@@ -374,7 +511,7 @@ def test_product_review_upsert_create_and_update(client_logged, user, db):
 
 def test_product_review_upsert_requires_auth(client, db):
     p, *_ = _prod()
-    r = client.post(f"/product/{p.id}/review/", {"rating": "4", "text": "ok"})
+    r = client.post(f"/product/{p.slug}/review/", {"rating": "4", "text": "ok"})
     assert r.status_code in (302, 303)
     assert "/account/login/" in r.headers.get("Location", "")
 
@@ -382,7 +519,7 @@ def test_product_review_upsert_requires_auth(client, db):
 def test_product_page_contains_reviews_block(client_logged, user, db):
     p, *_ = _prod()
     ProductReview.objects.create(product=p, user=user, rating=4, text="Good")
-    r = client_logged.get(f"/product/{p.id}/")
+    r = client_logged.get(f"/product/{p.slug}/")
     assert r.status_code == 200
     assert 'id="product-reviews"' in r.text
     assert "Отзывы и рейтинг" in r.text
@@ -392,7 +529,7 @@ def test_product_page_contains_reviews_block(client_logged, user, db):
 def test_product_review_upsert_htmx_returns_updated_reviews_panel(client_logged, user, db):
     p, *_ = _prod()
     r = client_logged.post(
-        f"/product/{p.id}/review/",
+        f"/product/{p.slug}/review/",
         {"rating": "5", "text": "new htmx text"},
         HTTP_HX_REQUEST="true",
     )
@@ -409,7 +546,7 @@ def test_product_review_delete_by_author_htmx(client_logged, user, db):
     p, *_ = _prod()
     ProductReview.objects.create(product=p, user=user, rating=4, text="to delete")
     r = client_logged.post(
-        f"/product/{p.id}/review/delete/",
+        f"/product/{p.slug}/review/delete/",
         HTTP_HX_REQUEST="true",
     )
     assert r.status_code == 200
@@ -422,7 +559,7 @@ def test_product_review_comment_create_update_delete_htmx(client_logged, user, d
     review = ProductReview.objects.create(product=p, user=user, rating=5, text="base")
 
     r_create = client_logged.post(
-        f"/product/{p.id}/review/{review.id}/comment/",
+        f"/product/{p.slug}/review/{review.id}/comment/",
         {"text": "first comment"},
         HTTP_HX_REQUEST="true",
     )
@@ -431,7 +568,7 @@ def test_product_review_comment_create_update_delete_htmx(client_logged, user, d
     assert comment.text == "first comment"
 
     r_update = client_logged.post(
-        f"/product/{p.id}/comment/{comment.id}/update/",
+        f"/product/{p.slug}/comment/{comment.id}/update/",
         {"text": "updated comment"},
         HTTP_HX_REQUEST="true",
     )
@@ -440,7 +577,7 @@ def test_product_review_comment_create_update_delete_htmx(client_logged, user, d
     assert comment.text == "updated comment"
 
     r_delete = client_logged.post(
-        f"/product/{p.id}/comment/{comment.id}/delete/",
+        f"/product/{p.slug}/comment/{comment.id}/delete/",
         HTTP_HX_REQUEST="true",
     )
     assert r_delete.status_code == 200

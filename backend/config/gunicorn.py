@@ -1,5 +1,9 @@
 import multiprocessing
+import os
+
 bind = "0.0.0.0:8000"
-workers = max(2, multiprocessing.cpu_count() // 2)
+workers = int(os.getenv("GUNICORN_WORKERS", str(max(4, multiprocessing.cpu_count()))))
 worker_class = "uvicorn.workers.UvicornWorker"
-timeout = 60
+timeout = int(os.getenv("GUNICORN_TIMEOUT", "120"))
+graceful_timeout = int(os.getenv("GUNICORN_GRACEFUL_TIMEOUT", "30"))
+keepalive = int(os.getenv("GUNICORN_KEEPALIVE", "5"))

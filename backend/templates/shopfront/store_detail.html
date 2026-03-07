@@ -1,0 +1,34 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<section class="page-2026 store-page-2026">
+  <header class="store-page-2026__hero">
+    <div class="store-page-2026__hero-bg"
+         {% if store.photo %}style="background-image:url('{{ store.photo.url }}')"{% endif %}
+         aria-hidden="true"></div>
+    <div class="store-page-2026__hero-content">
+      <div class="store-page-2026__logo-wrap">
+        {% if store.photo %}
+          <img src="{{ store.photo.url }}" alt="{{ store.name }}" class="store-page-2026__logo" loading="lazy">
+        {% else %}
+          <span class="store-page-2026__logo-fallback">{{ store.name|slice:":1"|upper }}</span>
+        {% endif %}
+      </div>
+      <div class="store-page-2026__hero-copy">
+        <h1>{{ store.name }}</h1>
+        <p>{% if store.description %}{{ store.description }}{% else %}Описание магазина пока не заполнено.{% endif %}</p>
+        <div class="store-page-2026__meta">Юр. лицо: {{ store.legal_entity.name }} · ИНН {{ store.legal_entity.inn }}</div>
+      </div>
+      <div class="store-page-2026__hero-actions">
+        <a class="btn btn-sm btn-outline" href="/sellers/{{ store.owner.profile.slug }}/" hx-boost="false">Профиль продавца</a>
+        <a class="btn btn-sm btn-primary" href="/catalog/?seller={{ store.owner.id }}" hx-boost="false">Все товары продавца</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="page-2026__header">
+    <h2>Товары магазина</h2>
+    <p>Всего позиций: {{ products|length }}</p>
+  </div>
+  {% include "shopfront/components/product_grid.html" with products=products %}
+</section>
+{% endblock %}

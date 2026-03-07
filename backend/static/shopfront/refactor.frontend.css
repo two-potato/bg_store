@@ -1,0 +1,99 @@
+/*
+ * Frontend refactor layer (loaded last).
+ * Purpose: stabilize core UI primitives and neutralize legacy conflicts.
+ */
+
+:root {
+  --fx-brand: #1569ff;
+  --fx-brand-2: #20c6ff;
+  --fx-brand-3: #7a2cf6;
+  --fx-text: #152238;
+  --fx-muted: #4b5f85;
+  --fx-border: #c8dcff;
+  --fx-surface: #ffffff;
+  --fx-danger: #ff4b46;
+}
+
+/* Global anti-legacy warm palette */
+body.app-theme .site-header-v3,
+body.app-theme .site-footer,
+body.app-theme .mobile-nav-mint,
+body.app-theme .home-minimal-footer {
+  background: var(--fx-surface) !important;
+  border-color: var(--fx-border) !important;
+}
+
+/* Header brand block */
+body.app-theme .site-header-v3__logo {
+  display: inline-flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 0.08rem !important;
+}
+
+body.app-theme .site-header-v3__logo-caption {
+  margin-left: 0.28rem !important;
+  font-size: 0.62rem !important;
+  line-height: 1.15 !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.01em !important;
+  color: var(--fx-muted) !important;
+  opacity: 0.94 !important;
+  white-space: nowrap !important;
+}
+
+/* Mobile bottom nav + cart badge clipping fix */
+body.app-theme .mobile-nav-mint-link {
+  color: var(--fx-muted) !important;
+}
+
+body.app-theme .mobile-nav-mint-link__icon {
+  border-color: var(--fx-border) !important;
+  color: #214da8 !important;
+}
+
+body.app-theme .mobile-nav-mint-link.is-active .mobile-nav-mint-link__icon {
+  color: #fff !important;
+  background: linear-gradient(135deg, var(--fx-brand-2) 0%, var(--fx-brand) 58%, var(--fx-brand-3) 100%) !important;
+}
+
+body.app-theme .mobile-nav-mint-link--cart .mobile-cart-icon-wrap,
+body.app-theme .mobile-nav-mint-link--cart .mobile-cart-icon-wrap .mobile-nav-mint-link__icon {
+  overflow: visible !important;
+}
+
+body.app-theme .mobile-nav-mint-link--cart .mobile-cart-badge {
+  top: -0.34rem !important;
+  right: -0.52rem !important;
+  background: var(--fx-danger) !important;
+  border: 2px solid #fff !important;
+  box-shadow: 0 8px 14px rgba(255, 75, 70, 0.3) !important;
+}
+
+/* Product-card cart control visibility contract */
+body.app-theme .products-grid .cart-control--icon .add.hidden,
+body.app-theme .products-grid .cart-control--icon .stepper.hidden,
+body.app-theme #product-grid .cart-control--icon .add.hidden,
+body.app-theme #product-grid .cart-control--icon .stepper.hidden {
+  display: none !important;
+}
+
+body.app-theme .products-grid .cart-control--icon:not(.is-in-cart) .stepper,
+body.app-theme #product-grid .cart-control--icon:not(.is-in-cart) .stepper {
+  display: none !important;
+}
+
+body.app-theme .products-grid .cart-control--icon:not(.is-in-cart) .add,
+body.app-theme #product-grid .cart-control--icon:not(.is-in-cart) .add {
+  display: inline-flex !important;
+}
+
+body.app-theme .products-grid .cart-control--icon.is-in-cart .add,
+body.app-theme #product-grid .cart-control--icon.is-in-cart .add {
+  display: none !important;
+}
+
+body.app-theme .products-grid .cart-control--icon.is-in-cart .stepper,
+body.app-theme #product-grid .cart-control--icon.is-in-cart .stepper {
+  display: inline-flex !important;
+}

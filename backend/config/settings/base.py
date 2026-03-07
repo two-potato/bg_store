@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import timedelta
 import os
 from django.core.exceptions import ImproperlyConfigured
 
@@ -137,6 +138,8 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "shopfront.context_processors.cart_badge",
                 "shopfront.context_processors.header_categories",
+                "shopfront.context_processors.site_settings",
+                "shopfront.context_processors.favorites_state",
             ],
         },
     }
@@ -218,9 +221,18 @@ BOT_BASE_URL = os.getenv("BOT_BASE_URL", "http://bot:8080")
 BOT_TWA_URL = os.getenv("BOT_TWA_URL", BOT_BASE_URL)
 BOT_NOTIFY_URL = os.getenv("BOT_NOTIFY_URL", BOT_BASE_URL)
 
+# Analytics
+GA_MEASUREMENT_ID = os.getenv("GA_MEASUREMENT_ID", "").strip()
+
 # Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TG_INIT_DATA_MAX_AGE_SECONDS = int(os.getenv("TG_INIT_DATA_MAX_AGE_SECONDS", "300"))
+
+# Login captcha / anti-bruteforce
+LOGIN_CAPTCHA_THRESHOLD = int(os.getenv("LOGIN_CAPTCHA_THRESHOLD", "5"))
+LOGIN_CAPTCHA_WINDOW_SECONDS = int(os.getenv("LOGIN_CAPTCHA_WINDOW_SECONDS", "900"))
+TURNSTILE_SITE_KEY = os.getenv("TURNSTILE_SITE_KEY", "1x00000000000000000000AA")
+TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "1x0000000000000000000000000000000AA")
 
 # Public observability/docs toggles
 ENABLE_API_DOCS = _env_bool("ENABLE_API_DOCS", DEBUG)
@@ -266,6 +278,31 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "1") == "1"
 EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "0") == "1"
 EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "30"))
+
+# Marketplace service notifications
+MARKETPLACE_SERVICE_ALERTS_ENABLED = _env_bool("MARKETPLACE_SERVICE_ALERTS_ENABLED", True)
+ORDER_NEW_SLA_MINUTES = int(os.getenv("ORDER_NEW_SLA_MINUTES", "20"))
+ORDER_NEW_SLA_ALERT_COOLDOWN_MINUTES = int(os.getenv("ORDER_NEW_SLA_ALERT_COOLDOWN_MINUTES", "60"))
+LOW_STOCK_THRESHOLD = int(os.getenv("LOW_STOCK_THRESHOLD", "5"))
+LOW_STOCK_MAX_ITEMS = int(os.getenv("LOW_STOCK_MAX_ITEMS", "20"))
+LOW_STOCK_ALERT_COOLDOWN_MINUTES = int(os.getenv("LOW_STOCK_ALERT_COOLDOWN_MINUTES", "180"))
+FAKE_PAYMENT_STALE_MINUTES = int(os.getenv("FAKE_PAYMENT_STALE_MINUTES", "10"))
+FAKE_PAYMENT_ALERT_COOLDOWN_MINUTES = int(os.getenv("FAKE_PAYMENT_ALERT_COOLDOWN_MINUTES", "120"))
+
+CELERY_BEAT_SCHEDULE = {
+    "service-alert-new-orders-sla": {
+        "task": "orders.tasks.notify_new_orders_sla_breach",
+        "schedule": timedelta(minutes=5),
+    },
+    "service-alert-low-stock": {
+        "task": "orders.tasks.notify_low_stock_products",
+        "schedule": timedelta(minutes=30),
+    },
+    "service-alert-stale-fake-payments": {
+        "task": "orders.tasks.notify_stale_fake_payments",
+        "schedule": timedelta(minutes=10),
+    },
+}
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

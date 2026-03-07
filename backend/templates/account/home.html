@@ -1,34 +1,39 @@
 {% extends "account/layout.html" %}
 {% block account_main %}
-<section id="account-main-content" class="cabinet-dark-main">
-  <div class="cabinet-dark-hero">
-    <div class="cabinet-dark-hero-title">Личный кабинет</div>
-    <div class="cabinet-dark-hero-sub">Управляйте заказами, компаниями, адресами и профилем без перезагрузки страницы.</div>
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero">
+    <div class="account-2026__hero-title">Личный кабинет</div>
+    <div class="account-2026__hero-sub">Управляйте заказами, компаниями, адресами и профилем без перезагрузки страницы.</div>
   </div>
 
-  <section class="cabinet-dark-panel">
-    <h2 class="cabinet-dark-panel-title">Мои данные</h2>
-    <div class="cabinet-dark-metrics">
-      <article class="cabinet-dark-metric">
-        <div class="cabinet-dark-metric-label">Скидка профиля</div>
-        <div class="cabinet-dark-metric-value">{{ profile.discount }}%</div>
+  <section class="account-2026__panel">
+    <h2 class="account-2026__panel-title">Мои данные</h2>
+    <div class="account-2026__metrics">
+      <article class="account-2026__metric">
+        <div class="account-2026__metric-label">Скидка профиля</div>
+        <div class="account-2026__metric-value">{{ profile.discount }}%</div>
       </article>
-      <article class="cabinet-dark-metric">
-        <div class="cabinet-dark-metric-label">Мои заказы</div>
-        <div class="cabinet-dark-metric-value">{{ metrics.orders_count }}</div>
+      <article class="account-2026__metric">
+        <div class="account-2026__metric-label">Мои заказы</div>
+        <div class="account-2026__metric-value">{{ metrics.orders_count }}</div>
       </article>
-      <article class="cabinet-dark-metric">
-        <div class="cabinet-dark-metric-label">Компании / Адреса</div>
-        <div class="cabinet-dark-metric-value">{{ metrics.entities_count }} / {{ metrics.addresses_count }}</div>
+      <article class="account-2026__metric">
+        <div class="account-2026__metric-label">Компании / Адреса</div>
+        <div class="account-2026__metric-value">{{ metrics.entities_count }} / {{ metrics.addresses_count }}</div>
       </article>
+    </div>
+    <div class="flex flex-wrap gap-2 mt-3">
+      <a class="btn btn-sm btn-outline" href="/favorites/" hx-boost="false">Избранное</a>
+      <a class="btn btn-sm btn-outline" href="/saved-searches/" hx-boost="false">Сохранённые поиски</a>
+      <a class="btn btn-sm btn-outline" href="/promotions/" hx-boost="false">Акции</a>
     </div>
   </section>
 
-  <section class="cabinet-dark-panel" id="profile-edit">
-    <h2 class="cabinet-dark-panel-title">Профиль</h2>
+  <section class="account-2026__panel" id="profile-edit">
+    <h2 class="account-2026__panel-title">Профиль</h2>
     <form method="post"
           enctype="multipart/form-data"
-          class="cabinet-dark-form"
+          class="account-2026__form"
           hx-post="/account/"
           hx-target="#account-main-content"
           hx-select="#account-main-content"
@@ -64,7 +69,7 @@
         </div>
       {% endif %}
       <div class="flex gap-2">
-        <button class="btn btn-success">Сохранить изменения</button>
+        <button class="btn btn-primary">Сохранить изменения</button>
         <a class="btn btn-ghost" href="/account/" hx-get="/account/" hx-target="#account-main-content" hx-select="#account-main-content" hx-swap="outerHTML" hx-push-url="true">Сбросить</a>
       </div>
     </form>

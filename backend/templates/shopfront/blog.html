@@ -1,0 +1,19 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<section class="page-2026">
+  <header class="page-2026__header">
+    <h1>Блог маркетплейса</h1>
+    <p>Практические материалы для закупок и управления ассортиментом.</p>
+  </header>
+  <div class="page-2026__grid page-2026__grid--blog">
+    {% for post in posts %}
+      <article class="page-2026__card page-2026__card--blog">
+        <span class="badge">{{ post.tag }}</span>
+        <h2>{{ post.title }}</h2>
+        <p>{{ post.excerpt }}</p>
+        <a class="btn btn-sm btn-outline" href="/blog/#{{ post.slug }}" hx-boost="false">Читать</a>
+      </article>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

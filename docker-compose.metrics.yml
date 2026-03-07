@@ -41,8 +41,12 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: mirror.gcr.io/grafana/grafana:11.6.0
+    image: grafana/grafana:12.4.0
     container_name: bg-grafana
+    environment:
+      GF_DATE_FORMATS_DEFAULT_TIMEZONE: browser
+      GF_EXPLORE_ENABLED: "true"
+      GF_FEATURE_TOGGLES_ENABLE: logsExploreTableVisualisation
     volumes:
       - grafana:/var/lib/grafana
       - ./deploy/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro

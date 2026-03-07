@@ -1,8 +1,11 @@
 import pytest
+import re
+from django.core import mail
+from rest_framework_simplejwt.tokens import AccessToken
 from orders.models import Order
-from commerce.models import LegalEntity, LegalEntityMembership, DeliveryAddress, LegalEntityCreationRequest
+from commerce.models import LegalEntity, LegalEntityMembership, DeliveryAddress, LegalEntityCreationRequest, SellerStore
 from users.models import UserProfile
-from catalog.models import Product, ProductReview, ProductReviewComment
+from catalog.models import Brand, Category, Product, ProductReview, ProductReviewComment
 
 pytestmark = pytest.mark.django_db
 
@@ -158,7 +161,10 @@ def test_account_comments_page_lists_only_user_comments(client_logged, user, db)
     assert "Чужой комментарий" not in r.text
 
 
-def test_login_register_logout(client, user):
+def test_login_register_logout(client, user, settings):
+    settings.EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
     # login GET
     r0 = client.get("/account/login/")
     assert r0.status_code == 200
@@ -173,14 +179,49 @@ def test_login_register_logout(client, user):
     assert r3.status_code in (200, 302, 303)
     r4 = client.post("/account/register/", {
         "username": "newuser",
-        "email": "n@e.com",
+        "email": "newuser@example.com",
         "password1": "p@ss12345",
         "password2": "p@ss12345",
     })
     assert r4.status_code in (302, 303)
+    assert r4.headers.get("Location", "").endswith("/account/login/")
+    new_user = User.objects.get(username="newuser")
+    assert new_user.is_active is False
+    assert len(mail.outbox) >= 1
+    body = mail.outbox[-1].body
+    m = re.search(r"/account/confirm-email/\?token=([^\s]+)", body)
+    assert m, body
+    token = m.group(1)
+    payload = AccessToken(token)
+    assert payload["typ"] == "email_confirm"
+    assert payload["uid"] == new_user.id
+    assert payload["eml"] == "newuser@example.com"
+
+    # cannot login before email confirmation
+    r_pre = client.post("/account/login/", {"identifier": "newuser@example.com", "password": "p@ss12345"})
+    assert r_pre.status_code == 200
+
+    # confirm email via JWT link and get authenticated session
+    r_confirm = client.get(f"/account/confirm-email/?token={token}")
+    assert r_confirm.status_code in (302, 303)
+    assert r_confirm.headers.get("Location", "").startswith("/account/")
+    new_user.refresh_from_db()
+    assert new_user.is_active is True
+    assert "_auth_user_id" in client.session
+    assert str(new_user.id) == client.session["_auth_user_id"]
+
     # logout
     r5 = client.get("/account/logout/")
     assert r5.status_code in (302, 303)
+
+
+def test_login_ignores_external_next_redirect(client, user):
+    r = client.post(
+        "/account/login/?next=https://evil.example/phish",
+        {"identifier": user.username, "password": "pass"},
+    )
+    assert r.status_code in (302, 303)
+    assert r.headers.get("Location", "").startswith("/account/")
 
 
 def test_login_page_google_button_state(client, settings):
@@ -195,6 +236,18 @@ def test_login_page_google_button_state(client, settings):
     assert "/account/social/google/login/" in r_enabled.text
 
 
+def test_register_page_google_button_state(client, settings):
+    settings.SOCIALACCOUNT_PROVIDERS["google"]["APP"]["client_id"] = ""
+    r_disabled = client.get("/account/register/")
+    assert r_disabled.status_code == 200
+    assert "Зарегистрироваться через Google (не настроено)" in r_disabled.text
+
+    settings.SOCIALACCOUNT_PROVIDERS["google"]["APP"]["client_id"] = "client-id"
+    r_enabled = client.get("/account/register/")
+    assert r_enabled.status_code == 200
+    assert "/account/social/google/login/" in r_enabled.text
+
+
 def test_twa_login_flow(monkeypatch, client):
     # no initData -> redirect with message
     r0 = client.get("/account/twa/login/")
@@ -204,3 +257,101 @@ def test_twa_login_flow(monkeypatch, client):
     monkeypatch.setattr(vhtml, "verify_init_data", lambda _: {"id": 1, "username": "tg"})
     r1 = client.get("/account/twa/login/?initData=dummy")
     assert r1.status_code in (302, 303)
+
+
+def test_seller_cabinet_and_product_add(client_logged, user, db):
+    profile = UserProfile.objects.get(user=user)
+    profile.role = UserProfile.Role.SELLER
+    profile.save(update_fields=["role"])
+
+    le = LegalEntity.objects.create(name="Seller LE", inn="7703897659", bik="044525225", checking_account="40702810900000000011")
+    LegalEntityMembership.objects.create(user=user, legal_entity=le)
+
+    r0 = client_logged.get("/account/seller/")
+    assert r0.status_code == 200
+
+    r1 = client_logged.post("/account/seller/", {"name": "Мой магазин", "legal_entity": le.id})
+    assert r1.status_code in (302, 303)
+    assert SellerStore.objects.filter(owner=user, name="Мой магазин", legal_entity=le).exists()
+
+    brand = Brand.objects.create(name="SellerBrand")
+    category = Category.objects.create(name="SellerCategory")
+    payload = {
+        "sku": "98765432",
+        "name": "Seller product",
+        "brand": brand.id,
+        "category": category.id,
+        "price": "199.99",
+        "stock_qty": 25,
+        "description": "Desc",
+        "is_new": "on",
+    }
+    r2 = client_logged.post("/account/seller/products/add/", payload)
+    assert r2.status_code in (302, 303)
+    product = Product.objects.get(sku="98765432")
+    assert product.seller_id == user.id
+
+
+def test_non_seller_cannot_open_seller_pages(client_logged):
+    r0 = client_logged.get("/account/seller/")
+    assert r0.status_code in (302, 303)
+    r1 = client_logged.get("/account/seller/products/add/")
+    assert r1.status_code in (302, 303)
+
+
+def test_auth_templates_have_htmx_validation_and_password_toggles(client):
+    login_page = client.get("/account/login/")
+    assert login_page.status_code == 200
+    assert '/account/login/validate/' in login_page.text
+    assert "data-password-toggle" in login_page.text
+    assert "data-password-input" in login_page.text
+
+    register_page = client.get("/account/register/")
+    assert register_page.status_code == 200
+    assert '/account/register/validate/' in register_page.text
+    # two password fields on registration form
+    assert register_page.text.count("data-password-toggle") >= 2
+
+
+def test_auth_validate_endpoints_return_form_errors(client):
+    login_validate = client.post(
+        "/account/login/validate/",
+        {"identifier": "", "password": ""},
+        HTTP_HX_REQUEST="true",
+    )
+    assert login_validate.status_code == 200
+    assert "Обязательное поле" in login_validate.text
+
+    register_validate = client.post(
+        "/account/register/validate/",
+        {"username": "", "email": "bad", "password1": "1", "password2": "2"},
+        HTTP_HX_REQUEST="true",
+    )
+    assert register_validate.status_code == 200
+    assert "Пароли не совпадают" in register_validate.text
+
+
+def test_login_requires_captcha_after_failed_attempts(client, user, settings, monkeypatch):
+    settings.LOGIN_CAPTCHA_THRESHOLD = 1
+    settings.LOGIN_CAPTCHA_WINDOW_SECONDS = 300
+    settings.TURNSTILE_SITE_KEY = "site-key"
+    settings.TURNSTILE_SECRET_KEY = "secret-key"
+
+    # first failed attempt should arm captcha
+    failed = client.post("/account/login/", {"identifier": user.username, "password": "bad"})
+    assert failed.status_code == 200
+
+    page_with_captcha = client.get("/account/login/")
+    assert page_with_captcha.status_code == 200
+    assert "cf-turnstile" in page_with_captcha.text
+    assert 'data-sitekey="site-key"' in page_with_captcha.text
+
+    from users import views_html as vhtml
+    monkeypatch.setattr(vhtml, "_verify_turnstile", lambda token, remoteip: (False, "captcha error"))
+
+    blocked = client.post(
+        "/account/login/",
+        {"identifier": user.username, "password": "pass"},
+    )
+    assert blocked.status_code == 200
+    assert "captcha error" in blocked.text

@@ -126,6 +126,16 @@ class Product(TimeStampedModel, SeoFieldsMixin):
         related_name="marketplace_products",
     )
 
+    class Meta:
+        indexes = [
+            models.Index(fields=["-is_new", "name", "id"], name="product_new_name_idx"),
+            models.Index(fields=["-is_promo", "name", "id"], name="product_promo_name_idx"),
+            models.Index(fields=["price", "name", "id"], name="product_price_name_idx"),
+            models.Index(fields=["category", "-is_new", "name", "id"], name="product_cat_new_idx"),
+            models.Index(fields=["brand", "-is_new", "name", "id"], name="product_brand_new_idx"),
+            models.Index(fields=["seller", "-is_new", "name", "id"], name="product_seller_new_idx"),
+        ]
+
     def __str__(self):
         return f"{self.sku} — {self.name}"
 

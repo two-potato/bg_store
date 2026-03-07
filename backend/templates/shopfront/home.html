@@ -1,68 +1,79 @@
 {% extends "shopfront/base.html" %}
 {% block content %}
-<div class="home-minimal reveal" data-anim="animate__fadeIn">
-  <section class="home-minimal-hero">
-    <div class="home-minimal-hero__content">
-      <span class="home-minimal-kicker">Bad Guys Shop</span>
-      <h1 class="home-minimal-title">Минимум кликов до нужного товара</h1>
-      <p class="home-minimal-subtitle">Сиропы, кофе, напитки и расходники в современной витрине без перегруза.</p>
-      <div class="home-minimal-hero__actions">
+<div class="home-b2b reveal" data-anim="animate__fadeIn">
+  <section class="home-b2b-hero">
+    <div class="home-b2b-hero__content">
+      <span class="home-b2b-kicker">Bad Guys Shop · B2B Marketplace</span>
+      <h1 class="home-b2b-title">Оптовые закупки для бизнеса без лишних шагов</h1>
+      <p class="home-b2b-subtitle">Быстрый поиск, прозрачные цены и заказ в несколько кликов для кофеен, ритейла и сервисных команд.</p>
+      <div class="home-b2b-hero__actions">
         <a class="btn btn-primary" href="/catalog/">Перейти в каталог</a>
-        <a class="btn btn-outline" href="/delivery/">Условия доставки</a>
+        <a class="btn btn-outline" href="/delivery/">Условия поставки</a>
       </div>
+      <div class="home-b2b-hero__trust" aria-label="Индикаторы доверия">
+        <span>Отгрузки каждый день</span>
+        <span>Проверенные поставщики</span>
+        <span>Поддержка B2B-клиентов</span>
+      </div>
+    </div>
+    <div class="home-b2b-hero__visual">
+      <a class="home-b2b-hero-card home-b2b-hero-card--lg" href="/catalog/?sort=rating">
+        <img src="/media/hero/hero-concept-main.png" alt="Лидеры продаж" loading="lazy">
+        <span>Лидеры продаж</span>
+      </a>
+      <a class="home-b2b-hero-card" href="/catalog/?is_new=1">
+        <img src="/media/hero/hero-concept-new.png" alt="Новые поступления" loading="lazy">
+        <span>Новые позиции</span>
+      </a>
+      <a class="home-b2b-hero-card" href="/catalog/?sort=price_asc">
+        <img src="/media/hero/hero-concept-price.png" alt="Лучшие цены" loading="lazy">
+        <span>Выгодные цены</span>
+      </a>
     </div>
   </section>
 
-  <section class="home-minimal-banners">
-    <a class="home-minimal-banner home-minimal-banner--lg" href="/catalog/?sort=rating">
-      <img src="https://picsum.photos/seed/bg-hero-banner/1400/700" alt="Подборка лидеров продаж" loading="lazy">
-      <div class="home-minimal-banner__overlay">
-        <span class="home-minimal-banner__kicker">Подборка недели</span>
-        <h3>Хиты с лучшим рейтингом</h3>
-        <p>Товары, которые чаще всего добавляют в корзину и рекомендуют другим.</p>
-        <span class="home-minimal-banner__cta">Смотреть подборку</span>
-      </div>
-    </a>
-    <a class="home-minimal-banner" href="/catalog/?is_new=1">
-      <img src="https://picsum.photos/seed/bg-new-arrivals/900/700" alt="Новые поступления" loading="lazy">
-      <div class="home-minimal-banner__overlay">
-        <span class="home-minimal-banner__kicker">Обновление витрины</span>
-        <h3>Новые позиции</h3>
-        <span class="home-minimal-banner__cta">Открыть новинки</span>
-      </div>
-    </a>
-    <a class="home-minimal-banner" href="/catalog/?sort=price_asc">
-      <img src="https://picsum.photos/seed/bg-best-price/900/700" alt="Товары по выгодной цене" loading="lazy">
-      <div class="home-minimal-banner__overlay">
-        <span class="home-minimal-banner__kicker">Экономия</span>
-        <h3>Лучшие цены</h3>
-        <span class="home-minimal-banner__cta">Перейти в раздел</span>
-      </div>
-    </a>
-  </section>
-
-  <section class="home-minimal-categories">
-    <div class="home-minimal-headline">
-      <h2>Категории</h2>
-      <a href="/catalog/" class="home-minimal-link">Все категории</a>
+  <section class="home-b2b-categories">
+    <div class="home-b2b-headline">
+      <h2>Категории закупок</h2>
+      <a href="/catalog/" class="home-b2b-link">Все категории</a>
     </div>
-    <div class="home-minimal-chip-row">
+    <div class="home-b2b-categories__grid">
       {% for c in cats %}
-        <a class="home-minimal-chip" href="/catalog/?category={{ c.id }}">
-          <span class="home-minimal-chip-icon">{% include 'shopfront/icons/tag.svg' %}</span>
-          <span>{{ c.name }}</span>
-        </a>
+        {% if forloop.counter <= 8 and "StoreCategory" not in c.name %}
+          <a class="home-b2b-category-card" href="/catalog/?category={{ c.slug }}">
+            <span class="home-b2b-category-card__icon">{% include 'shopfront/icons/tag.svg' %}</span>
+            <span class="home-b2b-category-card__name">{{ c.name }}</span>
+          </a>
+        {% endif %}
       {% endfor %}
     </div>
   </section>
 
-  <section class="home-minimal-products">
-    <div class="home-minimal-headline">
-      <h2>Новинки</h2>
-      <a href="/catalog/?sort=new" class="home-minimal-link">Смотреть все</a>
+  <section class="home-b2b-benefits" aria-label="Преимущества маркетплейса">
+    <article class="home-b2b-benefit-card">
+      <h3>Скорость закупки</h3>
+      <p>От поиска до корзины за минуты: интерфейс оптимизирован под повторяющиеся B2B-заказы.</p>
+    </article>
+    <article class="home-b2b-benefit-card">
+      <h3>Контроль затрат</h3>
+      <p>Сравнивайте предложения по цене и остаткам в одном окне без переключений между поставщиками.</p>
+    </article>
+    <article class="home-b2b-benefit-card">
+      <h3>Предсказуемая логистика</h3>
+      <p>Прозрачные условия доставки и статусы заказов помогают планировать закупки заранее.</p>
+    </article>
+    <article class="home-b2b-benefit-card">
+      <h3>Надежная платформа</h3>
+      <p>Стабильный сервис для регулярных поставок, с акцентом на удобство и скорость работы команды.</p>
+    </article>
+  </section>
+
+  <section class="home-b2b-products">
+    <div class="home-b2b-headline">
+      <h2>Популярные позиции</h2>
+      <a href="/catalog/?sort=rating_desc" class="home-b2b-link">Смотреть все</a>
     </div>
     {% include "shopfront/components/product_grid.html" with products=products %}
   </section>
-
 </div>
 {% endblock %}

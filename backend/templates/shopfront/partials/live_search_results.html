@@ -1,33 +1,56 @@
 {% if show %}
-  <div class="live-search-panel" role="listbox" aria-label="Результаты поиска">
-    <div class="live-search-head">
-      <span class="live-search-head__label">Быстрый поиск</span>
+  <div class="live-search-panel live-search-panel--glass" role="listbox" aria-label="Результаты поиска">
+    <div class="live-search-head live-search-head--v2">
+      <span class="live-search-head__label">Результаты</span>
       <span class="live-search-head__query">«{{ q }}»</span>
     </div>
+    {% if suggestions %}
+      <div class="live-search-countries">
+        <div class="live-search-countries__title">Подсказки</div>
+        <div class="live-search-countries__list">
+          {% for suggestion in suggestions %}
+            <a href="/catalog/?q={{ suggestion|urlencode }}" class="live-search-country-chip" hx-boost="false">{{ suggestion }}</a>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+    {% if countries %}
+      <div class="live-search-countries">
+        <div class="live-search-countries__title">Популярные страны</div>
+        <div class="live-search-countries__list">
+          {% for country in countries %}
+            <a href="/catalog/?q={{ country|urlencode }}" class="live-search-country-chip" hx-boost="false">{{ country }}</a>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
     {% if products %}
       <ul class="live-search-list">
         {% for p in products %}
           <li class="live-search-row">
-            <a href="/product/{{ p.id }}/" hx-boost="false" class="live-search-item">
+            <a href="/product/{{ p.slug }}/" hx-boost="false" class="live-search-item live-search-item--v2">
               <span class="live-search-thumb">
                 {% with img=p.images.first %}
                   {% if img %}
-                    <img src="{{ img.url }}" alt="{{ img.alt|default:p.name }}" loading="lazy">
+                    <img src="{{ img.url }}" alt="{{ img.alt|default:p.name }}" loading="lazy" onerror="this.onerror=null;this.src='/media/user_photos/image017.jpg';">
                   {% else %}
-                    <img src="https://picsum.photos/seed/live-{{ p.id }}/96/96" alt="{{ p.name }}" loading="lazy">
+                    <img src="/media/user_photos/image017.jpg" alt="{{ p.name }}" loading="lazy">
                   {% endif %}
                 {% endwith %}
               </span>
               <span class="live-search-meta">
                 <span class="live-search-title">{{ p.name }}</span>
-                <span class="live-search-subtitle">{{ p.brand|default:"Без бренда" }}{% if p.category %} · {{ p.category.name }}{% endif %}</span>
+                <span class="live-search-subtitle">
+                  {{ p.brand|default:"Без бренда" }}{% if p.category %} · {{ p.category.name }}{% endif %}
+                  {% if p.seller and p.seller.seller_store %} · Магазин: {{ p.seller.seller_store.name }}{% endif %}
+                </span>
               </span>
               <span class="live-search-price">{{ p.price }} ₽</span>
             </a>
           </li>
         {% endfor %}
       </ul>
-      <a href="/catalog/?q={{ q|urlencode }}" class="live-search-all" hx-boost="false">Смотреть все результаты</a>
+      <a href="/catalog/?q={{ q|urlencode }}" class="live-search-all live-search-all--v2" hx-boost="false">Показать все результаты</a>
     {% else %}
       <div class="live-search-empty">По запросу «{{ q }}» ничего не найдено</div>
     {% endif %}

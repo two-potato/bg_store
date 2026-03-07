@@ -2,6 +2,7 @@ from rest_framework import views, permissions, viewsets, mixins
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from django.conf import settings
+from django.core.cache import cache
 from .models import LegalEntity, MembershipRequest, DeliveryAddress, LegalEntityMembership
 from .serializers import (
     CheckInnResponseSerializer, MembershipRequestCreateSerializer, DeliveryAddressSerializer
@@ -17,15 +18,23 @@ from core.logging_utils import LoggedAPIViewMixin, LoggedViewSetMixin, log_calls
 
 log = logging.getLogger("commerce")
 
+
+def _notify_headers() -> dict[str, str]:
+    return {"X-Internal-Token": str(getattr(settings, "INTERNAL_TOKEN", ""))}
+
 class CheckInnView(LoggedAPIViewMixin, views.APIView):
     permission_classes = [permissions.IsAuthenticated]
     def post(self, request):
         inn = (request.data.get("inn") or "").strip()
-        try:
-            le = LegalEntity.objects.get(inn=inn)
-            data = {"exists": True, "legal_entity_id": le.id, "name": le.name}
-        except LegalEntity.DoesNotExist:
-            data = {"exists": False}
+        cache_key = f"commerce:inn_exists:{inn}"
+        data = cache.get(cache_key)
+        if data is None:
+            try:
+                le = LegalEntity.objects.get(inn=inn)
+                data = {"exists": True, "legal_entity_id": le.id, "name": le.name}
+            except LegalEntity.DoesNotExist:
+                data = {"exists": False}
+            cache.set(cache_key, data, timeout=LOOKUP_TTL)
         return Response(CheckInnResponseSerializer(data).data)
 
 class MembershipRequestViewSet(LoggedViewSetMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
@@ -45,11 +54,11 @@ class MembershipRequestViewSet(LoggedViewSetMixin, mixins.CreateModelMixin, view
                 for m in admins_list:
                     tg = getattr(m.user.profile, "telegram_id", None)
                     if tg:
-                        await c.post(f"{settings.BOT_BASE_URL}/notify/send_kb", json={
+                        await c.post(f"{settings.BOT_NOTIFY_URL}/notify/send_kb", json={
                             "telegram_id": tg,
                             "text": f"🔔 Заявка на вступление в {req.legal_entity.name} от {req.applicant.username}",
                             "keyboard": [[{"text":"Открыть админку","callback_data":"noop"}]]
-                        })
+                        }, headers=_notify_headers())
         try:
             if admins:
                 asyncio.run(send(admins))
@@ -93,6 +102,7 @@ class DeliveryAddressViewSet(LoggedViewSetMixin, viewsets.ModelViewSet):
 # -------- External lookups (DaData) --------
 
 DADATA_TOKEN = getattr(settings, "DADATA_TOKEN", os.getenv("DADATA_TOKEN", ""))
+LOOKUP_TTL = int(getattr(settings, "CACHE_TTL_COMMERCE_LOOKUPS", 600))
 
 async def _dadata_post(url: str, payload: dict):
     headers = {"Authorization": f"Token {DADATA_TOKEN}", "Content-Type": "application/json"}
@@ -111,6 +121,10 @@ def lookup_party_by_inn(request):
     inn = (request.query_params.get("inn") or "").strip()
     if not inn:
         return Response({"detail": "inn is required"}, status=400)
+    cache_key = f"commerce:lookup:party:{inn}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return Response(cached)
     data = asyncio.run(_dadata_post(
         "https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/party",
         {"query": inn}
@@ -134,6 +148,7 @@ def lookup_party_by_inn(request):
         "okved": (item.get("okveds") or [{}])[0].get("code") if item.get("okveds") else item.get("okved"),
         "status": item.get("state", {}).get("status"),
     }
+    cache.set(cache_key, out, timeout=LOOKUP_TTL)
     return Response(out)
 
 
@@ -146,6 +161,10 @@ def lookup_bank_by_bik(request):
     bik = (request.query_params.get("bik") or "").strip()
     if not bik:
         return Response({"detail": "bik is required"}, status=400)
+    cache_key = f"commerce:lookup:bank:{bik}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return Response(cached)
     data = asyncio.run(_dadata_post(
         "https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/bank",
         {"query": bik}
@@ -160,6 +179,7 @@ def lookup_bank_by_bik(request):
         "correspondent_account": item.get("corr_account"),
         "address": (item.get("address") or {}).get("value"),
     }
+    cache.set(cache_key, out, timeout=LOOKUP_TTL)
     return Response(out)
 
 
@@ -221,7 +241,13 @@ def lookup_reverse_geocode(request):
         lon_f = float(lon)
     except Exception:
         return Response({"detail": "invalid coordinates"}, status=400)
+    lat_lon = f"{lat_f:.5f}:{lon_f:.5f}"
+    cache_key = f"commerce:lookup:revgeo:{lat_lon}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return Response(cached)
     data = reverse_geocode(lat_f, lon_f)
     if not data:
         return Response({}, status=404)
+    cache.set(cache_key, data, timeout=LOOKUP_TTL)
     return Response(data)

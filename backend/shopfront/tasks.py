@@ -18,7 +18,10 @@ def _admin_emails() -> list[str]:
 
 
 def _admin_telegram_ids() -> list[int]:
-    recipients: set[int] = set(getattr(settings, "ADMIN_NOTIFY_TELEGRAM_IDS", []) or [])
+    explicit = list(getattr(settings, "ADMIN_NOTIFY_TELEGRAM_IDS", []) or [])
+    if explicit:
+        return sorted({int(v) for v in explicit if str(v).strip().lstrip("-").isdigit()})
+    recipients: set[int] = set()
     qs = UserProfile.objects.filter(
         role=UserProfile.Role.ADMIN,
         telegram_id__isnull=False,
@@ -79,17 +82,20 @@ def notify_contact_feedback(self, *, name: str, phone: str, message: str, source
                         )
                 except Exception:
                     log.exception("contact_feedback_send_text_exception", extra={"telegram_id": tg})
-            group_resp = await client.post(
-                f"{settings.BOT_NOTIFY_URL}/notify/send_group",
-                json={"text": tg_text},
-                headers=_notify_headers(),
-            )
-            # Group delivery is a fallback channel. Keep task successful even if this path is not configured.
-            if group_resp.is_error:
-                log.warning(
-                    "contact_feedback_group_send_failed",
-                    extra={"status_code": group_resp.status_code, "body": group_resp.text[:500]},
+            try:
+                group_resp = await client.post(
+                    f"{settings.BOT_NOTIFY_URL}/notify/send_group",
+                    json={"text": tg_text},
+                    headers=_notify_headers(),
                 )
+                # Group delivery is a fallback channel. Keep task successful even if this path is not configured.
+                if group_resp.is_error:
+                    log.warning(
+                        "contact_feedback_group_send_failed",
+                        extra={"status_code": group_resp.status_code, "body": group_resp.text[:500]},
+                    )
+            except Exception:
+                log.warning("contact_feedback_group_send_exception")
 
     try:
         asyncio.run(_send())

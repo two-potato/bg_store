@@ -1,32 +1,43 @@
 {% extends "account/layout.html" %}
 {% load tz %}
 {% block account_main %}
-<section id="account-main-content" class="cabinet-dark-main">
-  <div class="cabinet-dark-hero compact">
-    <div class="cabinet-dark-hero-title">Мои комментарии</div>
-    <div class="cabinet-dark-hero-sub">Ваши комментарии к отзывам по товарам.</div>
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero compact">
+    <div class="account-2026__hero-title">Мои комментарии</div>
+    <div class="account-2026__hero-sub">Ваши комментарии к отзывам по товарам.</div>
   </div>
-  <section class="cabinet-dark-panel">
-    <h2 class="cabinet-dark-panel-title">Список комментариев</h2>
+  <section class="account-2026__panel">
+    <h2 class="account-2026__panel-title">История комментариев</h2>
     {% if comments %}
-      <div class="overflow-x-auto">
-        <table class="table table-zebra table-sm">
-          <thead>
-            <tr><th>Товар</th><th>Комментарий</th><th>Дата</th><th></th></tr>
-          </thead>
-          <tbody>
-            {% for c in comments %}
-              <tr>
-                <td class="font-medium">{{ c.review.product.name }}</td>
-                <td class="max-w-[520px] whitespace-pre-line">{{ c.text }}</td>
-                <td>{{ c.created_at|timezone:"Europe/Moscow"|date:"d.m.Y H:i" }}</td>
-                <td class="text-right">
-                  <a class="btn btn-ghost btn-xs" href="/product/{{ c.review.product_id }}/" hx-boost="false">Открыть товар</a>
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <div class="account-comments-2026">
+        {% for c in comments %}
+          <article class="account-comments-2026__item">
+            <a class="account-comments-2026__thumb"
+               href="/product/{{ c.review.product.slug }}/"
+               hx-boost="false"
+               aria-label="Открыть товар {{ c.review.product.name }}">
+              {% with img=c.review.product.images.first %}
+                {% if img %}
+                  <img src="{{ img.url }}" alt="{{ c.review.product.name }}" loading="lazy" onerror="this.onerror=null;this.src='/media/user_photos/image017.jpg';">
+                {% else %}
+                  <span class="account-comments-2026__thumb-fallback">🛍</span>
+                {% endif %}
+              {% endwith %}
+            </a>
+            <div class="account-comments-2026__body">
+              <div class="account-comments-2026__meta">
+                <a class="account-comments-2026__product"
+                   href="/product/{{ c.review.product.slug }}/"
+                   hx-boost="false">{{ c.review.product.name }}</a>
+                <span class="account-comments-2026__date">{{ c.created_at|timezone:"Europe/Moscow"|date:"d.m.Y H:i" }}</span>
+              </div>
+              <p class="account-comments-2026__text">{{ c.text }}</p>
+            </div>
+            <div class="account-comments-2026__actions">
+              <a class="btn btn-outline btn-sm" href="/product/{{ c.review.product.slug }}/" hx-boost="false">К товару</a>
+            </div>
+          </article>
+        {% endfor %}
       </div>
     {% else %}
       <div class="alert">У вас пока нет комментариев.</div>

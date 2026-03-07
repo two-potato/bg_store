@@ -4,6 +4,7 @@ from pathlib import Path
 
 import aiohttp
 from aiogram.filters import Command
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup
 from fastapi import Depends, FastAPI, HTTPException, status
 from pydantic import BaseModel, Field
@@ -29,6 +30,7 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8000")
 INTERNAL_TOKEN = os.getenv("INTERNAL_TOKEN", "change-me")
 ORDER_APPROVE_SECRET = os.getenv("ORDER_APPROVE_SECRET", "dev-secret")
 MANAGERS_GROUP_ID = env_int("MANAGERS_GROUP_ID", 0)
+NOTIFY_USE_UPDATES_FALLBACK = os.getenv("NOTIFY_USE_UPDATES_FALLBACK", "0") == "1"
 ALLOWED_DOC_ROOTS = [
     Path(p).resolve()
     for p in (os.getenv("ALLOWED_DOC_ROOTS", "/app/media,/tmp").split(","))
@@ -81,21 +83,23 @@ async def _send_to_managers_chat(text: str) -> int | None:
     if MANAGERS_GROUP_ID:
         candidates.append(MANAGERS_GROUP_ID)
 
-    # Fallback: last active chat from bot updates (private/group/channel).
-    try:
-        updates = await bot.get_updates(limit=30, timeout=0)
-    except Exception:
-        updates = []
-    for upd in updates:
-        chat_id = None
-        if upd.message and upd.message.chat:
-            chat_id = upd.message.chat.id
-        elif upd.channel_post and upd.channel_post.chat:
-            chat_id = upd.channel_post.chat.id
-        elif upd.callback_query and upd.callback_query.message and upd.callback_query.message.chat:
-            chat_id = upd.callback_query.message.chat.id
-        if chat_id and chat_id not in candidates:
-            candidates.append(chat_id)
+    # Optional fallback: last active chat from bot updates (private/group/channel).
+    # Disabled by default to avoid getUpdates conflicts in multi-instance setups.
+    if NOTIFY_USE_UPDATES_FALLBACK:
+        try:
+            updates = await bot.get_updates(limit=30, timeout=0)
+        except Exception:
+            updates = []
+        for upd in updates:
+            chat_id = None
+            if upd.message and upd.message.chat:
+                chat_id = upd.message.chat.id
+            elif upd.channel_post and upd.channel_post.chat:
+                chat_id = upd.channel_post.chat.id
+            elif upd.callback_query and upd.callback_query.message and upd.callback_query.message.chat:
+                chat_id = upd.callback_query.message.chat.id
+            if chat_id and chat_id not in candidates:
+                candidates.append(chat_id)
 
     for chat_id in candidates:
         try:
@@ -111,7 +115,10 @@ async def send_kb(payload: MsgKb, _auth: None = Depends(require_internal_token))
     kb = InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(**btn) for btn in row] for row in payload.keyboard]
     )
-    await bot.send_message(payload.telegram_id, payload.text, reply_markup=kb, parse_mode="HTML")
+    try:
+        await bot.send_message(payload.telegram_id, payload.text, reply_markup=kb, parse_mode="HTML")
+    except TelegramBadRequest as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     try:
         log.info(
             "notify_send_kb",
@@ -129,7 +136,10 @@ async def send_document(payload: DocMsg, _auth: None = Depends(require_internal_
     allowed = any(requested.is_relative_to(root) for root in ALLOWED_DOC_ROOTS)
     if not allowed or not requested.is_file():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid document path")
-    await bot.send_document(payload.telegram_id, FSInputFile(str(requested)), caption=payload.caption)
+    try:
+        await bot.send_document(payload.telegram_id, FSInputFile(str(requested)), caption=payload.caption)
+    except TelegramBadRequest as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     try:
         log.info("notify_send_document", extra={"telegram_id": payload.telegram_id, "path": payload.path})
     except Exception:
@@ -140,7 +150,10 @@ async def send_document(payload: DocMsg, _auth: None = Depends(require_internal_
 
 @app.post("/notify/send_text")
 async def send_text(payload: TextMsg, _auth: None = Depends(require_internal_token)):
-    await bot.send_message(payload.telegram_id, payload.text, parse_mode="HTML")
+    try:
+        await bot.send_message(payload.telegram_id, payload.text, parse_mode="HTML")
+    except TelegramBadRequest as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     try:
         log.info("notify_send_text", extra={"telegram_id": payload.telegram_id, "len": len(payload.text or "")})
     except Exception:
@@ -244,7 +257,7 @@ register_common_http(app)
 async def startup_event():
     import asyncio
 
-    if os.getenv("BOT_DISABLE_POLLING", "0") == "1":
+    if os.getenv("BOT_DISABLE_POLLING", "1") == "1":
         try:
             log.info("bot_polling_disabled")
         except Exception:

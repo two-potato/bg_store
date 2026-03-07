@@ -33,7 +33,7 @@ class ProductReviewInline(admin.TabularInline):
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = (
-        "id", "sku", "name", "brand", "series", "category",
+        "id", "sku", "name", "seller", "brand", "series", "category",
         "rating_avg_display", "rating_count_display",
         "price", "stock_qty", "flavor", "is_new", "is_promo",
     )

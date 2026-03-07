@@ -1,8 +1,8 @@
 {% load tz %}
 <div class="overflow-x-auto">
-  <table class="table table-zebra table-sm">
+  <table class="table table-sm account-2026__table">
     <thead>
-      <tr><th>ID</th><th>Статус</th><th>Сумма</th><th>Дата</th><th></th></tr>
+      <tr><th>ID</th><th>Товары</th><th>Статус</th><th>Сумма</th><th>Дата</th><th></th></tr>
     </thead>
     <tbody>
       {% for o in orders %}
@@ -15,6 +15,28 @@
                hx-select="#account-main-content"
                hx-swap="outerHTML"
                hx-push-url="true">#{{ o.id }}</a>
+          </td>
+          <td>
+            <div class="order-thumbs-2026">
+              {% with items=o.items.all %}
+                {% for it in items|slice:":4" %}
+                  {% with img=it.product.images.first %}
+                    {% if img %}
+                      <img class="order-thumbs-2026__img"
+                           src="{{ img.url }}"
+                           alt="{{ it.name }}"
+                           loading="lazy"
+                           onerror="this.onerror=null;this.src='/media/user_photos/image017.jpg';">
+                    {% else %}
+                      <span class="order-thumbs-2026__img order-thumbs-2026__fallback">•</span>
+                    {% endif %}
+                  {% endwith %}
+                {% endfor %}
+                {% if items|length > 4 %}
+                  <span class="order-thumbs-2026__more">+{{ items|length|add:"-4" }}</span>
+                {% endif %}
+              {% endwith %}
+            </div>
           </td>
           <td>{{ o.get_status_display }}</td>
           <td>{{ o.total }} ₽</td>

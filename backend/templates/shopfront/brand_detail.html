@@ -1,0 +1,34 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<section class="page-2026 brand-page-2026">
+  <header class="brand-page-2026__hero">
+    <div class="brand-page-2026__hero-bg"
+         {% if brand.photo %}style="background-image:url('{{ brand.photo.url }}')"{% endif %}
+         aria-hidden="true"></div>
+    <div class="brand-page-2026__hero-content">
+      <div class="brand-page-2026__logo-wrap">
+        {% if brand.photo %}
+          <img src="{{ brand.photo.url }}" alt="{{ brand.name }}" class="brand-page-2026__logo" loading="lazy">
+        {% else %}
+          <span class="brand-page-2026__logo-fallback">{{ brand.name|slice:":1"|upper }}</span>
+        {% endif %}
+      </div>
+      <div class="brand-page-2026__hero-copy">
+        <h1>{{ brand.name }}</h1>
+        <p>{{ brand.description|default:"Товары бренда в каталоге PotatoFarm." }}</p>
+      </div>
+      <div class="brand-page-2026__hero-actions">
+        <a class="btn btn-sm btn-primary" href="/catalog/?brand={{ brand.id }}" hx-boost="false">Открыть в каталоге</a>
+        <a class="btn btn-sm btn-outline" href="/brands/" hx-boost="false">Все бренды</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="page-2026__header">
+    <h2>Товары бренда</h2>
+    <p>Всего позиций: {{ products|length }}</p>
+  </div>
+
+  {% include "shopfront/components/product_grid.html" with products=products %}
+</section>
+{% endblock %}

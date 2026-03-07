@@ -1,18 +1,103 @@
-<div class="mb-3">
-  <form method="get" class="catalog-toolbar">
-    <label class="catalog-toolbar__label" for="catalog-sort">Сортировка</label>
-    <select id="catalog-sort" class="select select-bordered catalog-toolbar__select" name="sort" aria-label="Сортировка" onchange="this.form.submit()">
-      <option value="new" {% if sort|default:'new' == 'new' %}selected{% endif %}>Сначала новинки</option>
-      <option value="price_asc" {% if sort == 'price_asc' %}selected{% endif %}>По возрастанию цены</option>
-      <option value="price_desc" {% if sort == 'price_desc' %}selected{% endif %}>По убыванию цены</option>
-      <option value="rating_desc" {% if sort == 'rating_desc' %}selected{% endif %}>По рейтингу</option>
-      <option value="name" {% if sort == 'name' %}selected{% endif %}>По алфавиту</option>
-      <option value="promo" {% if sort == 'promo' %}selected{% endif %}>Сначала акции</option>
-    </select>
+<div class="mb-2">
+  <form method="get" class="catalog-toolbar catalog-toolbar--neo2026 catalog-toolbar--single-row">
+    <details class="catalog-filter-dropdown" data-filter-dropdown>
+      <summary class="catalog-filter-dropdown__summary">
+        {% include 'shopfront/icons/layout-grid.svg' %}
+        <span>Фильтры</span>
+      </summary>
+      <button type="button" class="catalog-filter-dropdown__backdrop" data-filter-close aria-label="Закрыть фильтры"></button>
+      <div class="catalog-filter-dropdown__panel" role="dialog" aria-modal="true" aria-label="Фильтры каталога">
+        <div class="catalog-filter-dropdown__head">
+          <h3>Фильтры</h3>
+          <button type="button" class="catalog-filter-dropdown__close" data-filter-close aria-label="Закрыть фильтры">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M6 6l12 12M18 6l-12 12"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="catalog-filter-dropdown__grid">
+          <label>
+            <span>Категория</span>
+            <select class="select select-bordered select-sm w-full catalog-select-2026" name="category">
+              <option value="">Любая</option>
+              {% for c in cats %}
+                <option value="{{ c.id }}" {% if request.GET.category|default:'' == c.id|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            <span>Бренд</span>
+            <select class="select select-bordered select-sm w-full catalog-select-2026" name="brand">
+              <option value="">Любой</option>
+              {% for b in brands %}
+                <option value="{{ b.id }}" {% if request.GET.brand|default:'' == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            <span>Тег</span>
+            <select class="select select-bordered select-sm w-full catalog-select-2026" name="tag">
+              <option value="">Любой</option>
+              {% for t in tags %}
+                <option value="{{ t.id }}" {% if request.GET.tag|default:'' == t.id|stringformat:"s" %}selected{% endif %}>{{ t.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            <span>Поиск</span>
+            <input class="input input-bordered input-sm w-full catalog-select-2026" name="q" value="{{ request.GET.q|default:'' }}" placeholder="например: сироп">
+          </label>
+        </div>
+        <div class="catalog-filter-dropdown__actions">
+          <a class="btn btn-sm btn-ghost" href="/catalog/">Сбросить</a>
+          <button class="btn btn-sm btn-primary" type="submit">Применить</button>
+        </div>
+      </div>
+    </details>
 
-    {# Preserve other filters #}
-    {% if request.GET.category %}<input type="hidden" name="category" value="{{ request.GET.category }}">{% endif %}
-    {% if request.GET.brand %}<input type="hidden" name="brand" value="{{ request.GET.brand }}">{% endif %}
-    {% if request.GET.tag %}<input type="hidden" name="tag" value="{{ request.GET.tag }}">{% endif %}
+    <div class="catalog-toolbar__pills" role="group" aria-label="Сортировка каталога">
+      <button type="submit" name="sort" value="new" class="catalog-sort-pill {% if sort|default:'new' == 'new' %}is-active{% endif %}" title="Сначала новинки" aria-label="Сначала новинки">
+        <span class="catalog-sort-pill__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2l1.9 5.1L19 9l-5.1 1.9L12 16l-1.9-5.1L5 9l5.1-1.9L12 2z"></path>
+          </svg>
+        </span><span class="catalog-sort-pill__text">Новинки</span>
+      </button>
+      <button type="submit" name="sort" value="price_asc" class="catalog-sort-pill {% if sort == 'price_asc' %}is-active{% endif %}" title="Цена по возрастанию" aria-label="Цена по возрастанию">
+        <span class="catalog-sort-pill__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M7 17L17 7"></path><path d="M9 7h8v8"></path>
+          </svg>
+        </span><span class="catalog-sort-pill__text">Цена ↑</span>
+      </button>
+      <button type="submit" name="sort" value="price_desc" class="catalog-sort-pill {% if sort == 'price_desc' %}is-active{% endif %}" title="Цена по убыванию" aria-label="Цена по убыванию">
+        <span class="catalog-sort-pill__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M7 7l10 10"></path><path d="M9 17h8V9"></path>
+          </svg>
+        </span><span class="catalog-sort-pill__text">Цена ↓</span>
+      </button>
+      <button type="submit" name="sort" value="rating_desc" class="catalog-sort-pill {% if sort == 'rating_desc' %}is-active{% endif %}" title="По рейтингу" aria-label="По рейтингу">
+        <span class="catalog-sort-pill__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 3l2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.8 1-6.1-4.4-4.3 6.1-.9L12 3z"></path>
+          </svg>
+        </span><span class="catalog-sort-pill__text">Рейтинг</span>
+      </button>
+      <button type="submit" name="sort" value="name" class="catalog-sort-pill {% if sort == 'name' %}is-active{% endif %}" title="По алфавиту" aria-label="По алфавиту">
+        <span class="catalog-sort-pill__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 18l4-12 4 12"></path><path d="M5.5 14h5"></path><path d="M15 7h5"></path><path d="M17.5 7v10"></path><path d="M15 17h5"></path>
+          </svg>
+        </span><span class="catalog-sort-pill__text">А-Я</span>
+      </button>
+      <button type="submit" name="sort" value="promo" class="catalog-sort-pill {% if sort == 'promo' %}is-active{% endif %}" title="Сначала акции" aria-label="Сначала акции">
+        <span class="catalog-sort-pill__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="7" cy="7" r="2.2"></circle><circle cx="17" cy="17" r="2.2"></circle><path d="M6 18L18 6"></path>
+          </svg>
+        </span><span class="catalog-sort-pill__text">Акции</span>
+      </button>
+    </div>
   </form>
 </div>

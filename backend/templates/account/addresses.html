@@ -1,22 +1,22 @@
 {% extends "account/layout.html" %}
 {% block account_main %}
-<section id="account-main-content" class="cabinet-dark-main">
-  <div class="cabinet-dark-hero compact">
-    <div class="cabinet-dark-hero-title">Мои адреса</div>
-    <div class="cabinet-dark-hero-sub">Управляйте адресами доставки и устанавливайте адрес по умолчанию.</div>
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero compact">
+    <div class="account-2026__hero-title">Мои адреса</div>
+    <div class="account-2026__hero-sub">Управляйте адресами доставки и устанавливайте адрес по умолчанию.</div>
   </div>
 
   <div class="grid grid-cols-1 xl:grid-cols-5 gap-3">
-    <section class="xl:col-span-3 cabinet-dark-panel">
-      <h2 class="cabinet-dark-panel-title">Адреса доставки</h2>
+    <section class="xl:col-span-3 account-2026__panel">
+      <h2 class="account-2026__panel-title">Адреса доставки</h2>
       <div id="addresses-list">
         {% include "account/partials/addresses_list.html" %}
       </div>
     </section>
 
-    <section class="xl:col-span-2 cabinet-dark-panel">
-      <h2 class="cabinet-dark-panel-title">Добавить адрес</h2>
-      <form method="post" novalidate hx-post="/account/addresses/" hx-target="#addresses-list" hx-select="*" hx-swap="innerHTML" class="cabinet-dark-form">
+    <section class="xl:col-span-2 account-2026__panel">
+      <h2 class="account-2026__panel-title">Добавить адрес</h2>
+      <form method="post" novalidate hx-post="/account/addresses/" hx-target="#addresses-list" hx-select="*" hx-swap="innerHTML" class="account-2026__form">
         {% csrf_token %}
         <div id="address-form-errors" aria-live="polite"></div>
         <div>
@@ -47,7 +47,7 @@
             <span class="label-text">Сделать по умолчанию</span>
           </label>
         </div>
-        <button class="btn btn-success w-full">Сохранить</button>
+        <button class="btn btn-primary w-full">Сохранить</button>
       </form>
     </section>
   </div>

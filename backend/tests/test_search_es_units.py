@@ -1,6 +1,5 @@
 import pytest
 
-from catalog.models import Brand, Category, Country, Product
 from catalog import es_index
 from shopfront import search as sf_search
 
@@ -22,7 +21,7 @@ class _Resp:
         return self._payload
 
 
-def test_es_search_ids_success(monkeypatch):
+def test_es_search_bundle_success(monkeypatch):
     def _post(url, json, timeout):
         assert url.endswith('/products/_search')
         assert json['size'] == 3
@@ -33,15 +32,24 @@ def test_es_search_ids_success(monkeypatch):
                     {'_id': '11'},
                     {'_source': {'id': 'bad'}},
                 ]
-            }
+            },
+            "aggregations": {
+                "country_suggestions_scope": {
+                    "country_suggestions": {
+                        "buckets": [{"key": "Италия"}, {"key": "Россия"}]
+                    }
+                }
+            },
         })
 
     monkeypatch.setattr(sf_search.requests, 'post', _post)
-    assert sf_search._es_search_ids('abc', 3) == [10, 11]
+    ids, countries = sf_search._es_search_bundle('abc', 3, 2)
+    assert ids == [10, 11]
+    assert countries == ["Италия", "Россия"]
 
 
 def test_search_product_ids_es_empty_returns_empty(monkeypatch):
-    monkeypatch.setattr(sf_search, '_es_search_ids', lambda query, limit: [])
+    monkeypatch.setattr(sf_search, 'live_search_bundle', lambda query, limit, country_limit: ([], []))
     ids = sf_search.search_product_ids('lavazza', 8)
     assert ids == []
 
@@ -50,9 +58,18 @@ def test_search_product_ids_es_exception_returns_empty(monkeypatch):
     def _boom(*args, **kwargs):
         raise sf_search.ESSearchUnavailable('down')
 
-    monkeypatch.setattr(sf_search, '_es_search_ids', _boom)
+    monkeypatch.setattr(sf_search, 'live_search_bundle', _boom)
     ids = sf_search.search_product_ids('brazil', 8)
     assert ids == []
+
+
+def test_popular_country_suggestions_from_bundle(monkeypatch):
+    monkeypatch.setattr(
+        sf_search,
+        'live_search_bundle',
+        lambda query, limit, country_limit: ([1], ["Италия", "Россия"]),
+    )
+    assert sf_search.popular_country_suggestions("it", 2) == ["Италия", "Россия"]
 
 
 def test_es_index_upsert_and_delete_success(monkeypatch):
@@ -73,6 +90,8 @@ def test_es_index_upsert_and_delete_success(monkeypatch):
         id = 77
         name = 'Prod'
         sku = '12345678'
+        seller = type('S', (), {'username': 'seller'})()
+        seller_store = None
         brand = type('B', (), {'name': 'Brand'})()
         category = type('C', (), {'name': 'Category'})()
         country_of_origin = type('Co', (), {'name': 'Italy'})()
@@ -105,6 +124,7 @@ def test_es_index_upsert_exception_handled(monkeypatch):
         id = 1
         name = 'Prod'
         sku = '12345678'
+        seller = None
         brand = None
         category = None
         country_of_origin = None

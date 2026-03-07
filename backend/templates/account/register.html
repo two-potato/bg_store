@@ -1,36 +1,67 @@
 {% extends "shopfront/base.html" %}
+{% load socialaccount %}
 {% block content %}
 <div class="max-w-md mx-auto">
-  <div class="card bg-base-100">
+  <div id="auth-card" class="card bg-base-100">
     <div class="card-body p-4">
       <h1 class="text-lg font-semibold mb-3">Регистрация</h1>
       <form method="post" class="grid gap-3">
         {% csrf_token %}
         <div>
           <label class="text-xs mb-1 block">Имя пользователя</label>
-          <input type="text" name="username" class="input input-bordered w-full" required>
+          <input type="text" name="username" class="input input-bordered w-full" required
+                 hx-post="{% url 'register_validate' %}" hx-trigger="input changed delay:350ms, blur"
+                 hx-target="#auth-form-errors" hx-swap="innerHTML" hx-include="closest form">
         </div>
         <div>
           <label class="text-xs mb-1 block">Email</label>
-          <input type="email" name="email" class="input input-bordered w-full">
+          <input type="email" name="email" class="input input-bordered w-full" required
+                 hx-post="{% url 'register_validate' %}" hx-trigger="input changed delay:350ms, blur"
+                 hx-target="#auth-form-errors" hx-swap="innerHTML" hx-include="closest form">
         </div>
         <div>
           <label class="text-xs mb-1 block">Телефон</label>
-          <input type="text" name="phone" class="input input-bordered w-full">
+          <input type="text" name="phone" class="input input-bordered w-full"
+                 hx-post="{% url 'register_validate' %}" hx-trigger="input changed delay:350ms, blur"
+                 hx-target="#auth-form-errors" hx-swap="innerHTML" hx-include="closest form">
         </div>
         <div>
           <label class="text-xs mb-1 block">Пароль</label>
-          <input type="password" name="password1" class="input input-bordered w-full" required>
+          <div class="relative">
+            <input type="password" name="password1" class="input input-bordered w-full pr-20" required
+                   data-password-input
+                   hx-post="{% url 'register_validate' %}" hx-trigger="input changed delay:350ms, blur"
+                   hx-target="#auth-form-errors" hx-swap="innerHTML" hx-include="closest form">
+            <button type="button" class="btn btn-ghost btn-xs absolute right-2 top-1/2 -translate-y-1/2"
+                    data-password-toggle>Показать</button>
+          </div>
         </div>
         <div>
           <label class="text-xs mb-1 block">Повторите пароль</label>
-          <input type="password" name="password2" class="input input-bordered w-full" required>
+          <div class="relative">
+            <input type="password" name="password2" class="input input-bordered w-full pr-20" required
+                   data-password-input
+                   hx-post="{% url 'register_validate' %}" hx-trigger="input changed delay:350ms, blur"
+                   hx-target="#auth-form-errors" hx-swap="innerHTML" hx-include="closest form">
+            <button type="button" class="btn btn-ghost btn-xs absolute right-2 top-1/2 -translate-y-1/2"
+                    data-password-toggle>Показать</button>
+          </div>
         </div>
-        {% if form.non_field_errors %}
-          <div class="alert alert-error text-sm">{{ form.non_field_errors }}</div>
-        {% endif %}
+        <div id="auth-form-errors">
+          {% include "account/partials/form_errors.html" with form=form %}
+        </div>
         <button class="btn btn-primary w-full">Зарегистрироваться</button>
       </form>
+      <div class="divider my-3"></div>
+      {% if google_oauth_enabled %}
+      <a class="btn btn-primary w-full"
+         href="{% provider_login_url 'google' process='login' %}"
+         hx-boost="false">Зарегистрироваться через Google</a>
+      {% else %}
+      <button class="btn btn-outline w-full" type="button" disabled title="Нужны GOOGLE_CLIENT_ID и GOOGLE_CLIENT_SECRET в backend/.env">
+        Зарегистрироваться через Google (не настроено)
+      </button>
+      {% endif %}
       <div class="text-center mt-3 text-xs">
         Уже есть аккаунт? <a href="/account/login/" class="link">Войти</a>
       </div>

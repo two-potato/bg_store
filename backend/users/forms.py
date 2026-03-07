@@ -1,10 +1,13 @@
 from django import forms
 from django.contrib.auth import get_user_model
+import logging
 from .models import UserProfile
 from commerce.validators import validate_inn
-from commerce.models import DeliveryAddress, LegalEntityMembership
+from commerce.models import DeliveryAddress, LegalEntityMembership, SellerStore
+from catalog.models import Product
 
 User = get_user_model()
+log = logging.getLogger("users")
 
 
 class LoginForm(forms.Form):
@@ -29,6 +32,21 @@ class RegisterForm(forms.ModelForm):
         fields = ["username", "email"]
         labels = {"username": "Имя пользователя", "email": "Email"}
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["email"].required = True
+
+    def clean_email(self):
+        email = (self.cleaned_data.get("email") or "").strip().lower()
+        if not email:
+            raise forms.ValidationError("Email обязателен")
+        qs = User.objects.filter(email__iexact=email)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError("Пользователь с таким email уже существует")
+        return email
+
     def clean(self):
         cleaned = super().clean()
         if cleaned.get("password1") != cleaned.get("password2"):
@@ -37,6 +55,7 @@ class RegisterForm(forms.ModelForm):
 
     def save(self, commit=True):
         user = super().save(commit=False)
+        user.is_active = False
         user.set_password(self.cleaned_data["password1"])
         if commit:
             user.save()
@@ -47,6 +66,7 @@ class RegisterForm(forms.ModelForm):
             if phone:
                 setattr(prof, "phone", phone)
             prof.save()
+            log.info("user_registered", extra={"user_id": user.id})
         return user
 
 
@@ -176,3 +196,62 @@ class AddressForm(forms.ModelForm):
         if commit:
             obj.save()
         return obj
+
+
+class SellerStoreForm(forms.ModelForm):
+    class Meta:
+        model = SellerStore
+        fields = ["name", "description", "legal_entity", "photo"]
+        labels = {
+            "name": "Название магазина",
+            "description": "Описание магазина",
+            "legal_entity": "Юрлицо",
+            "photo": "Аватар магазина",
+        }
+
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop("user", None)
+        super().__init__(*args, **kwargs)
+        if user is not None:
+            entity_ids = LegalEntityMembership.objects.filter(user=user).values_list("legal_entity_id", flat=True)
+            self.fields["legal_entity"].queryset = self.fields["legal_entity"].queryset.filter(id__in=entity_ids)
+
+
+class SellerProductCreateForm(forms.ModelForm):
+    class Meta:
+        model = Product
+        fields = [
+            "sku",
+            "name",
+            "brand",
+            "category",
+            "price",
+            "stock_qty",
+            "is_new",
+            "is_promo",
+            "description",
+        ]
+        labels = {
+            "sku": "SKU (8 цифр)",
+            "name": "Название товара",
+            "brand": "Бренд",
+            "category": "Категория",
+            "price": "Цена",
+            "stock_qty": "Остаток",
+            "is_new": "Новинка",
+            "is_promo": "Акция",
+            "description": "Описание",
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop("user", None)
+        super().__init__(*args, **kwargs)
+
+    def save(self, commit=True):
+        product: Product = super().save(commit=False)
+        if self.user is not None:
+            product.seller = self.user
+        if commit:
+            product.save()
+            self.save_m2m()
+        return product

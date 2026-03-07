@@ -72,8 +72,12 @@ echo "[deploy] Running migrations"
 $COMPOSE exec -T backend /app/.venv/bin/python manage.py migrate --noinput
 
 echo "[deploy] Restoring sellers/stores links when missing"
-if ! $COMPOSE exec -T backend /app/.venv/bin/python manage.py seed_sellers; then
-  echo "[deploy] WARNING: seed_sellers failed, continuing deploy"
+if $COMPOSE exec -T backend /app/.venv/bin/python manage.py help seed_sellers >/dev/null 2>&1; then
+  if ! $COMPOSE exec -T backend /app/.venv/bin/python manage.py seed_sellers; then
+    echo "[deploy] WARNING: seed_sellers failed, continuing deploy"
+  fi
+else
+  echo "[deploy] seed_sellers command not available, skipping"
 fi
 
 echo "[deploy] Clearing application cache"
@@ -83,7 +87,7 @@ echo "[deploy] Fixing staticfiles volume permissions"
 $COMPOSE exec -T --user root backend sh -lc "mkdir -p /app/staticfiles && chown -R app:app /app/staticfiles"
 
 echo "[deploy] Collecting static files"
-$COMPOSE exec -T backend /app/.venv/bin/python manage.py collectstatic --noinput
+$COMPOSE exec -T backend /app/.venv/bin/python manage.py collectstatic --noinput --verbosity 0
 
 echo "[deploy] Service status"
 $COMPOSE ps

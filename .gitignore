@@ -15,6 +15,7 @@ backend/staticfiles/
 deploy/letsencrypt/
 deploy/letsencrypt-lib/
 deploy/certbot-www/
+deploy/nginx/certs/
 uv.lock
 .idea/
 .vscode/

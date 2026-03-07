@@ -1,11 +1,22 @@
 {% if tags %}
 <div class="chips-scroll -mx-3 px-3 md:mx-0 md:px-0 mb-3">
-  <div class="flex gap-2 overflow-x-auto no-scrollbar py-1">
-    {% for t in tags %}
-      <a class="badge whitespace-nowrap {% if request.GET.tag|default:'' == t.id|stringformat:'s' or request.GET.tag_slug == t.slug %}badge-neutral{% else %}badge-ghost{% endif %}"
-         href="/catalog/?tag={{ t.id }}{% if querystring_base %}&{{ querystring_base|safe }}{% endif %}">{{ t.name }}</a>
-    {% endfor %}
+  <div class="carousel-neo carousel-neo--tags">
+    <button type="button" class="carousel-neo__nav is-prev" data-carousel-prev="catalog-tags" aria-label="Прокрутить теги влево">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M15 6l-6 6 6 6"></path>
+      </svg>
+    </button>
+    <div class="tag-cloud-2026 carousel-neo__track" id="catalog-tags" data-carousel-track>
+      {% for t in tags %}
+        <a class="tag-chip-2026 whitespace-nowrap {% if request.GET.tag|default:'' == t.slug or request.GET.tag_slug == t.slug %}is-active{% endif %}"
+           href="/catalog/?tag={{ t.slug }}{% if querystring_base %}&{{ querystring_base|safe }}{% endif %}">{{ t.name }}</a>
+      {% endfor %}
+    </div>
+    <button type="button" class="carousel-neo__nav is-next" data-carousel-next="catalog-tags" aria-label="Прокрутить теги вправо">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M9 6l6 6-6 6"></path>
+      </svg>
+    </button>
   </div>
 </div>
 {% endif %}
-

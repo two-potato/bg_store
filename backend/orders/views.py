@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.conf import settings
 from django.shortcuts import get_object_or_404
+import hmac
 from .models import Order
 from .serializers import OrderSerializer, OrderCreateSerializer
 from commerce.models import LegalEntityMembership
@@ -13,10 +14,14 @@ log = logging.getLogger("orders")
 
 class OrderViewSet(LoggedViewSetMixin, mixins.CreateModelMixin, mixins.RetrieveModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated]
-    queryset = Order.objects.all().select_related("legal_entity","delivery_address","placed_by").prefetch_related("items")
+    queryset = (
+        Order.objects.all()
+        .select_related("legal_entity", "delivery_address", "placed_by")
+        .prefetch_related("items", "items__product")
+    )
 
     def get_queryset(self):
-        return Order.objects.filter(legal_entity__members=self.request.user)
+        return self.queryset.filter(legal_entity__members=self.request.user)
 
     def get_serializer_class(self):
         return OrderCreateSerializer if self.action == "create" else OrderSerializer
@@ -30,7 +35,11 @@ class OrderViewSet(LoggedViewSetMixin, mixins.CreateModelMixin, mixins.RetrieveM
 
 class IsInternalService(permissions.BasePermission):
     def has_permission(self, request, view):
-        return request.headers.get("X-Internal-Token") == settings.INTERNAL_TOKEN
+        expected = (getattr(settings, "INTERNAL_TOKEN", "") or "").strip()
+        provided = (request.headers.get("X-Internal-Token") or "").strip()
+        if not expected or expected in {"change-me", "dev", "dev-secret"}:
+            return False
+        return hmac.compare_digest(provided, expected)
 
 class OrderApproveView(LoggedAPIViewMixin, APIView):
     permission_classes = [IsInternalService]

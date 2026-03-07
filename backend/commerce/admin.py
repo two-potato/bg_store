@@ -8,6 +8,7 @@ from .models import (
     DeliveryAddress,
     MembershipRequest,
     LegalEntityCreationRequest,
+    SellerStore,
 )
 
 log = logging.getLogger("commerce")
@@ -140,3 +141,9 @@ class LegalEntityCreationRequestAdmin(admin.ModelAdmin):
         updated = queryset.filter(status__code='pending').update(status=RequestStatus.objects.get(code='rejected'))
         messages.success(request, f"Отклонено заявок: {updated}")
         log.info("entity_creations_rejected_admin_action", extra={"updated": updated, "admin_user_id": request.user.id})
+
+
+@admin.register(SellerStore)
+class SellerStoreAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "owner", "legal_entity", "created_at")
+    search_fields = ("name", "owner__username", "legal_entity__name", "legal_entity__inn")

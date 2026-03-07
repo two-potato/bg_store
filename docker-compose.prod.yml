@@ -9,7 +9,7 @@ services:
       LOG_CALLS_ENABLED: "0"
       REQUEST_LOG_LEVEL: WARNING
       ENABLE_CATALOG_RATING: "0"
-      GUNICORN_WORKERS: "4"
+      GUNICORN_WORKERS: "8"
       GUNICORN_TIMEOUT: "180"
     depends_on:
       - db
@@ -34,7 +34,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./deploy/letsencrypt:/etc/letsencrypt:ro
+      - ./deploy/nginx/certs:/etc/letsencrypt:ro
       - ./deploy/certbot-www:/var/www/certbot:ro
     depends_on:
       backend:

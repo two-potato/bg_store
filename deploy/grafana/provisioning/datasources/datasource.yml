@@ -14,4 +14,14 @@ datasources:
     type: loki
     access: proxy
     url: http://loki:3100
+    jsonData:
+      derivedFields:
+        - name: request_id
+          matcherRegex: '"request_id": "([a-zA-Z0-9_-]+)"'
+          url: '/explore?orgId=1&left={"datasource":"loki","queries":[{"expr":"{service=~\\\".+\\\"} |= \\\"$${__value.raw}\\\"","refId":"A"}],"range":{"from":"now-1h","to":"now"}}'
+          urlDisplayLabel: "Drilldown by request_id"
+        - name: traceback
+          matcherRegex: '(Traceback|panic|fatal)'
+          url: '/explore?orgId=1&left={"datasource":"loki","queries":[{"expr":"{service=~\\\".+\\\"} |~ \\\"(?i)(error|exception|traceback|panic|fatal)\\\"","refId":"A"}],"range":{"from":"now-1h","to":"now"}}'
+          urlDisplayLabel: "Open error stream"
     editable: true

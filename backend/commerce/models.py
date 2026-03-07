@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.utils.text import slugify
 from core.models import TimeStampedModel
 from .validators import validate_inn, validate_bik, validate_rs_with_bik
 
@@ -95,6 +96,7 @@ class SellerStore(TimeStampedModel):
     owner = models.OneToOneField(User, on_delete=models.CASCADE, related_name="seller_store")
     legal_entity = models.ForeignKey(LegalEntity, on_delete=models.PROTECT, related_name="seller_stores")
     name = models.CharField(max_length=255)
+    slug = models.SlugField(max_length=255, unique=True, blank=True, db_index=False)
     description = models.TextField(blank=True, default="")
     photo = models.ImageField(upload_to="seller_store_photos/", null=True, blank=True)
 
@@ -104,3 +106,14 @@ class SellerStore(TimeStampedModel):
 
     def __str__(self):
         return f"{self.name} — {self.owner}"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(self.name) or f"store-{self.owner_id or 'x'}"
+            candidate = base
+            suffix = 2
+            while SellerStore.objects.filter(slug=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base}-{suffix}"
+                suffix += 1
+            self.slug = candidate
+        super().save(*args, **kwargs)

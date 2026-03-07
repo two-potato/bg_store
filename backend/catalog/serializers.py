@@ -16,7 +16,7 @@ class SeriesSerializer(serializers.ModelSerializer):
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
-        fields = ["id", "name", "parent"]
+        fields = ["id", "name", "slug", "parent"]
 
 class ColorSerializer(serializers.ModelSerializer):
     class Meta:
@@ -46,10 +46,11 @@ class ProductSerializer(serializers.ModelSerializer):
     # Keep backward-compatible representation: expose names for FKs
     color = serializers.SlugRelatedField(read_only=True, slug_field="name")
     country_of_origin = serializers.SlugRelatedField(read_only=True, slug_field="name")
+    seller = serializers.SlugRelatedField(read_only=True, slug_field="username")
     class Meta:
         model = Product
-        fields = ["id","sku","manufacturer_sku","name","brand","series","category",
+        fields = ["id","sku","slug","manufacturer_sku","name","brand","series","category",
                   "country_of_origin","material","purpose","color",
                   "diameter_mm","height_mm","length_mm","width_mm","volume_ml","weight_g",
                   "pack_qty","unit","barcode","price","stock_qty","is_new","is_promo",
-                  "flavor","composition","shelf_life","attributes","images","tags"]
+                  "flavor","composition","shelf_life","attributes","images","tags","seller"]

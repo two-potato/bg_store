@@ -1,8 +1,17 @@
-from django.db.models.signals import post_save
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 import logging
 
-from .models import LegalEntityCreationRequest, LegalEntity, LegalEntityMembership, MembershipRole
+from catalog.es_index import upsert_product
+from catalog.models import Product
+
+from .models import (
+    LegalEntityCreationRequest,
+    LegalEntity,
+    LegalEntityMembership,
+    MembershipRole,
+    SellerStore,
+)
 
 log = logging.getLogger("commerce")
 
@@ -48,3 +57,12 @@ def ensure_entity_and_membership_on_approval(sender, instance: LegalEntityCreati
             "legal_entity_id": le.id,
         },
     )
+
+
+@receiver([post_save, post_delete], sender=SellerStore)
+def reindex_products_on_seller_store_change(sender, instance: SellerStore, **kwargs):
+    products = Product.objects.select_related("brand", "category", "country_of_origin", "seller", "seller__seller_store").filter(
+        seller=instance.owner
+    )
+    for product in products.iterator(chunk_size=200):
+        upsert_product(product)

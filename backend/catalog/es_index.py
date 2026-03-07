@@ -1,4 +1,5 @@
 import logging
+from typing import List
 
 import requests
 from django.conf import settings
@@ -18,17 +19,82 @@ def _timeout() -> float:
     return float(getattr(settings, "ES_TIMEOUT_SECONDS", 0.8))
 
 
+def _compact_terms(values: List[str]) -> List[str]:
+    out: List[str] = []
+    seen = set()
+    for raw in values:
+        v = " ".join(str(raw or "").strip().split())
+        if not v:
+            continue
+        key = v.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(v)
+    return out
+
+
 def product_doc(product):
+    store = getattr(getattr(product, "seller", None), "seller_store", None)
+    country_name = product.country_of_origin.name if product.country_of_origin else ""
+    tags = list(product.tags.values_list("name", flat=True)[:20]) if getattr(product, "pk", None) else []
+    series_name = product.series.name if product.series else ""
+    search_terms = _compact_terms(
+        [
+            product.name,
+            product.sku,
+            product.manufacturer_sku,
+            product.barcode,
+            product.brand.name if product.brand else "",
+            series_name,
+            product.category.name if product.category else "",
+            country_name,
+            product.material,
+            product.purpose,
+            product.flavor,
+            store.name if store else "",
+            product.seller.username if product.seller else "",
+            *tags,
+        ]
+    )
+    suggest_inputs = _compact_terms(
+        [
+            product.name,
+            f"{product.brand.name} {product.name}" if product.brand else product.name,
+            f"{product.category.name} {product.name}" if product.category else product.name,
+            f"{store.name} {product.name}" if store else product.name,
+            product.sku,
+            *tags,
+        ]
+    )
     return {
         "id": product.id,
         "name": product.name,
         "sku": product.sku,
+        "manufacturer_sku": product.manufacturer_sku or "",
+        "barcode": product.barcode or "",
         "brand": product.brand.name if product.brand else "",
+        "series": series_name,
         "category": product.category.name if product.category else "",
-        "country_of_origin": product.country_of_origin.name if product.country_of_origin else "",
+        "country_of_origin": country_name,
+        "country_of_origin_keyword": (country_name or "").lower(),
+        "store_name": store.name if store else "",
+        "store_description": store.description if store else "",
+        "seller_username": product.seller.username if product.seller else "",
+        "material": product.material or "",
+        "purpose": product.purpose or "",
+        "flavor": product.flavor or "",
+        "tags": tags,
         "description": product.description or "",
         "price": float(product.price or 0),
         "is_new": bool(product.is_new),
+        "is_promo": bool(product.is_promo),
+        "in_stock": int(product.stock_qty or 0) > 0,
+        "search_terms": search_terms,
+        "suggest": {
+            "input": suggest_inputs,
+            "weight": 10 + (2 if bool(product.is_new) else 0) + (1 if bool(product.is_promo) else 0),
+        },
     }
 
 

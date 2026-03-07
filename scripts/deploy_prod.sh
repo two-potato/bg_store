@@ -11,8 +11,9 @@ LETSENCRYPT_DOMAIN_WWW="${LETSENCRYPT_DOMAIN_WWW:-www.potatofarm.ru}"
 LETSENCRYPT_EXTRA_DOMAINS="${LETSENCRYPT_EXTRA_DOMAINS:-grafana.potatofarm.ru}"
 LETSENCRYPT_CERT_PATH="$ROOT_DIR/deploy/letsencrypt/live/$LETSENCRYPT_DOMAIN/fullchain.pem"
 ALLOWED_SSH_PORT_RAW="${ALLOWED_SSH_PORT:-22}"
-if [[ "$ALLOWED_SSH_PORT_RAW" =~ ^[0-9]{1,5}$ ]] && [ "$ALLOWED_SSH_PORT_RAW" -ge 1 ] && [ "$ALLOWED_SSH_PORT_RAW" -le 65535 ]; then
-  ALLOWED_SSH_PORT="$ALLOWED_SSH_PORT_RAW"
+ALLOWED_SSH_PORT="$(printf '%s' "$ALLOWED_SSH_PORT_RAW" | grep -Eo '[0-9]{1,5}' | head -n1 || true)"
+if [[ -n "$ALLOWED_SSH_PORT" ]] && [ "$ALLOWED_SSH_PORT" -ge 1 ] && [ "$ALLOWED_SSH_PORT" -le 65535 ]; then
+  :
 else
   echo "[deploy] Invalid ALLOWED_SSH_PORT='$ALLOWED_SSH_PORT_RAW', fallback to 22"
   ALLOWED_SSH_PORT="22"

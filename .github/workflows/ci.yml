@@ -75,7 +75,7 @@ jobs:
         env:
           DEBUG: 0
           DJANGO_SETTINGS_MODULE: config.settings.prod
-          DJANGO_SECRET_KEY: ci-strong-secret-key
+          DJANGO_SECRET_KEY: ci_prod_secret_key_2026_x7V4mK9pQ2nR8sT5uW1yZ6AaBbCcDdEe
           INTERNAL_TOKEN: ci-internal-token
           ORDER_APPROVE_SECRET: ci-order-approve-secret
           METRICS_TOKEN: ci-metrics-token

@@ -22,6 +22,22 @@ export NGINX_HTTP_PORT="${NGINX_HTTP_PORT:-80}"
 
 mkdir -p "$ROOT_DIR/deploy/letsencrypt" "$ROOT_DIR/deploy/letsencrypt-lib" "$ROOT_DIR/deploy/certbot-www"
 
+ensure_named_volumes() {
+  local volumes=(
+    "servio_pgdata"
+    "servio_esdata"
+    "servio_redisdata"
+    "servio_staticfiles"
+  )
+  local volume
+  for volume in "${volumes[@]}"; do
+    if ! docker volume inspect "$volume" >/dev/null 2>&1; then
+      echo "[deploy] Creating missing Docker volume: $volume"
+      docker volume create "$volume" >/dev/null
+    fi
+  done
+}
+
 configure_firewall() {
   if ! command -v ufw >/dev/null 2>&1; then
     echo "[deploy] ufw not found, skipping firewall hardening"
@@ -91,6 +107,7 @@ if [ -f "$LETSENCRYPT_CERT_PATH" ]; then
 fi
 
 echo "[deploy] Pulling/building and starting services"
+ensure_named_volumes
 $COMPOSE up -d --build --remove-orphans
 
 echo "[deploy] Running migrations"

@@ -12,8 +12,7 @@ from django.utils.text import slugify
 from PIL import Image, ImageDraw, ImageFilter
 
 from catalog.models import Brand, Category, Product, ProductImage, Series, Tag
-from commerce.models import LegalEntity, SellerStore
-from users.models import UserProfile
+from commerce.models import SellerStore
 
 
 ROOT_CATEGORIES = [
@@ -351,7 +350,6 @@ class Command(BaseCommand):
         for idx, product in enumerate(products):
             root_name = product.category.parent.name if product.category and product.category.parent else (product.category.name if product.category else ROOT_CATEGORIES[idx % len(ROOT_CATEGORIES)])
             profile = self._profile_for(root_name, idx)
-            brand_name = product.brand.name if product.brand else "Servio Collection"
             base_name = f"{profile.type_name} {profile.series_name} {profile.size_label}".strip()
             if base_name in used_names:
                 base_name = f"{profile.type_name} {profile.series_name} {profile.material.title()}"

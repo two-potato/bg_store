@@ -1,4 +1,3 @@
-import pytest
 from django.test.utils import override_settings
 
 from core import notifications

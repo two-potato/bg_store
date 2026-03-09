@@ -7,8 +7,6 @@ from catalog.models import Product
 
 from .models import (
     ApprovalPolicy,
-    Company,
-    CompanyMembership,
     LegalEntityCreationRequest,
     LegalEntity,
     LegalEntityMembership,

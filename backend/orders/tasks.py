@@ -334,7 +334,10 @@ def notify_low_stock_products(self):
     text = "📉 Низкие остатки товаров:\n" + "\n".join(lines)
     send_telegram_bulk(text)
     send_telegram_group(text)
-    send_email_notification("[Servio] Низкие остатки товаров", "\n".join(l.replace("<b>", "").replace("</b>", "") for l in lines))
+    send_email_notification(
+        "[Servio] Низкие остатки товаров",
+        "\n".join(line.replace("<b>", "").replace("</b>", "") for line in lines),
+    )
     log.info("service_alert_low_stock_sent", extra={"items": len(lines)})
 
 

@@ -5,7 +5,7 @@ from django.core.cache import cache
 from django.db.models import Avg, Case, Count, FloatField, IntegerField, Min, Max, Prefetch, Value, When
 from django.db.models.functions import Coalesce
 
-from catalog.models import Brand, Category, Collection, Product, ProductImage
+from catalog.models import Category, Collection, Product, ProductImage
 from catalog.offer_service import active_offer_queryset, apply_offer_snapshot
 
 log = logging.getLogger("shopfront")

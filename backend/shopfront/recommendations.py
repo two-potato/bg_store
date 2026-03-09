@@ -5,7 +5,7 @@ from collections import Counter
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
 
-from catalog.models import Brand, Category, Collection, Product
+from catalog.models import Brand, Collection, Product
 from orders.models import OrderItem
 from shopfront.models import BrandSubscription, CategorySubscription, FavoriteProduct, RecentlyViewedProduct
 

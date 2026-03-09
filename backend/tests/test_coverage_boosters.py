@@ -667,8 +667,6 @@ def test_shopfront_tasks_and_live_search(monkeypatch):
 
 
 def test_order_signal_helpers(monkeypatch):
-    order = Order(id=123, status=Order.Status.NEW)
-
     class _Delay:
         def __init__(self, fail=False):
             self.fail = fail

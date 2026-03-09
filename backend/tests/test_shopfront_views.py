@@ -1293,7 +1293,7 @@ def test_creator_can_edit_product_and_add_image_url(client, db):
 
 def test_admin_can_open_product_edit_page(client, db):
     product, *_ = _prod()
-    admin = get_user_model().objects.create_superuser(username="product_admin", email="admin@example.com", password="pass")
+    get_user_model().objects.create_superuser(username="product_admin", email="admin@example.com", password="pass")
     assert client.login(username="product_admin", password="pass")
 
     response = client.get(f"/account/seller/products/{product.id}/edit/")

@@ -10,9 +10,7 @@ from catalog.models import (
     ProductImage,
     ProductReview,
     ProductReviewComment,
-    ProductReviewPhoto,
     ProductReviewVote,
-    ProductQuestion,
     Collection,
     SellerOffer,
 )
@@ -43,7 +41,6 @@ from .models import (
     PersistentCart,
     CategorySubscription,
     BrandSubscription,
-    RecentlyViewedProduct,
     SavedList,
     SavedListItem,
 )
@@ -56,7 +53,6 @@ from .cart_checkout_service import (
     checkout_cart_tracking_payload,
     checkout_company_snapshots,
     checkout_identity_defaults,
-    profile_discount_percent as _profile_discount_percent,
     session_cart as _cart,
 )
 from .checkout_flow_service import (

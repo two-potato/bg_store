@@ -1,0 +1,89 @@
+{% extends "shopfront/base.html" %}
+{% load tz %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3 text-sm text-base-content/60">
+  <a class="link" href="/">Главная</a> /
+  <span>Заказ #{{ order.id }}</span>
+</nav>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+  <section class="card bg-base-100 lg:col-span-2">
+    <div class="card-body">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h1 class="text-lg font-semibold">Заказ #{{ order.id }}</h1>
+          <p class="text-sm text-base-content/70">Гостевой заказ сохранён. По этой странице можно вернуться к его деталям и оплате.</p>
+        </div>
+        <div class="badge badge-outline">{{ order.get_status_display }}</div>
+      </div>
+      <div class="alert alert-info text-sm mt-2">
+        Сохраните эту ссылку в браузере или заметках. Она даёт доступ к подтверждению заказа без входа в аккаунт.
+      </div>
+      <div class="overflow-x-auto mt-3">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Товар</th>
+              <th class="text-right">Цена</th>
+              <th class="text-right">Кол-во</th>
+              <th class="text-right">Сумма</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in order.items.all %}
+              <tr>
+                <td>{{ item.name }}</td>
+                <td class="text-right">{{ item.price }} ₽</td>
+                <td class="text-right">{{ item.qty }}</td>
+                <td class="text-right">{{ item.qty }} × {{ item.price }} ₽</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <aside class="card bg-base-100 text-sm">
+    <div class="card-body">
+      <div><span class="text-base-content/60">Дата:</span> {{ order.created_at|timezone:"Europe/Moscow"|date:"d.m.Y H:i" }} (МСК)</div>
+      <div><span class="text-base-content/60">Тип клиента:</span> {{ order.get_customer_type_display }}</div>
+      <div><span class="text-base-content/60">Оплата:</span> {{ order.get_payment_method_display }}</div>
+      {% if order.customer_name %}<div><span class="text-base-content/60">Контакт:</span> {{ order.customer_name }}</div>{% endif %}
+      {% if order.customer_email %}<div><span class="text-base-content/60">Email:</span> {{ order.customer_email }}</div>{% endif %}
+      {% if order.customer_phone %}<div><span class="text-base-content/60">Телефон:</span> {{ order.customer_phone }}</div>{% endif %}
+      <div><span class="text-base-content/60">Адрес:</span> {{ order.address_text|default:order.delivery_address|default:"-" }}</div>
+      {% if order.customer_comment %}
+        <div><span class="text-base-content/60">Комментарий:</span> {{ order.customer_comment }}</div>
+      {% endif %}
+      {% if order.seller_orders.all %}
+        <div class="divider my-1"></div>
+        <div class="font-semibold">Отгрузки по продавцам</div>
+        {% for seller_order in order.seller_orders.all %}
+          <div class="rounded-2xl border border-base-200/80 p-3 mb-2">
+            <div class="font-medium">{{ seller_order.seller_store_name|default:seller_order.seller.username }}</div>
+            <div class="text-xs text-base-content/70">{{ seller_order.get_status_display }} · {{ seller_order.total }} ₽</div>
+            {% for shipment in seller_order.shipments.all %}
+              <div class="mt-2 text-xs text-base-content/70">
+                {{ shipment.get_status_display }}{% if shipment.tracking_number %} · трек {{ shipment.tracking_number }}{% endif %}{% if shipment.delivery_method %} · {{ shipment.delivery_method }}{% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      {% endif %}
+      <div class="divider my-1"></div>
+      <div><span class="text-base-content/60">Подытог:</span> {{ order.subtotal }} ₽</div>
+      {% if order.discount_amount > 0 %}
+        <div><span class="text-base-content/60">Скидка:</span> -{{ order.discount_amount }} ₽</div>
+      {% endif %}
+      <div><span class="text-base-content/60">Итого:</span> <b>{{ order.total }} ₽</b></div>
+      <div class="grid gap-2 mt-3">
+        {% if fake_payment %}
+          <a class="btn btn-neutral" href="{{ payment_page_url }}" hx-boost="false">Открыть оплату</a>
+        {% endif %}
+        <a class="btn btn-outline" href="/catalog/">Вернуться в каталог</a>
+      </div>
+    </div>
+  </aside>
+</div>
+{% endblock %}

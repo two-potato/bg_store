@@ -5,8 +5,8 @@
         <label class="text-xs mb-1 block">Категория</label>
         <select class="select select-bordered select-sm w-full catalog-select-2026" name="category">
           <option value="">Любая</option>
-          {% for c in cats %}
-            <option value="{{ c.id }}" {% if request.GET.category|default:'' == c.id|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+          {% for c in category_rows %}
+            <option value="{{ c.slug }}" {% if request.GET.category|default:'' == c.slug or request.GET.category|default:'' == c.id|stringformat:"s" %}selected{% endif %}>{{ c.label }}</option>
           {% endfor %}
         </select>
       </div>

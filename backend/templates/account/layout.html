@@ -2,68 +2,168 @@
 {% block content %}
 <section class="account-2026 reveal" data-anim="animate__fadeInUp">
   <aside class="account-2026__sidebar">
-    <div class="account-2026__profile">
-      <div class="account-2026__avatar">
-        {% if profile.photo %}
-          <img src="{{ profile.photo.url }}" alt="Фото профиля" class="avatar-img">
-        {% else %}
-          <div class="avatar-fallback">{{ request.user.username|slice:":1"|upper }}</div>
+    <div class="account-2026__profile-card">
+      <div class="account-2026__profile">
+        <div class="account-2026__avatar">
+          {% if profile.photo %}
+            <img src="{{ profile.photo.url }}" alt="Фото профиля" class="avatar-img">
+          {% else %}
+            <div class="avatar-fallback">{{ request.user.username|slice:":1"|upper }}</div>
+          {% endif %}
+        </div>
+        <div class="account-2026__profile-copy">
+          <div class="account-2026__name">{{ profile.full_name|default:request.user.username }}</div>
+          <div class="account-2026__sub">@{{ request.user.username }}</div>
+        </div>
+      </div>
+      <div class="account-2026__profile-badges">
+        <span class="account-2026__badge is-accent">{% if profile.role == "seller" %}Seller workspace{% else %}Buyer workspace{% endif %}</span>
+        {% if profile.telegram_id %}
+          <span class="account-2026__badge">Telegram connected</span>
         {% endif %}
       </div>
-      <div class="account-2026__name">{{ profile.full_name|default:request.user.username }}</div>
-      <div class="account-2026__sub">@{{ request.user.username }}</div>
     </div>
-    <div class="account-2026__segment">
+    <div class="account-2026__workspace-card">
       <span class="account-2026__segment-kicker">Рабочее пространство</span>
       <div class="account-2026__segment-title">
-        {% if profile.role == "seller" %}Панель продавца{% else %}Панель клиента{% endif %}
+        {% if profile.role == "seller" %}Операционная панель продавца{% else %}Центр управления закупками{% endif %}
       </div>
-      <div class="account-2026__segment-sub">Управляйте заказами, компаниями и настройками в одном окне.</div>
+      <div class="account-2026__segment-sub">
+        {% if profile.role == "seller" %}
+          Следите за витриной, карточками и заказами из одного компактного меню.
+        {% else %}
+          Быстрый доступ к заказам, адресам, компаниям и персональным инструментам.
+        {% endif %}
+      </div>
     </div>
     <nav class="account-2026__nav">
       {% if profile.role == "seller" %}
-        <a class="{% if account_section == 'seller_home' %}is-active{% endif %}" href="/account/seller/" hx-boost="false">Кабинет продавца</a>
-        <a class="{% if account_section == 'seller_products' %}is-active{% endif %}" href="/account/seller/products/add/" hx-boost="false">Добавить товар</a>
+        <div class="account-2026__nav-group">
+          <div class="account-2026__nav-group-title">Операции</div>
+          <a class="account-2026__nav-link {% if account_section == 'seller_home' %}is-active{% endif %}" href="/account/seller/" hx-boost="false">
+            <span class="account-2026__nav-link-title">Кабинет продавца</span>
+            <span class="account-2026__nav-link-meta">Сводка магазина и KPI</span>
+          </a>
+          <a class="account-2026__nav-link {% if account_section == 'seller_products' %}is-active{% endif %}" href="/account/seller/products/add/" hx-boost="false">
+            <span class="account-2026__nav-link-title">Товары и карточки</span>
+            <span class="account-2026__nav-link-meta">Контент, фото, остатки</span>
+          </a>
+          <a class="account-2026__nav-link" href="/account/orders/" hx-boost="false">
+            <span class="account-2026__nav-link-title">Заказы и согласование</span>
+            <span class="account-2026__nav-link-meta">Fulfillment и статусы</span>
+          </a>
+          <a class="account-2026__nav-link" href="/account/comments/" hx-boost="false">
+            <span class="account-2026__nav-link-title">Комментарии и отзывы</span>
+            <span class="account-2026__nav-link-meta">UGC и обратная связь</span>
+          </a>
+        </div>
+        <div class="account-2026__nav-group">
+          <div class="account-2026__nav-group-title">Публичный контур</div>
+          {% if request.user.seller_store %}
+            <a class="account-2026__nav-link" href="/stores/{{ request.user.seller_store.slug }}/" hx-boost="false">
+              <span class="account-2026__nav-link-title">Витрина магазина</span>
+              <span class="account-2026__nav-link-meta">Публичная storefront-страница</span>
+            </a>
+          {% endif %}
+          {% if request.user.profile.slug %}
+            <a class="account-2026__nav-link" href="/sellers/{{ request.user.profile.slug }}/" hx-boost="false">
+              <span class="account-2026__nav-link-title">Публичный профиль</span>
+              <span class="account-2026__nav-link-meta">Карточка продавца</span>
+            </a>
+          {% endif %}
+        </div>
       {% else %}
-        <a class="{% if account_section == 'home' %}is-active{% endif %}"
-           href="/account/"
-           hx-get="/account/"
-           hx-target="#account-main-content"
-           hx-select="#account-main-content"
-           hx-swap="outerHTML"
-           hx-push-url="true">Главная</a>
-        <a class="{% if account_section == 'legal' %}is-active{% endif %}"
-           href="/account/legal/"
-           hx-get="/account/legal/"
-           hx-target="#account-main-content"
-           hx-select="#account-main-content"
-           hx-swap="outerHTML"
-           hx-push-url="true">Мои компании</a>
-        <a class="{% if account_section == 'addresses' %}is-active{% endif %}"
-           href="/account/addresses/"
-           hx-get="/account/addresses/"
-           hx-target="#account-main-content"
-           hx-select="#account-main-content"
-           hx-swap="outerHTML"
-           hx-push-url="true">Мои адреса</a>
-        <a class="{% if account_section == 'orders' %}is-active{% endif %}"
-           href="/account/orders/"
-           hx-get="/account/orders/"
-           hx-target="#account-main-content"
-           hx-select="#account-main-content"
-           hx-swap="outerHTML"
-           hx-push-url="true">Мои заказы</a>
-        <a href="/favorites/" hx-boost="false">Избранное</a>
-        <a href="/saved-searches/" hx-boost="false">Сохранённые поиски</a>
-        <a class="{% if account_section == 'comments' %}is-active{% endif %}"
-           href="/account/comments/"
-           hx-get="/account/comments/"
-           hx-target="#account-main-content"
-           hx-select="#account-main-content"
-           hx-swap="outerHTML"
-           hx-push-url="true">Мои комментарии</a>
+        <div class="account-2026__nav-group">
+          <div class="account-2026__nav-group-title">Рабочий стол</div>
+          <a class="account-2026__nav-link {% if account_section == 'home' %}is-active{% endif %}"
+             href="/account/"
+             hx-get="/account/"
+             hx-target="#account-main-content"
+             hx-select="#account-main-content"
+             hx-swap="outerHTML"
+             hx-push-url="true">
+            <span class="account-2026__nav-link-title">Главная</span>
+            <span class="account-2026__nav-link-meta">Сводка по аккаунту и действиям</span>
+          </a>
+          <a class="account-2026__nav-link {% if account_section == 'orders' %}is-active{% endif %}"
+             href="/account/orders/"
+             hx-get="/account/orders/"
+             hx-target="#account-main-content"
+             hx-select="#account-main-content"
+             hx-swap="outerHTML"
+             hx-push-url="true">
+            <span class="account-2026__nav-link-title">Мои заказы</span>
+            <span class="account-2026__nav-link-meta">История, статусы, повторы</span>
+          </a>
+          <a class="account-2026__nav-link {% if account_section == 'comments' %}is-active{% endif %}"
+             href="/account/comments/"
+             hx-get="/account/comments/"
+             hx-target="#account-main-content"
+             hx-select="#account-main-content"
+             hx-swap="outerHTML"
+             hx-push-url="true">
+            <span class="account-2026__nav-link-title">Мои комментарии</span>
+            <span class="account-2026__nav-link-meta">Отзывы и обсуждения</span>
+          </a>
+        </div>
+        <div class="account-2026__nav-group">
+          <div class="account-2026__nav-group-title">B2B и логистика</div>
+          <a class="account-2026__nav-link {% if account_section == 'legal' %}is-active{% endif %}"
+             href="/account/legal/"
+             hx-get="/account/legal/"
+             hx-target="#account-main-content"
+             hx-select="#account-main-content"
+             hx-swap="outerHTML"
+             hx-push-url="true">
+            <span class="account-2026__nav-link-title">Мои компании</span>
+            <span class="account-2026__nav-link-meta">Юрлица и approval flow</span>
+          </a>
+          <a class="account-2026__nav-link {% if account_section == 'addresses' %}is-active{% endif %}"
+             href="/account/addresses/"
+             hx-get="/account/addresses/"
+             hx-target="#account-main-content"
+             hx-select="#account-main-content"
+             hx-swap="outerHTML"
+             hx-push-url="true">
+            <span class="account-2026__nav-link-title">Мои адреса</span>
+            <span class="account-2026__nav-link-meta">Доставка и адресная книга</span>
+          </a>
+        </div>
+        <div class="account-2026__nav-group">
+          <div class="account-2026__nav-group-title">Инструменты</div>
+          <a class="account-2026__nav-link" href="/favorites/" hx-boost="false">
+            <span class="account-2026__nav-link-title">Избранное</span>
+            <span class="account-2026__nav-link-meta">Сохранённые товары</span>
+          </a>
+          <a class="account-2026__nav-link" href="/lists/" hx-boost="false">
+            <span class="account-2026__nav-link-title">Списки закупок</span>
+            <span class="account-2026__nav-link-meta">Шаблоны repeat purchase</span>
+          </a>
+          <a class="account-2026__nav-link" href="/compare/" hx-boost="false">
+            <span class="account-2026__nav-link-title">Сравнение товаров</span>
+            <span class="account-2026__nav-link-meta">Параметры и выбор</span>
+          </a>
+          <a class="account-2026__nav-link" href="/saved-searches/" hx-boost="false">
+            <span class="account-2026__nav-link-title">Сохранённые поиски</span>
+            <span class="account-2026__nav-link-meta">Запросы и подписки</span>
+          </a>
+          <a class="account-2026__nav-link" href="/brands/" hx-boost="false">
+            <span class="account-2026__nav-link-title">Бренды</span>
+            <span class="account-2026__nav-link-meta">Поставщики и линейки</span>
+          </a>
+          <a class="account-2026__nav-link" href="/collections/" hx-boost="false">
+            <span class="account-2026__nav-link-title">Коллекции</span>
+            <span class="account-2026__nav-link-meta">Подборки и сценарии</span>
+          </a>
+        </div>
       {% endif %}
-      <a href="/account/logout/">Выйти</a>
+      <div class="account-2026__nav-group">
+        <div class="account-2026__nav-group-title">Аккаунт</div>
+        <a class="account-2026__nav-link is-danger" href="/account/logout/">
+          <span class="account-2026__nav-link-title">Выйти</span>
+          <span class="account-2026__nav-link-meta">Завершить текущую сессию</span>
+        </a>
+      </div>
     </nav>
   </aside>
   {% block account_main %}{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<section class="page-2026">
+  <header class="page-2026__header">
+    <nav aria-label="breadcrumb" class="mb-2 text-sm text-base-content/60">
+      <a href="/" hx-boost="false">Главная</a>
+      {% for crumb in breadcrumbs %}
+        / <a href="/catalog/categories/{{ crumb.slug }}/" hx-boost="false">{{ crumb.name }}</a>
+      {% endfor %}
+    </nav>
+    <h1>{{ category.hero_title|default:category.name }}</h1>
+    <p>{{ category.hero_text|default:category.description|default:"Категорийная витрина Servio для long-tail SEO и профессиональных закупок." }}</p>
+  </header>
+
+  {% if child_categories %}
+    <section class="page-2026__card">
+      <h2>Подкатегории</h2>
+      <div class="flex flex-wrap gap-2">
+        {% for child in child_categories %}
+          <a class="btn btn-sm btn-outline" href="/catalog/categories/{{ child.slug }}/" hx-boost="false">{{ child.name }}</a>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  {% if featured_brands %}
+    <section class="page-2026__card">
+      <h2>Бренды в категории</h2>
+      <div class="flex flex-wrap gap-2">
+        {% for brand in featured_brands %}
+          <a class="btn btn-sm btn-outline" href="/brands/{{ brand.slug }}/" hx-boost="false">{{ brand.name }}</a>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  {% if category.landing_body %}
+    <section class="page-2026__card">
+      <h2>О категории</h2>
+      <div class="prose max-w-none">{{ category.landing_body|linebreaks }}</div>
+    </section>
+  {% endif %}
+
+  <section class="page-2026__section">
+    <div class="page-2026__header">
+      <h2>Товары категории</h2>
+      <p>{{ products|length }} позиций в SEO-витрине категории.</p>
+    </div>
+    {% include "shopfront/components/product_grid.html" with products=products recommendation_source="category_landing" %}
+  </section>
+
+  {% if category.faq_body %}
+    <section class="page-2026__card">
+      <h2>{{ category.faq_title|default:"FAQ по категории" }}</h2>
+      <div class="prose max-w-none">{{ category.faq_body|linebreaks }}</div>
+    </section>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,4 +1,8 @@
 (function(){
+  function isActive(){
+    return window.ServioRuntime && window.ServioRuntime.isPageType('account_addresses');
+  }
+
   function setAddrField(form, name, value) {
     var el = form.querySelector('[name="' + name + '"]');
     if (el && value) el.value = value;
@@ -73,6 +77,7 @@
   }
 
   document.body.addEventListener('click', function(e){
+    if (!isActive()) return;
     var btn = e.target.closest('[data-geolocate-btn]');
     if (!btn) return;
     e.preventDefault();

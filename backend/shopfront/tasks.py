@@ -1,10 +1,9 @@
 from celery import shared_task
 import asyncio
 import logging
-import httpx
 from django.conf import settings
-from django.core.mail import send_mail
 from users.models import UserProfile
+from core.notifications import apost_notify_json, is_telegram_recipient_quarantined, send_mail_message
 
 log = logging.getLogger("shopfront")
 
@@ -18,17 +17,34 @@ def _admin_emails() -> list[str]:
 
 
 def _admin_telegram_ids() -> list[int]:
-    explicit = list(getattr(settings, "ADMIN_NOTIFY_TELEGRAM_IDS", []) or [])
-    if explicit:
-        return sorted({int(v) for v in explicit if str(v).strip().lstrip("-").isdigit()})
-    recipients: set[int] = set()
+    recipients: list[int] = []
+    seen: set[int] = set()
     qs = UserProfile.objects.filter(
         role=UserProfile.Role.ADMIN,
         telegram_id__isnull=False,
     ).values_list("telegram_id", flat=True)
-    recipients.update(int(v) for v in qs if v)
-    return sorted(recipients)
-
+    for value in qs:
+        if not value:
+            continue
+        tg_id = int(value)
+        if is_telegram_recipient_quarantined(tg_id):
+            continue
+        if tg_id in seen:
+            continue
+        seen.add(tg_id)
+        recipients.append(tg_id)
+    explicit = list(getattr(settings, "ADMIN_NOTIFY_TELEGRAM_IDS", []) or [])
+    for value in explicit:
+        if not str(value).strip().lstrip("-").isdigit():
+            continue
+        tg_id = int(value)
+        if is_telegram_recipient_quarantined(tg_id):
+            continue
+        if tg_id in seen:
+            continue
+        seen.add(tg_id)
+        recipients.append(tg_id)
+    return recipients
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def notify_contact_feedback(self, *, name: str, phone: str, message: str, source: str):
@@ -42,18 +58,13 @@ def notify_contact_feedback(self, *, name: str, phone: str, message: str, source
 
     recipients = _admin_emails()
     if recipients:
-        try:
-            send_mail(
-                subject="[BG Shop] Новая заявка с формы контактов",
-                message=text,
-                from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-                recipient_list=recipients,
-                fail_silently=False,
-            )
-            log.info("contact_feedback_email_sent", extra={"recipients": recipients})
-        except Exception:
-            # Email transport issues must not block Telegram notifications.
-            log.exception("contact_feedback_email_send_failed", extra={"recipients": recipients})
+        send_mail_message(
+            subject="[BG Shop] Новая заявка с формы контактов",
+            message=text,
+            recipient_list=recipients,
+            logger=log,
+            extra={"source": source},
+        )
     else:
         log.warning("contact_feedback_email_no_recipients")
 
@@ -67,35 +78,26 @@ def notify_contact_feedback(self, *, name: str, phone: str, message: str, source
     telegram_ids = _admin_telegram_ids()
 
     async def _send():
-        async with httpx.AsyncClient(timeout=10) as client:
+        from httpx import AsyncClient
+
+        async with AsyncClient(timeout=10) as client:
             for tg in telegram_ids:
-                try:
-                    resp = await client.post(
-                        f"{settings.BOT_NOTIFY_URL}/notify/send_text",
-                        json={"telegram_id": tg, "text": tg_text},
-                        headers=_notify_headers(),
-                    )
-                    if resp.is_error:
-                        log.warning(
-                            "contact_feedback_send_text_failed",
-                            extra={"telegram_id": tg, "status_code": resp.status_code, "body": resp.text[:500]},
-                        )
-                except Exception:
-                    log.exception("contact_feedback_send_text_exception", extra={"telegram_id": tg})
-            try:
-                group_resp = await client.post(
-                    f"{settings.BOT_NOTIFY_URL}/notify/send_group",
-                    json={"text": tg_text},
-                    headers=_notify_headers(),
+                await apost_notify_json(
+                    client,
+                    "/notify/send_text",
+                    {"telegram_id": tg, "text": tg_text},
+                    logger=log,
+                    failure_event="contact_feedback_send_text_failed",
+                    extra={"telegram_id": tg},
                 )
-                # Group delivery is a fallback channel. Keep task successful even if this path is not configured.
-                if group_resp.is_error:
-                    log.warning(
-                        "contact_feedback_group_send_failed",
-                        extra={"status_code": group_resp.status_code, "body": group_resp.text[:500]},
-                    )
-            except Exception:
-                log.warning("contact_feedback_group_send_exception")
+            # Group delivery is a fallback channel. Keep task successful even if this path is not configured.
+            await apost_notify_json(
+                client,
+                "/notify/send_group",
+                {"text": tg_text},
+                logger=log,
+                failure_event="contact_feedback_group_send_failed",
+            )
 
     try:
         asyncio.run(_send())
@@ -103,5 +105,3 @@ def notify_contact_feedback(self, *, name: str, phone: str, message: str, source
         log.exception("contact_feedback_tg_send_failed", extra={"recipients": telegram_ids})
         raise
     log.info("contact_feedback_tg_sent", extra={"recipients": telegram_ids})
-def _notify_headers() -> dict[str, str]:
-    return {"X-Internal-Token": str(getattr(settings, "INTERNAL_TOKEN", ""))}

@@ -1,15 +1,21 @@
 <section id="product-reviews" class="mt-4 reviews-lite-2026" aria-label="Отзывы о товаре">
   <div class="reviews-lite-2026__shell">
     <header class="reviews-lite-2026__head">
-      <h2>Отзывы о товаре</h2>
+      <h2>Отзывы и рейтинг</h2>
       <div class="reviews-lite-2026__summary">
         <span class="reviews-lite-2026__score">{{ rating_avg|floatformat:1 }}</span>
         <span>из 5 · {{ rating_count }} оценок</span>
       </div>
     </header>
 
+    {% if seller_rating_count %}
+      <div class="alert alert-info text-sm mb-3">
+        Рейтинг продавца: {{ seller_rating_avg|floatformat:1 }} / 5 на основе {{ seller_rating_count }} отзывов по его ассортименту.
+      </div>
+    {% endif %}
+
     {% if request.user.is_authenticated %}
-      <form hx-post="/product/{{ p.id }}/review/"
+      <form hx-post="/product/{{ p.slug }}/review/"
             hx-target="#product-reviews"
             hx-select="#product-reviews"
             hx-swap="outerHTML"
@@ -33,7 +39,7 @@
           {% if user_review %}
             <button class="btn btn-outline btn-sm"
                     type="button"
-                    hx-post="/product/{{ p.id }}/review/delete/"
+                    hx-post="/product/{{ p.slug }}/review/delete/"
                     hx-target="#product-reviews"
                     hx-select="#product-reviews"
                     hx-swap="outerHTML">
@@ -69,9 +75,49 @@
             <div class="reviews-lite-2026__rating">★ {{ r.rating }}/5</div>
           </div>
 
+          {% if r.is_verified_purchase %}
+            <div class="badge badge-success badge-sm mb-2">Проверенная покупка</div>
+          {% endif %}
+
           {% if r.text %}
             <p class="reviews-lite-2026__text">{{ r.text }}</p>
           {% endif %}
+
+          {% if r.photos.all %}
+            <div class="grid gap-2 md:grid-cols-3 mb-3">
+              {% for photo in r.photos.all %}
+                <figure class="rounded-2xl overflow-hidden border border-base-300">
+                  <img src="{{ photo.image_url }}" alt="{{ photo.caption|default:r.user.username }}" loading="lazy">
+                  {% if photo.caption %}<figcaption class="px-3 py-2 text-xs text-base-content/70">{{ photo.caption }}</figcaption>{% endif %}
+                </figure>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          <div class="reviews-lite-2026__actions">
+            {% if request.user.is_authenticated %}
+              <button class="btn btn-outline btn-xs"
+                      type="button"
+                      hx-post="/product/{{ p.slug }}/review/{{ r.id }}/vote/"
+                      hx-vals='{"value":"helpful"}'
+                      hx-target="#product-reviews"
+                      hx-select="#product-reviews"
+                      hx-swap="outerHTML">
+                Полезно ({{ r.helpful_count }})
+              </button>
+              <button class="btn btn-outline btn-xs"
+                      type="button"
+                      hx-post="/product/{{ p.slug }}/review/{{ r.id }}/vote/"
+                      hx-vals='{"value":"unhelpful"}'
+                      hx-target="#product-reviews"
+                      hx-select="#product-reviews"
+                      hx-swap="outerHTML">
+                Не по делу ({{ r.unhelpful_count }})
+              </button>
+            {% else %}
+              <span class="text-xs text-base-content/50">Авторизуйтесь, чтобы оценить отзыв.</span>
+            {% endif %}
+          </div>
 
           <div class="reviews-lite-2026__comments">
             {% for c in r.comments.all %}
@@ -82,7 +128,7 @@
                 </div>
                 {% if request.user.is_authenticated and request.user.id == c.user_id %}
                   <form class="grid gap-2 mt-1"
-                        hx-post="/product/{{ p.id }}/comment/{{ c.id }}/update/"
+                        hx-post="/product/{{ p.slug }}/comment/{{ c.id }}/update/"
                         hx-target="#product-reviews"
                         hx-select="#product-reviews"
                         hx-swap="outerHTML">
@@ -90,7 +136,7 @@
                     <div class="reviews-lite-2026__actions">
                       <button class="btn btn-outline btn-xs"
                               type="button"
-                              hx-post="/product/{{ p.id }}/comment/{{ c.id }}/delete/"
+                              hx-post="/product/{{ p.slug }}/comment/{{ c.id }}/delete/"
                               hx-target="#product-reviews"
                               hx-select="#product-reviews"
                               hx-swap="outerHTML">
@@ -108,7 +154,7 @@
             {% endfor %}
 
             {% if request.user.is_authenticated %}
-              <form hx-post="/product/{{ p.id }}/review/{{ r.id }}/comment/"
+              <form hx-post="/product/{{ p.slug }}/review/{{ r.id }}/comment/"
                     hx-target="#product-reviews"
                     hx-select="#product-reviews"
                     hx-swap="outerHTML"
@@ -124,6 +170,49 @@
       {% empty %}
         <div class="reviews-lite-2026__empty">Пока нет отзывов. Станьте первым, кто оценит товар.</div>
       {% endfor %}
+    </div>
+
+    <div id="questions" class="mt-6">
+      <div class="reviews-lite-2026__head">
+        <h2>Q&A по товару</h2>
+        <div class="reviews-lite-2026__summary"><span>{{ questions|length }}</span><span>публичных вопросов</span></div>
+      </div>
+      {% if request.user.is_authenticated %}
+        <form hx-post="/product/{{ p.slug }}/questions/"
+              hx-target="#product-reviews"
+              hx-select="#product-reviews"
+              hx-swap="outerHTML"
+              class="reviews-lite-2026__form">
+          <textarea name="question_text"
+                    class="textarea textarea-bordered w-full"
+                    rows="3"
+                    placeholder="Задайте вопрос по поставке, материалу, совместимости или срокам"
+                    required></textarea>
+          <div class="reviews-lite-2026__actions">
+            <button class="btn btn-primary btn-sm" type="submit">Отправить вопрос</button>
+          </div>
+        </form>
+      {% endif %}
+
+      <div class="space-y-3 mt-3">
+        {% for question in questions %}
+          <article class="rounded-2xl border border-base-300 p-4">
+            <div class="text-sm font-semibold">{{ question.user.username }}</div>
+            <p class="text-sm mt-2">{{ question.question_text }}</p>
+            {% if question.answer_text %}
+              <div class="mt-3 rounded-2xl bg-base-200 px-4 py-3">
+                <div class="text-xs uppercase tracking-wide text-base-content/50 mb-1">Ответ</div>
+                <p class="text-sm">{{ question.answer_text }}</p>
+                {% if question.answered_by %}<div class="text-xs text-base-content/50 mt-2">{{ question.answered_by.username }} · {{ question.answered_at|date:"d.m.Y H:i" }}</div>{% endif %}
+              </div>
+            {% else %}
+              <div class="text-xs text-base-content/50 mt-2">Ответ появится после модерации или ответа продавца.</div>
+            {% endif %}
+          </article>
+        {% empty %}
+          <div class="text-sm text-base-content/60">Вопросов пока нет. Этот блок поможет снять возражения до добавления в корзину.</div>
+        {% endfor %}
+      </div>
     </div>
   </div>
 </section>

@@ -1,13 +1,4 @@
 (function(){
-  function escapeHtml(s) {
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/\"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
   var MAX_TOASTS = 5;
   var DURATION_MS = 4200;
 
@@ -43,20 +34,38 @@
     var stack = document.getElementById('toast-stack');
     if (!stack) return;
 
-    var wrap = document.createElement('div');
-    wrap.innerHTML =
-      '<div class="' + cardClass(variant) + '" role="' + (variant === 'danger' ? 'alert' : 'status') + '" style="--toast-duration:' + duration + 'ms">' +
-        '<div class="toast-card__icon">' + iconSvg(variant) + '</div>' +
-        '<div class="toast-card__body">' +
-          '<div class="toast-card__message">' + escapeHtml(msg) + '</div>' +
-          '<div class="toast-card__progress" aria-hidden="true"></div>' +
-        '</div>' +
-        '<button type="button" class="toast-close" aria-label="Закрыть уведомление">' +
-          '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6l-12 12"></path></svg>' +
-        '</button>' +
-      '</div>';
+    var node = document.createElement('div');
+    node.className = cardClass(variant);
+    node.setAttribute('role', variant === 'danger' ? 'alert' : 'status');
+    node.style.setProperty('--toast-duration', duration + 'ms');
 
-    var node = wrap.firstElementChild;
+    var icon = document.createElement('div');
+    icon.className = 'toast-card__icon';
+    icon.innerHTML = iconSvg(variant);
+
+    var body = document.createElement('div');
+    body.className = 'toast-card__body';
+
+    var message = document.createElement('div');
+    message.className = 'toast-card__message';
+    message.textContent = msg;
+
+    var progress = document.createElement('div');
+    progress.className = 'toast-card__progress';
+    progress.setAttribute('aria-hidden', 'true');
+
+    body.appendChild(message);
+    body.appendChild(progress);
+
+    var close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'toast-close';
+    close.setAttribute('aria-label', 'Закрыть уведомление');
+    close.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6l-12 12"></path></svg>';
+
+    node.appendChild(icon);
+    node.appendChild(body);
+    node.appendChild(close);
     stack.appendChild(node);
     pruneOldToasts(stack);
 
@@ -91,7 +100,7 @@
       startTimer(remaining);
     };
 
-    node.querySelector('.toast-close')?.addEventListener('click', hide, { once: true });
+    close.addEventListener('click', hide, { once: true });
     node.addEventListener('mouseenter', pauseTimer);
     node.addEventListener('mouseleave', resumeTimer);
     node.addEventListener('focusin', pauseTimer);

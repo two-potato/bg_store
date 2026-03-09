@@ -1,4 +1,5 @@
 import pytest
+from django.test import override_settings
 
 from catalog import es_index
 from shopfront import search as sf_search
@@ -21,6 +22,7 @@ class _Resp:
         return self._payload
 
 
+@override_settings(ES_ENABLED=True)
 def test_es_search_bundle_success(monkeypatch):
     def _post(url, json, timeout):
         assert url.endswith('/products/_search')
@@ -43,9 +45,10 @@ def test_es_search_bundle_success(monkeypatch):
         })
 
     monkeypatch.setattr(sf_search.requests, 'post', _post)
-    ids, countries = sf_search._es_search_bundle('abc', 3, 2)
+    ids, countries, suggestions = sf_search._es_search_bundle('abc', 3, 2)
     assert ids == [10, 11]
     assert countries == ["Италия", "Россия"]
+    assert suggestions == []
 
 
 def test_search_product_ids_es_empty_returns_empty(monkeypatch):
@@ -72,6 +75,7 @@ def test_popular_country_suggestions_from_bundle(monkeypatch):
     assert sf_search.popular_country_suggestions("it", 2) == ["Италия", "Россия"]
 
 
+@override_settings(ES_ENABLED=True)
 def test_es_index_upsert_and_delete_success(monkeypatch):
     calls = []
 

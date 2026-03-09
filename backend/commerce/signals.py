@@ -6,12 +6,16 @@ from catalog.es_index import upsert_product
 from catalog.models import Product
 
 from .models import (
+    ApprovalPolicy,
+    Company,
+    CompanyMembership,
     LegalEntityCreationRequest,
     LegalEntity,
     LegalEntityMembership,
     MembershipRole,
     SellerStore,
 )
+from .company_service import ensure_company_workspace, sync_company_membership_from_legal_entity
 
 log = logging.getLogger("commerce")
 
@@ -66,3 +70,10 @@ def reindex_products_on_seller_store_change(sender, instance: SellerStore, **kwa
     )
     for product in products.iterator(chunk_size=200):
         upsert_product(product)
+
+
+@receiver(post_save, sender=LegalEntityMembership)
+def sync_company_workspace_on_membership_change(sender, instance: LegalEntityMembership, created: bool, **kwargs):
+    company = ensure_company_workspace(instance.legal_entity)
+    sync_company_membership_from_legal_entity(instance)
+    ApprovalPolicy.objects.get_or_create(company=company)

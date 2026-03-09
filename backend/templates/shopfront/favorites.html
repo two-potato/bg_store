@@ -5,6 +5,44 @@
     <h1>Избранные товары</h1>
     <p>Собранные позиции для быстрого возврата к покупке.</p>
   </header>
+  {% if brand_subscriptions or category_subscriptions %}
+    <div class="page-2026__card mb-4">
+      <h2 class="text-base font-semibold mb-2">Подписки и персонализация</h2>
+      <div class="grid gap-3 md:grid-cols-2">
+        <div>
+          <div class="text-sm font-semibold mb-2">Бренды</div>
+          <div class="flex flex-wrap gap-2">
+            {% for subscription in brand_subscriptions %}
+              <a class="btn btn-sm btn-outline" href="/brands/{{ subscription.brand.slug }}/" hx-boost="false">{{ subscription.brand.name }}</a>
+            {% empty %}
+              <span class="text-sm text-base-content/60">Подписок на бренды пока нет.</span>
+            {% endfor %}
+          </div>
+        </div>
+        <div>
+          <div class="text-sm font-semibold mb-2">Категории</div>
+          <div class="flex flex-wrap gap-2">
+            {% for subscription in category_subscriptions %}
+              <a class="btn btn-sm btn-outline" href="/catalog/?category={{ subscription.category.slug }}" hx-boost="false">{{ subscription.category.name }}</a>
+            {% empty %}
+              <span class="text-sm text-base-content/60">Подписок на категории пока нет.</span>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+  {% if saved_lists %}
+    <div class="page-2026__card mb-4">
+      <h2 class="text-base font-semibold mb-2">Списки закупок</h2>
+      <div class="flex flex-wrap gap-2">
+        {% for saved_list in saved_lists %}
+          <a class="btn btn-sm btn-outline" href="/lists/{{ saved_list.id }}/" hx-boost="false">{{ saved_list.name }}</a>
+        {% endfor %}
+        <a class="btn btn-sm btn-primary" href="/lists/" hx-boost="false">Управлять списками</a>
+      </div>
+    </div>
+  {% endif %}
   {% include "shopfront/components/product_grid.html" with products=products %}
 </section>
 {% endblock %}

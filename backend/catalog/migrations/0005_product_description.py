@@ -3,8 +3,8 @@ from django.db import migrations, models
 
 def _build_two_paragraphs(product):
     name = (getattr(product, "name", "") or "Товар").strip()
-    brand_name = (getattr(getattr(product, "brand", None), "name", "") or "бренда Bad Guys").strip()
-    category_name = (getattr(getattr(product, "category", None), "name", "") or "категории магазина").strip()
+    brand_name = (getattr(getattr(product, "brand", None), "name", "") or "бренда Servio").strip()
+    category_name = (getattr(getattr(product, "category", None), "name", "") or "категории каталога Servio").strip()
     flavor = (getattr(product, "flavor", "") or "").strip()
     unit = (getattr(product, "unit", "") or "шт").strip()
     composition = (getattr(product, "composition", "") or "").strip()
@@ -58,4 +58,3 @@ class Migration(migrations.Migration):
         ),
         migrations.RunPython(fill_product_descriptions, migrations.RunPython.noop),
     ]
-

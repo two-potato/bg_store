@@ -1,5 +1,10 @@
 (function(){
+  function isActive(){
+    return window.ServioRuntime && window.ServioRuntime.isPageType('product');
+  }
+
   document.body.addEventListener('click', function(e){
+    if (!isActive()) return;
     var btn = e.target.closest('[data-qty-action]');
     if (!btn) return;
     var inputId = btn.getAttribute('data-qty-target');
@@ -15,6 +20,7 @@
   });
 
   document.body.addEventListener('click', function(e){
+    if (!isActive()) return;
     var favBtn = e.target.closest('[data-fav-toggle="true"]');
     if (!favBtn) return;
 

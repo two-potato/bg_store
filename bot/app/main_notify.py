@@ -20,9 +20,12 @@ from .common import (
     env_int,
     require_internal_token,
     register_common_http,
+    register_polling_lifecycle,
     verify_sig,
 )
+from .sentry_runtime import init_sentry
 
+init_sentry("bot-notify")
 app = FastAPI()
 bot, dp, log = build_runtime()
 
@@ -118,6 +121,13 @@ async def send_kb(payload: MsgKb, _auth: None = Depends(require_internal_token))
     try:
         await bot.send_message(payload.telegram_id, payload.text, reply_markup=kb, parse_mode="HTML")
     except TelegramBadRequest as exc:
+        log.warning(
+            "notify_send_kb_bad_request telegram_id=%s rows=%s detail=%s",
+            payload.telegram_id,
+            len(payload.keyboard),
+            str(exc),
+            extra={"telegram_id": payload.telegram_id, "detail": str(exc), "rows": len(payload.keyboard)},
+        )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     try:
         log.info(
@@ -139,6 +149,13 @@ async def send_document(payload: DocMsg, _auth: None = Depends(require_internal_
     try:
         await bot.send_document(payload.telegram_id, FSInputFile(str(requested)), caption=payload.caption)
     except TelegramBadRequest as exc:
+        log.warning(
+            "notify_send_document_bad_request telegram_id=%s path=%s detail=%s",
+            payload.telegram_id,
+            payload.path,
+            str(exc),
+            extra={"telegram_id": payload.telegram_id, "path": payload.path, "detail": str(exc)},
+        )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     try:
         log.info("notify_send_document", extra={"telegram_id": payload.telegram_id, "path": payload.path})
@@ -153,6 +170,13 @@ async def send_text(payload: TextMsg, _auth: None = Depends(require_internal_tok
     try:
         await bot.send_message(payload.telegram_id, payload.text, parse_mode="HTML")
     except TelegramBadRequest as exc:
+        log.warning(
+            "notify_send_text_bad_request telegram_id=%s len=%s detail=%s",
+            payload.telegram_id,
+            len(payload.text or ""),
+            str(exc),
+            extra={"telegram_id": payload.telegram_id, "detail": str(exc), "len": len(payload.text or "")},
+        )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     try:
         log.info("notify_send_text", extra={"telegram_id": payload.telegram_id, "len": len(payload.text or "")})
@@ -251,29 +275,4 @@ async def on_callback(callback):
 
 
 register_common_http(app)
-
-
-@app.on_event("startup")
-async def startup_event():
-    import asyncio
-
-    if os.getenv("BOT_DISABLE_POLLING", "1") == "1":
-        try:
-            log.info("bot_polling_disabled")
-        except Exception:
-            pass
-        return
-
-    try:
-        await bot.delete_webhook(drop_pending_updates=False)
-    except Exception:
-        pass
-    polling_timeout = env_int("BOT_POLLING_TIMEOUT", 30)
-    asyncio.create_task(
-        dp.start_polling(
-            bot,
-            polling_timeout=polling_timeout,
-            allowed_updates=dp.resolve_used_update_types(),
-            handle_signals=False,
-        )
-    )
+register_polling_lifecycle(app, bot=bot, dp=dp, log=log, disable_by_default="1")

@@ -17,3 +17,12 @@ def mul(a, b):
         except Exception:
             return 0
 
+
+@register.filter(name="get_item")
+def get_item(mapping, key):
+    try:
+        if mapping is None:
+            return None
+        return mapping.get(key)
+    except Exception:
+        return None

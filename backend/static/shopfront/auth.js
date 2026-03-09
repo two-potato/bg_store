@@ -1,5 +1,10 @@
 (function () {
+  function isActive() {
+    return window.ServioRuntime && (window.ServioRuntime.isPageType("login") || window.ServioRuntime.isPageType("register"));
+  }
+
   function bindPasswordToggles(scope) {
+    if (!isActive()) return;
     var root = scope || document;
     var buttons = root.querySelectorAll("[data-password-toggle]");
     buttons.forEach(function (btn) {
@@ -25,7 +30,8 @@
     bindPasswordToggles(document);
   }
 
-  document.body.addEventListener("htmx:afterSwap", function (evt) {
-    bindPasswordToggles(evt.target || document);
+  document.body.addEventListener("servio:page-enter", function (evt) {
+    var root = evt.detail && evt.detail.root ? evt.detail.root : document;
+    bindPasswordToggles(root);
   });
 })();

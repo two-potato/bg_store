@@ -2,18 +2,27 @@
 {% block account_main %}
 <section id="account-main-content" class="account-2026__main">
   <div class="account-2026__hero compact">
-    <div class="account-2026__hero-title">Добавление товаров</div>
-    <div class="account-2026__hero-sub">{{ store.name }}: публикуйте новые позиции в каталог.</div>
+    <div class="account-2026__hero-title">{% if page_mode == "edit" %}Редактирование карточки товара{% else %}Управление товарами{% endif %}</div>
+    <div class="account-2026__hero-sub">{{ store.name }}: публикуйте, редактируйте и дополняйте карточки товара фото и характеристиками.</div>
   </div>
 
   <section class="account-2026__panel">
-    <h2 class="account-2026__panel-title">Новый товар</h2>
-    <form method="post" class="account-2026__form">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">{% if page_mode == "edit" %}Карточка {{ product_obj.name }}{% else %}Новый товар{% endif %}</h2>
+      {% if page_mode == "edit" %}
+        <a class="account-2026__panel-link" href="/product/{{ product_obj.slug }}/" hx-boost="false">Открыть карточку</a>
+      {% endif %}
+    </div>
+    <form method="post" enctype="multipart/form-data" class="account-2026__form">
       {% csrf_token %}
-      <div class="grid md:grid-cols-2 gap-3">
+      <div class="grid md:grid-cols-3 gap-3">
         <div>
           <label class="label" for="id_sku"><span class="label-text">SKU</span></label>
           <input id="id_sku" type="text" name="sku" class="input input-bordered w-full" value="{{ form.sku.value|default_if_none:'' }}" required>
+        </div>
+        <div>
+          <label class="label" for="id_manufacturer_sku"><span class="label-text">Артикул производителя</span></label>
+          <input id="id_manufacturer_sku" type="text" name="manufacturer_sku" class="input input-bordered w-full" value="{{ form.manufacturer_sku.value|default_if_none:'' }}">
         </div>
         <div>
           <label class="label" for="id_name"><span class="label-text">Название</span></label>
@@ -29,6 +38,15 @@
           </select>
         </div>
         <div>
+          <label class="label" for="id_series"><span class="label-text">Серия</span></label>
+          <select id="id_series" name="series" class="select select-bordered w-full">
+            <option value="">Без серии</option>
+            {% for s in form.fields.series.queryset %}
+              <option value="{{ s.id }}" {% if form.series.value|stringformat:"s" == s.id|stringformat:"s" %}selected{% endif %}>{{ s.brand.name }} / {{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
           <label class="label" for="id_category"><span class="label-text">Категория</span></label>
           <select id="id_category" name="category" class="select select-bordered w-full" required>
             <option value="">Выберите категорию</option>
@@ -38,6 +56,14 @@
           </select>
         </div>
         <div>
+          <label class="label" for="id_material"><span class="label-text">Материал</span></label>
+          <input id="id_material" type="text" name="material" class="input input-bordered w-full" value="{{ form.material.value|default_if_none:'' }}">
+        </div>
+        <div>
+          <label class="label" for="id_purpose"><span class="label-text">Назначение</span></label>
+          <input id="id_purpose" type="text" name="purpose" class="input input-bordered w-full" value="{{ form.purpose.value|default_if_none:'' }}">
+        </div>
+        <div>
           <label class="label" for="id_price"><span class="label-text">Цена</span></label>
           <input id="id_price" type="number" step="0.01" min="0" name="price" class="input input-bordered w-full" value="{{ form.price.value|default_if_none:'' }}" required>
         </div>
@@ -45,11 +71,64 @@
           <label class="label" for="id_stock_qty"><span class="label-text">Остаток</span></label>
           <input id="id_stock_qty" type="number" min="0" name="stock_qty" class="input input-bordered w-full" value="{{ form.stock_qty.value|default_if_none:'0' }}" required>
         </div>
+        <div>
+          <label class="label" for="id_min_order_qty"><span class="label-text">Минимальный заказ</span></label>
+          <input id="id_min_order_qty" type="number" min="1" name="min_order_qty" class="input input-bordered w-full" value="{{ form.min_order_qty.value|default_if_none:'1' }}" required>
+        </div>
+        <div>
+          <label class="label" for="id_pack_qty"><span class="label-text">Количество в упаковке</span></label>
+          <input id="id_pack_qty" type="number" min="1" name="pack_qty" class="input input-bordered w-full" value="{{ form.pack_qty.value|default_if_none:'1' }}" required>
+        </div>
+        <div>
+          <label class="label" for="id_lead_time_days"><span class="label-text">Срок поставки, дней</span></label>
+          <input id="id_lead_time_days" type="number" min="0" name="lead_time_days" class="input input-bordered w-full" value="{{ form.lead_time_days.value|default_if_none:'0' }}" required>
+        </div>
+        <div>
+          <label class="label" for="id_unit"><span class="label-text">Единица</span></label>
+          <input id="id_unit" type="text" name="unit" class="input input-bordered w-full" value="{{ form.unit.value|default_if_none:'шт' }}" required>
+        </div>
+        <div>
+          <label class="label" for="id_barcode"><span class="label-text">Штрихкод</span></label>
+          <input id="id_barcode" type="text" name="barcode" class="input input-bordered w-full" value="{{ form.barcode.value|default_if_none:'' }}">
+        </div>
       </div>
       <div>
         <label class="label" for="id_description"><span class="label-text">Описание</span></label>
         <textarea id="id_description" name="description" rows="4" class="textarea textarea-bordered w-full">{{ form.description.value|default_if_none:'' }}</textarea>
       </div>
+      <div>
+        <label class="label" for="id_attributes_json"><span class="label-text">JSON-характеристики</span></label>
+        <textarea id="id_attributes_json" name="attributes_json" rows="5" class="textarea textarea-bordered w-full">{{ form.attributes_json.value|default_if_none:'' }}</textarea>
+      </div>
+      <div class="grid md:grid-cols-2 gap-3">
+        <div>
+          <label class="label" for="id_image_urls"><span class="label-text">Ссылки на фото</span></label>
+          <textarea id="id_image_urls" name="image_urls" rows="4" class="textarea textarea-bordered w-full" placeholder="https://...&#10;https://...">{{ form.image_urls.value|default_if_none:'' }}</textarea>
+        </div>
+        <div>
+          <label class="label" for="id_image_files"><span class="label-text">Загрузить фото</span></label>
+          <input id="id_image_files" type="file" name="image_files" class="file-input file-input-bordered w-full" accept="image/*" multiple>
+        </div>
+      </div>
+      {% if page_mode == "edit" and product_obj.images.all %}
+        <div>
+          <div class="label"><span class="label-text">Текущие фото</span></div>
+          <div class="grid gap-3 md:grid-cols-3">
+            {% for image in product_obj.images.all %}
+              <label class="rounded-2xl border border-base-300 p-3 space-y-2">
+                <img src="{{ image.url }}" alt="{{ product_obj.name }}" class="w-full h-32 object-cover rounded-xl" loading="lazy">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs text-base-content/60 truncate">{{ image.url }}</span>
+                  <span class="label cursor-pointer gap-2">
+                    <input type="checkbox" class="checkbox checkbox-sm" name="remove_image_ids" value="{{ image.id }}">
+                    <span class="text-xs">Удалить</span>
+                  </span>
+                </div>
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
       <div class="flex flex-wrap gap-4">
         <label class="label cursor-pointer gap-2"><input type="checkbox" class="checkbox" name="is_new" {% if form.is_new.value %}checked{% endif %}><span class="label-text">Новинка</span></label>
         <label class="label cursor-pointer gap-2"><input type="checkbox" class="checkbox" name="is_promo" {% if form.is_promo.value %}checked{% endif %}><span class="label-text">Акция</span></label>
@@ -57,17 +136,26 @@
       {% if form.errors %}
         <div class="alert alert-error text-sm"><span>Не удалось сохранить товар. Проверьте введённые данные.</span></div>
       {% endif %}
-      <button class="btn btn-primary">Добавить товар</button>
+      <div class="flex flex-wrap gap-2">
+        <button class="btn btn-primary">{% if page_mode == "edit" %}Сохранить изменения{% else %}Добавить товар{% endif %}</button>
+        {% if page_mode == "edit" %}
+          <a class="btn btn-outline" href="/product/{{ product_obj.slug }}/" hx-boost="false">Открыть карточку</a>
+          <a class="btn btn-ghost" href="/account/seller/products/add/" hx-boost="false">Новый товар</a>
+        {% endif %}
+      </div>
     </form>
   </section>
 
   <section class="account-2026__panel">
-    <h2 class="account-2026__panel-title">Последние товары продавца</h2>
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Последние товары продавца</h2>
+      <a class="account-2026__panel-link" href="/account/seller/" hx-boost="false">Вернуться в seller workspace</a>
+    </div>
     {% if my_products %}
       <div class="overflow-x-auto">
         <table class="table table-sm account-2026__table">
           <thead>
-            <tr><th>SKU</th><th>Название</th><th>Бренд</th><th>Категория</th><th>Цена</th><th>Остаток</th></tr>
+            <tr><th>SKU</th><th>Название</th><th>Бренд</th><th>Категория</th><th>Цена</th><th>Остаток</th><th>Фото</th><th></th></tr>
           </thead>
           <tbody>
             {% for p in my_products %}
@@ -78,6 +166,13 @@
                 <td>{{ p.category.name|default:"—" }}</td>
                 <td>{{ p.price }} ₽</td>
                 <td>{{ p.stock_qty }}</td>
+                <td>{{ p.images.count }}</td>
+                <td class="text-right">
+                  <div class="flex justify-end gap-2">
+                    <a class="btn btn-xs btn-outline" href="/product/{{ p.slug }}/" hx-boost="false">Карточка</a>
+                    <a class="btn btn-xs btn-primary" href="/account/seller/products/{{ p.id }}/edit/" hx-boost="false">Редактировать</a>
+                  </div>
+                </td>
               </tr>
             {% endfor %}
           </tbody>

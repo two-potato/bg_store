@@ -1,10 +1,44 @@
 {% extends "shopfront/base.html" %}
 {% block content %}
+{% if catalog_tracking_payload %}
+  <script type="application/json" data-analytics-payload>{{ catalog_tracking_payload|safe }}</script>
+{% endif %}
 {% include "shopfront/components/catalog_header.html" %}
 {% include "shopfront/components/tag_chips.html" %}
 
 <section class="catalog-layout-neo">
   {% include "shopfront/components/product_grid.html" with products=products %}
+    {% if not products %}
+      <div class="mt-4 rounded-2xl border border-base-200/80 bg-base-100 p-4">
+        <h2 class="text-base font-semibold mb-2">Ничего не нашли</h2>
+        <p class="text-sm text-base-content/70 mb-3">Попробуйте упростить запрос, снять часть фильтров или перейти в соседнюю категорию.</p>
+        {% if search_corrections %}
+          <div class="mb-3">
+            <div class="text-xs uppercase tracking-wide text-base-content/50 mb-2">Возможно, вы искали</div>
+            <div class="flex flex-wrap gap-2">
+              {% for suggestion in search_corrections %}
+                <a class="btn btn-sm btn-outline" href="/catalog/?q={{ suggestion|urlencode }}">{{ suggestion }}</a>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+        <div class="flex flex-wrap gap-2">
+          <a class="btn btn-sm btn-outline" href="/catalog/">Сбросить фильтры</a>
+          {% if sel_category and sel_category.parent %}
+            <a class="btn btn-sm btn-outline" href="/catalog/?category={{ sel_category.parent.slug }}">Вернуться в {{ sel_category.parent.name }}</a>
+          {% endif %}
+          {% for suggestion in search_suggestions %}
+            <a class="btn btn-sm btn-ghost" href="/catalog/?q={{ suggestion|urlencode }}">{{ suggestion }}</a>
+          {% endfor %}
+        </div>
+        {% if zero_results_products %}
+          <div class="mt-4 border-t border-base-200 pt-4">
+            <div class="text-sm font-semibold mb-2">Популярные позиции вместо пустой выдачи</div>
+            {% include "shopfront/components/product_grid.html" with products=zero_results_products %}
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
     {% if has_next %}
       <div id="load-more"
          class="mt-3"

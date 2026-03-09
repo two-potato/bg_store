@@ -1,18 +1,36 @@
 <div id="checkout-form-block">
+  {% if checkout_error_tracking_payload %}
+    <script type="application/json" data-analytics-payload>{{ checkout_error_tracking_payload|safe }}</script>
+  {% endif %}
   <div class="card bg-base-100">
     <div class="card-body">
     <h2 class="text-sm font-semibold">Данные для заказа</h2>
     {% if checkout_error %}
       <div class="alert alert-error text-sm">{{ checkout_error }}</div>
     {% endif %}
+    {% if seller_count > 1 %}
+      <div class="alert alert-warning text-sm">
+        Корзина мультивендорная: после внедрения split logic этот заказ сможет автоматически делиться по поставщикам и SLA.
+      </div>
+    {% endif %}
     <form method="post"
           action="/checkout/submit/"
           data-checkout-form
+          data-checkout-cart='{{ checkout_cart_tracking_payload|escapejs }}'
           hx-post="/checkout/submit/"
           hx-target="#checkout-form-block"
           hx-swap="outerHTML"
           class="grid gap-3 mt-2 pb-14 lg:pb-0">
       {% csrf_token %}
+      <input type="hidden" name="_idem" value="{{ checkout_idem_key }}">
+      <div class="rounded-2xl border border-base-200/80 bg-base-200/30 p-3 text-sm">
+        <div class="font-semibold mb-1">Перед отправкой</div>
+        <ul class="grid gap-1 text-base-content/70">
+          <li>Проверьте юрлицо или контактное лицо.</li>
+          <li>Доставка и остатки будут подтверждены после создания заказа.</li>
+          <li>Повторное нажатие не создаст дубль заказа.</li>
+        </ul>
+      </div>
       <div>
         <label class="text-xs mb-1 block">Тип клиента</label>
         <div class="flex gap-4">
@@ -23,10 +41,16 @@
           </label>
           <label class="label cursor-pointer gap-2">
             <input class="radio radio-sm" type="radio" name="customer_type" value="company"
-                   {% if form_data.customer_type == "company" %}checked{% endif %}>
-            <span class="label-text">Юр. лицо</span>
+                   {% if not is_authenticated_checkout %}disabled{% endif %}
+                   {% if form_data.customer_type == "company" and is_authenticated_checkout %}checked{% endif %}>
+            <span class="label-text">Юр. лицо{% if not is_authenticated_checkout %} (требует вход){% endif %}</span>
           </label>
         </div>
+        {% if not is_authenticated_checkout %}
+          <div class="text-xs text-base-content/60 mt-1">
+            Гостевой checkout доступен для физических лиц. Для B2B-заказа войдите в аккаунт компании.
+          </div>
+        {% endif %}
       </div>
 
       <div>
@@ -50,10 +74,40 @@
         </div>
       </div>
 
+      <div class="grid gap-3 md:grid-cols-2">
+        <div>
+          <label class="text-xs mb-1 block">Промокод / контракт</label>
+          <input class="input input-bordered w-full" name="coupon_code" value="{{ form_data.coupon_code|default:'' }}" placeholder="например: B2B-2026">
+        </div>
+        <div>
+          <label class="text-xs mb-1 block">Комментарий к заказу</label>
+          <input class="input input-bordered w-full" name="customer_comment" value="{{ form_data.customer_comment|default:'' }}" placeholder="Окно поставки, контакт на приёмке">
+        </div>
+      </div>
+
       <div id="company-fields" class="{% if form_data.customer_type == 'company' %}{% else %}hidden{% endif %}">
+        {% if company_snapshots %}
+          <div class="rounded-2xl border border-base-200/80 bg-base-200/30 p-3 text-sm mb-3">
+            <div class="font-semibold mb-1">B2B согласование</div>
+            <ul class="grid gap-1 text-base-content/70">
+              {% for row in company_snapshots %}
+                <li>{{ row.company.display_name|default:row.company.legal_entity.name }}:
+                  {% if row.policy.is_enabled %}
+                    auto-approve до {{ row.policy.auto_approve_below }} ₽
+                  {% else %}
+                    политика согласования выключена
+                  {% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
         <div>
           <label class="text-xs mb-1 block">Юр лицо</label>
           <select class="select select-bordered w-full" name="legal_entity">
+            {% if not memberships %}
+              <option value="">Нет доступных юрлиц</option>
+            {% endif %}
             {% for m in memberships %}
               <option value="{{ m.legal_entity.id }}" {% if form_data.legal_entity == m.legal_entity.id|stringformat:"s" %}selected{% endif %}>{{ m.legal_entity }}</option>
             {% endfor %}
@@ -62,18 +116,29 @@
         <div>
           <label class="text-xs mb-1 block">Адрес доставки</label>
           <select class="select select-bordered w-full" name="delivery_address">
+            {% if not addresses %}
+              <option value="">Нет доступных адресов</option>
+            {% endif %}
             {% for a in addresses %}
               <option value="{{ a.id }}" {% if form_data.delivery_address == a.id|stringformat:"s" %}selected{% endif %}>{{ a.legal_entity.name }} — {{ a.label }} ({{ a.city }}, {{ a.street }})</option>
             {% endfor %}
           </select>
         </div>
+        {% if not memberships %}
+          <div class="text-xs text-base-content/60">Добавьте юрлицо в личном кабинете, чтобы оформить B2B-заказ.</div>
+        {% endif %}
       </div>
 
       <div id="individual-fields" class="{% if form_data.customer_type == 'company' %}hidden{% endif %}">
         <div>
           <label class="text-xs mb-1 block">Ваше имя</label>
           <input class="input input-bordered w-full" name="customer_name"
-                 value="{{ form_data.customer_name|default:request.user.get_full_name|default:request.user.username }}">
+                 value="{{ form_data.customer_name|default:individual_default_name }}">
+        </div>
+        <div>
+          <label class="text-xs mb-1 block">Email{% if not is_authenticated_checkout %} <span class="text-error">*</span>{% endif %}</label>
+          <input class="input input-bordered w-full" type="email" name="customer_email" placeholder="name@example.com"
+                 value="{{ form_data.customer_email|default:individual_default_email }}" {% if not is_authenticated_checkout %}required{% endif %}>
         </div>
         <div>
           <label class="text-xs mb-1 block">Телефон</label>
@@ -87,7 +152,12 @@
         </div>
       </div>
 
-      <button class="btn btn-primary lg:w-full fixed lg:static bottom-16 left-3 right-3 z-40" {% if not items %}disabled{% endif %}>Оформить</button>
+      <button class="btn btn-primary lg:w-full fixed lg:static bottom-16 left-3 right-3 z-40"
+              type="submit"
+              data-checkout-submit
+              {% if not items %}disabled{% endif %}>
+        Оформить
+      </button>
     </form>
     </div>
   </div>

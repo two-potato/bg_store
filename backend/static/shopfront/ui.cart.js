@@ -22,26 +22,45 @@
 
   function applyQtyState(node, qty){
     if (!node) return;
+    var iconOnly = node.classList.contains('cart-control--icon');
     var addBtn = node.querySelector('.add');
     var step = node.querySelector('.stepper');
     var label = node.querySelector('.qty');
     if (qty > 0) {
       node.classList.add('is-in-cart');
-      addBtn?.classList.add('hidden');
-      if (addBtn?.style) addBtn.style.setProperty('display', 'none', 'important');
+      if (iconOnly) {
+        addBtn?.classList.add('is-active');
+        addBtn?.classList.remove('hidden');
+        addBtn?.setAttribute('title', 'Товар уже в корзине');
+        addBtn?.setAttribute('aria-label', 'Товар уже в корзине');
+        if (addBtn?.style) addBtn.style.removeProperty('display');
+      } else {
+        addBtn?.classList.add('hidden');
+        if (addBtn?.style) addBtn.style.setProperty('display', 'none', 'important');
+      }
       if (step) {
-        step.classList.remove('hidden');
-        if (step.style) step.style.setProperty('display', 'inline-flex', 'important');
+        if (iconOnly) {
+          step.classList.add('hidden');
+          if (step.style) step.style.setProperty('display', 'none', 'important');
+        } else {
+          step.classList.remove('hidden');
+          if (step.style) step.style.setProperty('display', 'inline-flex', 'important');
+        }
       }
       if (label) label.textContent = String(qty);
     } else {
       node.classList.remove('is-in-cart');
+      addBtn?.classList.remove('is-active');
       if (step) {
         step.classList.add('hidden');
         if (step.style) step.style.setProperty('display', 'none', 'important');
       }
       if (label) label.textContent = '0';
       addBtn?.classList.remove('hidden');
+      if (iconOnly) {
+        addBtn?.setAttribute('title', 'Добавить в корзину');
+        addBtn?.setAttribute('aria-label', 'Добавить в корзину');
+      }
       if (addBtn?.style) addBtn.style.removeProperty('display');
     }
   }
@@ -62,14 +81,17 @@
     var iconO = document.getElementById('cart-icon-outline');
     var iconF = document.getElementById('cart-icon-filled');
     var badge = document.getElementById('cart-badge-inline') || document.getElementById('cart-badge');
+    var pill = document.getElementById('toggle-cart');
     if (!badge || !iconO || !iconF) return;
     var cnt = getBadgeCount(badge);
     if (cnt > 0) {
       iconO.classList.add('hidden');
       iconF.classList.remove('hidden');
+      pill?.classList.add('is-active');
     } else {
       iconF.classList.add('hidden');
       iconO.classList.remove('hidden');
+      pill?.classList.remove('is-active');
     }
   }
 

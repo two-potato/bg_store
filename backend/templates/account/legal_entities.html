@@ -8,7 +8,10 @@
 
   <div class="grid grid-cols-1 xl:grid-cols-5 gap-3">
     <section class="xl:col-span-3 account-2026__panel">
-      <h2 class="account-2026__panel-title">Привязанные компании</h2>
+      <div class="account-2026__panel-head">
+        <h2 class="account-2026__panel-title">Привязанные компании</h2>
+        <a class="account-2026__panel-link" href="/catalog/" hx-boost="false">Перейти в каталог</a>
+      </div>
       <div id="memberships"
            hx-get="/account/legal/?fragment=memberships"
            hx-trigger="load, legalPoll from:body"
@@ -17,6 +20,33 @@
            hx-swap="innerHTML">
         {% include "account/partials/memberships_list.html" %}
       </div>
+
+      {% if company_workspaces %}
+        <h2 class="account-2026__panel-title mt-5">B2B workspaces</h2>
+        <div class="account-grid-cards">
+          {% for row in company_workspaces %}
+            <article class="account-entity-card">
+              <div class="account-entity-card__title">{{ row.company.display_name|default:row.company.legal_entity.name }}</div>
+              <div class="account-entity-card__meta">
+                Роль: {{ row.membership.get_role_display|default:"buyer" }} ·
+                Политика: {% if row.policy.is_enabled %}threshold {{ row.policy.auto_approve_below }} ₽{% else %}автосогласование выключено{% endif %}
+              </div>
+              {% if row.company.procurement_email %}
+                <div class="account-entity-card__body">Procurement: {{ row.company.procurement_email }}</div>
+              {% endif %}
+              <div class="account-entity-card__actions">
+                <a class="account-2026__panel-link"
+                   href="/account/orders/"
+                   hx-get="/account/orders/"
+                   hx-target="#account-main-content"
+                   hx-select="#account-main-content"
+                   hx-swap="outerHTML"
+                   hx-push-url="true">Открыть заказы</a>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      {% endif %}
 
       <h2 class="account-2026__panel-title mt-5">Мои заявки</h2>
       <div id="legal-requests"

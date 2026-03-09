@@ -2,7 +2,7 @@
   <form method="get" class="catalog-toolbar catalog-toolbar--neo2026 catalog-toolbar--single-row">
     <details class="catalog-filter-dropdown" data-filter-dropdown>
       <summary class="catalog-filter-dropdown__summary">
-        {% include 'shopfront/icons/layout-grid.svg' %}
+        <span class="catalog-filter-dropdown__summary-icon">{% include 'shopfront/icons/layout-grid.svg' %}</span>
         <span>Фильтры</span>
       </summary>
       <button type="button" class="catalog-filter-dropdown__backdrop" data-filter-close aria-label="Закрыть фильтры"></button>
@@ -20,8 +20,8 @@
             <span>Категория</span>
             <select class="select select-bordered select-sm w-full catalog-select-2026" name="category">
               <option value="">Любая</option>
-              {% for c in cats %}
-                <option value="{{ c.id }}" {% if request.GET.category|default:'' == c.id|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+              {% for c in category_rows %}
+                <option value="{{ c.slug }}" {% if request.GET.category|default:'' == c.slug or request.GET.category|default:'' == c.id|stringformat:"s" %}selected{% endif %}>{{ c.label }}</option>
               {% endfor %}
             </select>
           </label>
@@ -30,7 +30,18 @@
             <select class="select select-bordered select-sm w-full catalog-select-2026" name="brand">
               <option value="">Любой</option>
               {% for b in brands %}
-                <option value="{{ b.id }}" {% if request.GET.brand|default:'' == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+                <option value="{{ b.id }}" {% if request.GET.brand|default:'' == b.id|stringformat:"s" %}selected{% endif %}>
+                  {{ b.name }}{% for facet in facet_brand_options %}{% if facet.id == b.id %} · {{ facet.count }}{% endif %}{% endfor %}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            <span>Поставщик</span>
+            <select class="select select-bordered select-sm w-full catalog-select-2026" name="seller">
+              <option value="">Любой</option>
+              {% for s in facet_seller_options %}
+                <option value="{{ s.slug|default:s.id }}" {% if seller == s.slug or seller == s.id|stringformat:"s" %}selected{% endif %}>{{ s.label }} · {{ s.count }}</option>
               {% endfor %}
             </select>
           </label>
@@ -47,6 +58,30 @@
             <span>Поиск</span>
             <input class="input input-bordered input-sm w-full catalog-select-2026" name="q" value="{{ request.GET.q|default:'' }}" placeholder="например: сироп">
           </label>
+          <label>
+            <span>Наличие</span>
+            <select class="select select-bordered select-sm w-full catalog-select-2026" name="availability">
+              <option value="">Любое</option>
+              <option value="in_stock" {% if availability == "in_stock" %}selected{% endif %}>Только в наличии</option>
+            </select>
+          </label>
+          <label>
+            <span>Срок поставки</span>
+            <select class="select select-bordered select-sm w-full catalog-select-2026" name="delivery_eta">
+              <option value="">Любой</option>
+              <option value="fast" {% if delivery_eta == "fast" %}selected{% endif %}>До 2 дней</option>
+              <option value="week" {% if delivery_eta == "week" %}selected{% endif %}>До недели</option>
+              <option value="planned" {% if delivery_eta == "planned" %}selected{% endif %}>Больше недели</option>
+            </select>
+          </label>
+          <label>
+            <span>Цена от</span>
+            <input class="input input-bordered input-sm w-full catalog-select-2026" name="min_price" inputmode="decimal" value="{{ min_price|default:'' }}" placeholder="{% if facet_price_min %}{{ facet_price_min }}{% else %}0{% endif %}">
+          </label>
+          <label>
+            <span>Цена до</span>
+            <input class="input input-bordered input-sm w-full catalog-select-2026" name="max_price" inputmode="decimal" value="{{ max_price|default:'' }}" placeholder="{% if facet_price_max %}{{ facet_price_max }}{% else %}10000{% endif %}">
+          </label>
         </div>
         <div class="catalog-filter-dropdown__actions">
           <a class="btn btn-sm btn-ghost" href="/catalog/">Сбросить</a>
@@ -54,6 +89,11 @@
         </div>
       </div>
     </details>
+
+    <div class="catalog-toolbar__meta">
+      <span class="catalog-toolbar__meta-label">Сортировка</span>
+      <span class="catalog-toolbar__meta-hint">Быстрые сценарии как в маркетплейсе</span>
+    </div>
 
     <div class="catalog-toolbar__pills" role="group" aria-label="Сортировка каталога">
       <button type="submit" name="sort" value="new" class="catalog-sort-pill {% if sort|default:'new' == 'new' %}is-active{% endif %}" title="Сначала новинки" aria-label="Сначала новинки">

@@ -5,14 +5,14 @@
   <section class="twa-market__hero">
     <div class="twa-market__hero-top">
       <div>
-        <p class="twa-market__overline">Bad Guys Shop</p>
-        <h1 class="twa-market__title">Магазин</h1>
+        <p class="twa-market__overline">Servio</p>
+        <h1 class="twa-market__title">Каталог HoReCa</h1>
       </div>
       <button class="twa-market__haptic" data-twa-haptic="light" aria-label="Включить тактильный отклик">
         {% include 'shopfront/icons/bolt.svg' %}
       </button>
     </div>
-    <p class="twa-market__subtitle">Подборка товаров с быстрой покупкой внутри Telegram</p>
+    <p class="twa-market__subtitle">Быстрый вход в каталог, корзину и повторные b2b-заказы внутри Telegram</p>
 
     <form action="/catalog/" class="twa-market__search" role="search">
       <span class="twa-market__search-icon">{% include 'shopfront/icons/search.svg' %}</span>
@@ -32,9 +32,9 @@
       <article class="twa-product-card">
         <a class="twa-product-card__link" href="/product/{{ p.slug }}/" hx-boost="false" aria-label="Открыть товар {{ p.name }}">
           <figure class="twa-product-card__media">
-            {% with first_image=p.images.first %}
+            {% with first_image=p.prefetched_images.0 %}
               {% if first_image %}
-                <img src="{{ first_image.url }}" alt="{{ first_image.alt|default:p.name }}" loading="lazy" onerror="this.onerror=null;this.src='/media/user_photos/image017.jpg';">
+                <img src="{{ first_image.url }}" alt="{{ first_image.alt|default:p.name }}" loading="lazy" data-fallback-src="/media/user_photos/image017.jpg">
               {% else %}
                 <img src="/media/user_photos/image017.jpg" alt="{{ p.name }}" loading="lazy">
               {% endif %}
@@ -47,7 +47,7 @@
             <div class="twa-product-card__meta">
               <span class="twa-product-card__rating">{% include 'shopfront/icons/bolt.svg' %}4.8</span>
               <span class="twa-product-card__stock {% if p.stock_qty > 0 %}is-ok{% else %}is-empty{% endif %}">
-                {% if p.stock_qty > 0 %}В наличии{% else %}Нет{% endif %}
+                {% if p.stock_qty > 0 %}{{ p.stock_qty }} шт.{% else %}Нет в наличии{% endif %}
               </span>
             </div>
             <div class="twa-product-card__bottom">

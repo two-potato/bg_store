@@ -1,0 +1,173 @@
+body.app-theme .site-footer {
+  background: transparent !important;
+  border-top: 0 !important;
+}
+
+body.app-theme .site-footer-neo {
+  background: #fff;
+  border: 1px solid var(--pf-border);
+  border-radius: var(--pf-radius-xl);
+  box-shadow: var(--pf-shadow-soft);
+  padding: clamp(1rem, 2vw, 1.6rem);
+}
+
+body.app-theme .site-footer-neo__logo {
+  background: var(--pf-brand-soft) !important;
+  color: var(--pf-brand) !important;
+  border: 1px solid color-mix(in srgb, var(--pf-brand) 30%, white);
+}
+
+body.app-theme .site-footer-neo h4 {
+  color: var(--pf-text);
+}
+
+body.app-theme .site-footer-neo a,
+body.app-theme .site-footer-neo p,
+body.app-theme .site-footer-neo span {
+  color: #334155;
+}
+
+body.app-theme .site-footer-neo a:hover {
+  color: var(--pf-brand);
+}
+
+body.app-theme .site-footer.site-footer-2026 {
+  margin-top: 1.8rem !important;
+  border-top: 0 !important;
+  background: transparent !important;
+}
+
+body.app-theme .site-footer-2026__shell {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(0, 1fr)) !important;
+  gap: 0.85rem !important;
+  padding: 0.2rem 0 1rem !important;
+}
+
+body.app-theme .site-footer-2026__brand,
+body.app-theme .site-footer-2026__col {
+  background: #ffffff !important;
+  border: 1px solid #d9e2fb !important;
+  border-radius: 16px !important;
+  padding: 0.95rem 1rem !important;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06) !important;
+}
+
+body.app-theme .site-footer-2026__logo {
+  width: 2.45rem !important;
+  height: 2.45rem !important;
+  border-radius: 0.8rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-weight: 800 !important;
+  font-size: 0.96rem !important;
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #2a8cff 0%, #1f6fe8 55%, #5f2fd6 100%) !important;
+  margin-bottom: 0.62rem !important;
+}
+
+body.app-theme .site-footer-2026__logo-wrap {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  margin-bottom: 0.62rem !important;
+}
+
+body.app-theme .site-footer-2026__logo-img {
+  display: block !important;
+  height: 2.35rem !important;
+  width: auto !important;
+  max-width: min(100%, 11.5rem) !important;
+  object-fit: contain !important;
+}
+
+body.app-theme .site-footer-2026__brand h3,
+body.app-theme .site-footer-2026__col h4 {
+  margin: 0 0 0.52rem !important;
+  color: #111827 !important;
+}
+
+body.app-theme .site-footer-2026__brand h3 {
+  font-size: 1rem !important;
+  font-weight: 800 !important;
+}
+
+body.app-theme .site-footer-2026__brand p {
+  margin: 0 !important;
+  color: #475569 !important;
+  font-size: 0.84rem !important;
+  line-height: 1.45 !important;
+}
+
+body.app-theme .site-footer-2026__meta {
+  margin-top: 0.72rem !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 0.38rem !important;
+}
+
+body.app-theme .site-footer-2026__meta span {
+  border: 1px solid #d9e2fb !important;
+  border-radius: 999px !important;
+  padding: 0.18rem 0.5rem !important;
+  color: #64748b !important;
+  background: #f8faff !important;
+  font-size: 0.72rem !important;
+  line-height: 1 !important;
+}
+
+body.app-theme .site-footer-2026__col h4 {
+  font-size: 0.88rem !important;
+  font-weight: 700 !important;
+}
+
+body.app-theme .site-footer-2026__col a {
+  display: block !important;
+  color: #334155 !important;
+  text-decoration: none !important;
+  font-size: 0.8rem !important;
+  line-height: 1.32 !important;
+  margin-bottom: 0.38rem !important;
+}
+
+body.app-theme .site-footer-2026__col a:last-child {
+  margin-bottom: 0 !important;
+}
+
+body.app-theme .site-footer-2026__col a:hover {
+  color: #1a5dcb !important;
+}
+
+body.app-theme .site-footer,
+body.app-theme .home-minimal-footer,
+body.app-theme .site-footer-neo,
+body.app-theme .site-footer-neo__brand,
+body.app-theme .site-footer-neo__col,
+body.app-theme .site-footer-neo__logo {
+  box-shadow: none !important;
+}
+
+@media (max-width: 1023.98px) {
+  body.app-theme .site-footer-2026__shell {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 767.98px) {
+  body.app-theme .site-footer.site-footer-2026 {
+    margin-top: 1.2rem !important;
+    padding-bottom: 5rem !important;
+  }
+
+  body.app-theme .site-footer-2026__shell {
+    grid-template-columns: 1fr !important;
+    gap: 0.6rem !important;
+  }
+
+  body.app-theme .site-footer-2026__brand,
+  body.app-theme .site-footer-2026__col {
+    padding: 0.86rem 0.88rem !important;
+    border-radius: 14px !important;
+  }
+}

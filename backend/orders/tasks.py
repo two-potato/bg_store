@@ -3,13 +3,11 @@ import logging
 import time
 from django.conf import settings
 from django.core.cache import cache
-from django.core.mail import send_mail
-import httpx
 import asyncio
 from django.utils import timezone
 from datetime import timedelta
 from orders.models import Order
-from catalog.models import Product
+from catalog.models import Product, SellerInventory
 from commerce.models import SellerStore
 from commerce.models import LegalEntityMembership
 from core.secure import sign_approve
@@ -17,6 +15,8 @@ from core.pdf import render_invoice_pdf
 from .models import FakeAcquiringPayment
 from core.notifications import (
     admin_telegram_ids,
+    apost_notify_json,
+    send_mail_message,
     send_telegram_bulk,
     send_telegram_group,
     send_email_notification,
@@ -38,8 +38,14 @@ def _admin_telegram_recipients() -> list[int]:
     return admin_telegram_ids()
 
 
+def _is_valid_telegram_id(value: int) -> bool:
+    return -(10**14) <= int(value) <= 10**14 and int(value) != 0
+
+
 def _buyer_emails(order: Order) -> list[str]:
     recipients = set()
+    if order.customer_email:
+        recipients.add(order.customer_email.strip())
     if getattr(order.placed_by, "email", None):
         recipients.add(order.placed_by.email.strip())
     profile = getattr(order.placed_by, "profile", None)
@@ -57,37 +63,39 @@ def notify_admin_order_status_email(self, order_id: int, event: str, previous_st
         return
 
     status_text = order.get_status_display()
+    seller_count = max(1, order.seller_splits.count())
     if event == "created":
-        subject = f"[BG Shop] Новый заказ #{order.id}"
+        subject = f"[Servio] Новый заказ #{order.id}"
         body = (
             f"Создан новый заказ #{order.id}\n"
             f"Статус: {status_text}\n"
-            f"Клиент: {order.placed_by}\n"
+            f"Клиент: {order.buyer_display()}\n"
             f"Юрлицо: {order.legal_entity or '-'}\n"
+            f"Поставщиков в заказе: {seller_count}\n"
             f"Сумма: {order.total}\n"
         )
     else:
-        subject = f"[BG Shop] Заказ #{order.id}: статус изменен"
+        subject = f"[Servio] Заказ #{order.id}: статус изменен"
         body = (
             f"Заказ #{order.id}: статус изменен\n"
             f"Было: {previous_status or '-'}\n"
             f"Стало: {status_text}\n"
-            f"Клиент: {order.placed_by}\n"
+            f"Клиент: {order.buyer_display()}\n"
             f"Юрлицо: {order.legal_entity or '-'}\n"
+            f"Поставщиков в заказе: {seller_count}\n"
             f"Сумма: {order.total}\n"
         )
 
-    send_mail(
+    send_mail_message(
         subject=subject,
         message=body,
-        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
         recipient_list=recipients,
-        fail_silently=False,
+        logger=log,
+        extra={"order_id": order_id, "event": event},
     )
-    log.info("order_email_sent", extra={"order_id": order_id, "event": event, "recipients": recipients})
     buyer_recipients = _buyer_emails(order)
     if buyer_recipients:
-        buyer_subject = f"PotatoFarm: заказ #{order.id}"
+        buyer_subject = f"Servio: заказ #{order.id}"
         buyer_body = (
             f"Статус вашего заказа #{order.id}: {status_text}\n"
             f"Сумма: {order.total}\n"
@@ -106,7 +114,7 @@ def notify_order_status_telegram(self, order_id: int, event: str, previous_statu
         text = (
             f"🆕 Новый заказ <b>#{order.id}</b>\n"
             f"Статус: <b>{status_text}</b>\n"
-            f"Клиент: {order.placed_by}\n"
+            f"Клиент: {order.buyer_display()}\n"
             f"Юрлицо: {order.legal_entity or '-'}\n"
             f"Сумма: {order.total}"
         )
@@ -116,20 +124,31 @@ def notify_order_status_telegram(self, order_id: int, event: str, previous_statu
             f"🔔 Заказ <b>#{order.id}</b>: статус изменён\n"
             f"Было: <code>{prev_text}</code>\n"
             f"Стало: <b>{status_text}</b>\n"
-            f"Клиент: {order.placed_by}\n"
+            f"Клиент: {order.buyer_display()}\n"
             f"Юрлицо: {order.legal_entity or '-'}\n"
             f"Сумма: {order.total}"
         )
 
     async def send():
-        async with httpx.AsyncClient(timeout=10) as c:
+        from httpx import AsyncClient
+
+        async with AsyncClient(timeout=10) as c:
             for tg in recipients:
-                resp = await c.post(
-                    f"{settings.BOT_NOTIFY_URL}/notify/send_text",
-                    json={"telegram_id": tg, "text": text},
-                    headers=_notify_headers(),
+                tg_int = int(tg)
+                if not _is_valid_telegram_id(tg_int):
+                    log.warning(
+                        "order_status_tg_skip_invalid_recipient",
+                        extra={"order_id": order_id, "event": event, "telegram_id": tg_int},
+                    )
+                    continue
+                await apost_notify_json(
+                    c,
+                    "/notify/send_text",
+                    {"telegram_id": tg_int, "text": text},
+                    logger=log,
+                    failure_event="order_status_tg_recipient_failed",
+                    extra={"order_id": order_id, "event": event, "telegram_id": tg_int},
                 )
-                resp.raise_for_status()
 
     try:
         asyncio.run(send())
@@ -166,20 +185,29 @@ def notify_entity_admins_order_created(self, order_id: int):
         role__code__in=["owner","admin"]
     ).select_related("user__profile")
     async def send():
-        async with httpx.AsyncClient(timeout=15) as c:
+        from httpx import AsyncClient
+
+        async with AsyncClient(timeout=15) as c:
             for m in admins:
                 tg = getattr(m.user.profile, "telegram_id", None)
                 if tg:
                     import time as _t
                     ts = int(_t.time())
-                    await c.post(f"{settings.BOT_NOTIFY_URL}/notify/send_kb", json={
-                        "telegram_id": tg,
-                        "text": f"🧾 Новый заказ #{order.id}\n{order.legal_entity.name}\nСумма: {order.total}",
-                        "keyboard": [[
-                            {"text":"✅ Подтвердить","callback_data":f"approve:{order.id}:{ts}:{sign_approve(order.id, tg, ts)}"},
-                            {"text":"❌ Отклонить","callback_data":f"reject:{order.id}:{ts}:{sign_approve(order.id, tg, ts)}"},
-                        ]]
-                    }, headers=_notify_headers())
+                    await apost_notify_json(
+                        c,
+                        "/notify/send_kb",
+                        {
+                            "telegram_id": tg,
+                            "text": f"🧾 Новый заказ #{order.id}\n{order.legal_entity.name}\nСумма: {order.total}",
+                            "keyboard": [[
+                                {"text":"✅ Подтвердить","callback_data":f"approve:{order.id}:{ts}:{sign_approve(order.id, tg, ts)}"},
+                                {"text":"❌ Отклонить","callback_data":f"reject:{order.id}:{ts}:{sign_approve(order.id, tg, ts)}"},
+                            ]],
+                        },
+                        logger=log,
+                        failure_event="entity_admin_notify_failed",
+                        extra={"order_id": order.id, "telegram_id": int(tg)},
+                    )
     asyncio.run(send())
     # Try to notify managers group via notify-bot (if configured)
     try:
@@ -191,10 +219,17 @@ def notify_entity_admins_order_created(self, order_id: int):
 
 async def _notify_group(order_id:int):
     order = Order.objects.select_related("legal_entity").get(id=order_id)
-    async with httpx.AsyncClient(timeout=10) as c:
-        await c.post(f"{settings.BOT_NOTIFY_URL}/notify/send_group", json={
-            "text": f"🧾 Новый заказ #{order.id} — {order.legal_entity.name} — сумма {order.total}"
-        }, headers=_notify_headers())
+    from httpx import AsyncClient
+
+    async with AsyncClient(timeout=10) as c:
+        await apost_notify_json(
+            c,
+            "/notify/send_group",
+            {"text": f"🧾 Новый заказ #{order.id} — {order.legal_entity.name} — сумма {order.total}"},
+            logger=log,
+            failure_event="entity_admin_group_notify_failed",
+            extra={"order_id": order.id},
+        )
 
 @shared_task(bind=True, max_retries=5, default_retry_delay=30)
 def send_invoice_to_buyer(self, order_id: int):
@@ -204,15 +239,20 @@ def send_invoice_to_buyer(self, order_id: int):
     pdf_path, _ = render_invoice_pdf(order)
     tg = order.placed_by.profile.telegram_id
     async def send():
-        async with httpx.AsyncClient(timeout=30) as c:
-            await c.post(f"{settings.BOT_NOTIFY_URL}/notify/send_document", json={
-                "telegram_id": tg, "caption": f"Счёт по заказу #{order.id}", "path": pdf_path
-            }, headers=_notify_headers())
+        from httpx import AsyncClient
+
+        async with AsyncClient(timeout=30) as c:
+            await apost_notify_json(
+                c,
+                "/notify/send_document",
+                {"telegram_id": tg, "caption": f"Счёт по заказу #{order.id}", "path": pdf_path},
+                logger=log,
+                failure_event="invoice_send_document_failed",
+                extra={"order_id": order.id, "telegram_id": int(tg)},
+            )
     asyncio.run(send())
     dur = (time.perf_counter_ns() - t0) / 1_000_000
     log.info("task_done send_invoice_to_buyer", extra={"order_id": order_id, "duration_ms": round(dur,2)})
-def _notify_headers() -> dict[str, str]:
-    return {"X-Internal-Token": str(getattr(settings, "INTERNAL_TOKEN", ""))}
 
 
 @shared_task(bind=True, max_retries=0, default_retry_delay=60)
@@ -236,7 +276,7 @@ def notify_new_orders_sla_breach(self):
         text = (
             f"⏱️ SLA: заказ <b>#{order.id}</b> слишком долго в статусе NEW\n"
             f"Возраст: {age_min} мин\n"
-            f"Клиент: {order.placed_by}\n"
+            f"Клиент: {order.buyer_display()}\n"
             f"Юрлицо: {order.legal_entity or '-'}\n"
             f"Сумма: {order.total}"
         )
@@ -273,11 +313,28 @@ def notify_low_stock_products(self):
         if len(lines) >= max_items:
             break
     if not lines:
+        inventory_qs = (
+            SellerInventory.objects.select_related("offer__product", "offer__seller", "offer__seller_store")
+            .filter(stock_qty__lte=threshold)
+            .order_by("stock_qty", "offer__product__name")[: max(1, max_items * 2)]
+        )
+        for inv in inventory_qs:
+            key = f"service-alert:low-stock:inventory:{inv.id}"
+            if cache.get(key):
+                continue
+            store_name = getattr(getattr(inv.offer, "seller_store", None), "name", "") or getattr(inv.offer.seller, "username", "-")
+            lines.append(
+                f"• оффер #{inv.offer_id} {inv.offer.product.name} | склад: <b>{inv.warehouse_name}</b> | остаток: <b>{inv.available_qty}</b> | магазин: {store_name}"
+            )
+            cache.set(key, "1", timeout=cooldown * 60)
+            if len(lines) >= max_items:
+                break
+    if not lines:
         return
     text = "📉 Низкие остатки товаров:\n" + "\n".join(lines)
     send_telegram_bulk(text)
     send_telegram_group(text)
-    send_email_notification("[PotatoFarm] Низкие остатки товаров", "\n".join(l.replace("<b>", "").replace("</b>", "") for l in lines))
+    send_email_notification("[Servio] Низкие остатки товаров", "\n".join(l.replace("<b>", "").replace("</b>", "") for l in lines))
     log.info("service_alert_low_stock_sent", extra={"items": len(lines)})
 
 

@@ -1,0 +1,27 @@
+body.app-theme .app-main {
+  max-width: 1440px;
+}
+
+body.app-theme .site-header-v3,
+body.app-theme .site-footer-2026__shell,
+body.app-theme .servio-info-card,
+body.app-theme .servio-home__hero,
+body.app-theme .servio-home__category,
+body.app-theme .servio-home__benefit,
+body.app-theme .servio-home__step,
+body.app-theme .servio-home__hero-card,
+body.app-theme .product-card--neo,
+body.app-theme .product-lite-2026__summary,
+body.app-theme .product-lite-2026__panel,
+body.app-theme .live-search-panel--neo,
+body.app-theme .catalog-head-neo,
+body.app-theme .catalog-filter-dropdown__panel {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--servio-border);
+  box-shadow: var(--servio-shadow);
+}
+
+body.app-theme .site-footer-2026__shell {
+  border-radius: 28px 28px 0 0;
+}

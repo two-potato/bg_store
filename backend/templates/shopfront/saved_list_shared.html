@@ -1,0 +1,10 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<section class="page-2026">
+  <header class="page-2026__header">
+    <h1>{{ saved_list.name }}</h1>
+    <p>{{ saved_list.description|default:"Публичный список закупок Servio." }}</p>
+  </header>
+  {% include "shopfront/components/product_grid.html" with products=products recommendation_source="shared_saved_list" %}
+</section>
+{% endblock %}

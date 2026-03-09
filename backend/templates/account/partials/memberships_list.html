@@ -1,12 +1,26 @@
 {% if memberships %}
-  <ul class="account-2026__list">
+  <div class="account-grid-cards">
     {% for m in memberships %}
-      <li class="p-3">
-        <div class="font-semibold">{{ m.legal_entity.name }}</div>
-        <div class="text-xs text-base-content/60">ИНН: {{ m.legal_entity.inn }} · Роль: {{ m.role }}</div>
-      </li>
+      <article class="account-entity-card">
+        <div class="account-entity-card__head">
+          <div>
+            <div class="account-entity-card__title">{{ m.legal_entity.name }}</div>
+            <div class="account-entity-card__meta">ИНН: {{ m.legal_entity.inn }}</div>
+          </div>
+          <div class="account-entity-card__tag">{{ m.role }}</div>
+        </div>
+        <div class="account-entity-card__actions">
+          <a class="account-2026__panel-link"
+             href="/account/orders/"
+             hx-get="/account/orders/"
+             hx-target="#account-main-content"
+             hx-select="#account-main-content"
+             hx-swap="outerHTML"
+             hx-push-url="true">Заказы компании</a>
+        </div>
+      </article>
     {% endfor %}
-  </ul>
+  </div>
 {% else %}
   <div class="alert">Пока нет привязанных юр лиц.</div>
 {% endif %}

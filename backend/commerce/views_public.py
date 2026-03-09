@@ -1,11 +1,19 @@
 from rest_framework import views, permissions, viewsets, mixins
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from django.conf import settings
 from django.core.cache import cache
 from .models import LegalEntity, MembershipRequest, DeliveryAddress, LegalEntityMembership
 from .serializers import (
-    CheckInnResponseSerializer, MembershipRequestCreateSerializer, DeliveryAddressSerializer
+    CheckInnResponseSerializer,
+    CheckInnRequestSerializer,
+    MembershipRequestCreateSerializer,
+    DeliveryAddressSerializer,
+    DetailSerializer,
+    LookupPartyResponseSerializer,
+    LookupBankResponseSerializer,
+    ReverseGeocodeResponseSerializer,
 )
 import asyncio
 import logging
@@ -15,15 +23,16 @@ from django.template import loader
 from django.http import HttpResponse
 from .utils import reverse_geocode
 from core.logging_utils import LoggedAPIViewMixin, LoggedViewSetMixin, log_calls
+from core.notifications import apost_notify_json
 
 log = logging.getLogger("commerce")
 
 
-def _notify_headers() -> dict[str, str]:
-    return {"X-Internal-Token": str(getattr(settings, "INTERNAL_TOKEN", ""))}
-
+@extend_schema(request=CheckInnRequestSerializer, responses=CheckInnResponseSerializer)
 class CheckInnView(LoggedAPIViewMixin, views.APIView):
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = CheckInnRequestSerializer
+
     def post(self, request):
         inn = (request.data.get("inn") or "").strip()
         cache_key = f"commerce:inn_exists:{inn}"
@@ -37,6 +46,7 @@ class CheckInnView(LoggedAPIViewMixin, views.APIView):
             cache.set(cache_key, data, timeout=LOOKUP_TTL)
         return Response(CheckInnResponseSerializer(data).data)
 
+@extend_schema_view(create=extend_schema(request=MembershipRequestCreateSerializer, responses=MembershipRequestCreateSerializer))
 class MembershipRequestViewSet(LoggedViewSetMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated]
     queryset = MembershipRequest.objects.all()
@@ -50,15 +60,24 @@ class MembershipRequestViewSet(LoggedViewSetMixin, mixins.CreateModelMixin, view
         ).select_related("user__profile")
         admins = list(admins_qs)
         async def send(admins_list):
-            async with httpx.AsyncClient(timeout=10) as c:
+            from httpx import AsyncClient
+
+            async with AsyncClient(timeout=10) as c:
                 for m in admins_list:
                     tg = getattr(m.user.profile, "telegram_id", None)
                     if tg:
-                        await c.post(f"{settings.BOT_NOTIFY_URL}/notify/send_kb", json={
-                            "telegram_id": tg,
-                            "text": f"🔔 Заявка на вступление в {req.legal_entity.name} от {req.applicant.username}",
-                            "keyboard": [[{"text":"Открыть админку","callback_data":"noop"}]]
-                        }, headers=_notify_headers())
+                        await apost_notify_json(
+                            c,
+                            "/notify/send_kb",
+                            {
+                                "telegram_id": tg,
+                                "text": f"🔔 Заявка на вступление в {req.legal_entity.name} от {req.applicant.username}",
+                                "keyboard": [[{"text":"Открыть админку","callback_data":"noop"}]],
+                            },
+                            logger=log,
+                            failure_event="membership_notify_failed",
+                            extra={"legal_entity_id": req.legal_entity_id, "telegram_id": int(tg)},
+                        )
         try:
             if admins:
                 asyncio.run(send(admins))
@@ -70,7 +89,12 @@ class MembershipRequestViewSet(LoggedViewSetMixin, mixins.CreateModelMixin, view
 class DeliveryAddressViewSet(LoggedViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = DeliveryAddressSerializer
+    queryset = DeliveryAddress.objects.none()
+    lookup_field = "pk"
+
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False) or not getattr(getattr(self.request, "user", None), "is_authenticated", False):
+            return DeliveryAddress.objects.none()
         le_id = self.request.query_params.get("legal_entity")
         qs = DeliveryAddress.objects.filter(legal_entity__members=self.request.user)
         return qs.filter(legal_entity_id=le_id) if le_id else qs
@@ -112,6 +136,10 @@ async def _dadata_post(url: str, payload: dict):
         return r.json()
 
 
+@extend_schema(
+    parameters=[OpenApiParameter(name="inn", type=str, location=OpenApiParameter.QUERY, required=True)],
+    responses={200: LookupPartyResponseSerializer, 400: DetailSerializer, 404: LookupPartyResponseSerializer},
+)
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 @log_calls(log)
@@ -152,6 +180,10 @@ def lookup_party_by_inn(request):
     return Response(out)
 
 
+@extend_schema(
+    parameters=[OpenApiParameter(name="bik", type=str, location=OpenApiParameter.QUERY, required=True)],
+    responses={200: LookupBankResponseSerializer, 400: DetailSerializer, 404: LookupBankResponseSerializer},
+)
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 @log_calls(log)
@@ -183,6 +215,7 @@ def lookup_bank_by_bik(request):
     return Response(out)
 
 
+@extend_schema(exclude=True)
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 @log_calls(log)
@@ -224,6 +257,13 @@ def lookup_party_preview(request):
     return HttpResponse(html, content_type="text/html", status=status_code)
 
 
+@extend_schema(
+    parameters=[
+        OpenApiParameter(name="lat", type=float, location=OpenApiParameter.QUERY, required=True),
+        OpenApiParameter(name="lon", type=float, location=OpenApiParameter.QUERY, required=True),
+    ],
+    responses={200: ReverseGeocodeResponseSerializer, 400: DetailSerializer, 404: ReverseGeocodeResponseSerializer},
+)
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 @log_calls(log)

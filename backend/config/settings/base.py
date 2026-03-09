@@ -6,7 +6,6 @@ from django.core.exceptions import ImproperlyConfigured
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev")
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "*").split(",")
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -16,7 +15,15 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _env_csv(name: str, default: list[str] | None = None) -> list[str]:
+    raw = os.getenv(name)
+    if raw is None:
+        return list(default or [])
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 DEBUG = _env_bool("DEBUG", False)
+ALLOWED_HOSTS = _env_csv("ALLOWED_HOSTS", ["*"])
 
 INSTALLED_APPS = [
     "jazzmin",
@@ -42,6 +49,7 @@ INSTALLED_APPS = [
     "users",
     "commerce",
     "catalog",
+    "promotions",
     "orders",
     "shopfront",
 ]
@@ -81,6 +89,9 @@ ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = _env_csv("CORS_ALLOWED_ORIGINS")
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -108,7 +119,7 @@ elif _cache_backend == "locmem":  # pragma: no cover - env-specific branch
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
             "LOCATION": os.getenv("CACHE_LOCATION", "bg-shop-cache"),
             "TIMEOUT": int(os.getenv("CACHE_DEFAULT_TIMEOUT", "300")),
-            "KEY_PREFIX": os.getenv("CACHE_KEY_PREFIX", "bgshop"),
+            "KEY_PREFIX": os.getenv("CACHE_KEY_PREFIX", "servio"),
         }
     }
 else:
@@ -117,7 +128,7 @@ else:
             "BACKEND": "django.core.cache.backends.redis.RedisCache",
             "LOCATION": os.getenv("CACHE_URL", os.getenv("REDIS_URL", "redis://redis:6379/1")),
             "TIMEOUT": int(os.getenv("CACHE_DEFAULT_TIMEOUT", "300")),
-            "KEY_PREFIX": os.getenv("CACHE_KEY_PREFIX", "bgshop"),
+            "KEY_PREFIX": os.getenv("CACHE_KEY_PREFIX", "servio"),
         }
     }
 
@@ -140,6 +151,7 @@ TEMPLATES = [
                 "shopfront.context_processors.header_categories",
                 "shopfront.context_processors.site_settings",
                 "shopfront.context_processors.favorites_state",
+                "shopfront.context_processors.compare_state",
             ],
         },
     }
@@ -163,7 +175,7 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "Bad Guys Shop API",
+    "TITLE": "Servio API",
     "VERSION": "1.0.0",
 }
 
@@ -223,6 +235,18 @@ BOT_NOTIFY_URL = os.getenv("BOT_NOTIFY_URL", BOT_BASE_URL)
 
 # Analytics
 GA_MEASUREMENT_ID = os.getenv("GA_MEASUREMENT_ID", "").strip()
+POSTHOG_API_KEY = os.getenv("POSTHOG_API_KEY", "").strip()
+POSTHOG_HOST = os.getenv("POSTHOG_HOST", "https://app.posthog.com").strip()
+CLARITY_PROJECT_ID = os.getenv("CLARITY_PROJECT_ID", "").strip()
+ANALYTICS_REQUIRE_CONSENT = _env_bool("ANALYTICS_REQUIRE_CONSENT", not DEBUG)
+
+# Search readiness
+SEARCH_PROVIDER = os.getenv("SEARCH_PROVIDER", "elasticsearch").strip().lower()
+ES_ENABLED = _env_bool("ES_ENABLED", True)
+SEMANTIC_SEARCH_ENABLED = _env_bool("SEMANTIC_SEARCH_ENABLED", False)
+SEARCH_QUERY_REWRITE_ENABLED = _env_bool("SEARCH_QUERY_REWRITE_ENABLED", True)
+SEARCH_RERANK_ENABLED = _env_bool("SEARCH_RERANK_ENABLED", True)
+SEMANTIC_SEARCH_BACKEND = os.getenv("SEMANTIC_SEARCH_BACKEND", "hybrid-db").strip().lower()
 
 # Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -237,7 +261,7 @@ TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "1x00000000000000000000
 # Public observability/docs toggles
 ENABLE_API_DOCS = _env_bool("ENABLE_API_DOCS", DEBUG)
 METRICS_TOKEN = os.getenv("METRICS_TOKEN", "")
-ENABLE_CATALOG_RATING = _env_bool("ENABLE_CATALOG_RATING", DEBUG)
+ENABLE_CATALOG_RATING = _env_bool("ENABLE_CATALOG_RATING", True)
 
 # Google Maps
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")
@@ -246,6 +270,7 @@ GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")
 ES_URL = os.getenv("ES_URL", "http://es:9200")
 ES_PRODUCTS_INDEX = os.getenv("ES_PRODUCTS_INDEX", "products")
 ES_TIMEOUT_SECONDS = float(os.getenv("ES_TIMEOUT_SECONDS", "0.8"))
+ES_ENABLED = _env_bool("ES_ENABLED", True)
 
 # Cache TTLs (seconds)
 CACHE_TTL_HEADER_CATEGORIES = int(os.getenv("CACHE_TTL_HEADER_CATEGORIES", "900"))
@@ -267,7 +292,7 @@ ADMIN_NOTIFY_TELEGRAM_IDS = [
     for v in os.getenv("ADMIN_NOTIFY_TELEGRAM_IDS", "").split(",")
     if v.strip().lstrip("-").isdigit()
 ]
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@bgshop.local")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@servio.local")
 EMAIL_BACKEND = os.getenv(
     "EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend"
 )
@@ -307,9 +332,7 @@ CELERY_BEAT_SCHEDULE = {
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # CSRF trusted origins (needed when serving through a different port like 8080)
-_csrf_env = [
-    u.strip() for u in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if u.strip()
-]
+_csrf_env = _env_csv("CSRF_TRUSTED_ORIGINS")
 CSRF_TRUSTED_ORIGINS = _csrf_env or [
     "http://localhost",
     "http://localhost:8000",
@@ -326,16 +349,28 @@ if not DEBUG:  # pragma: no cover - primarily exercised in production runtime
         _settings_module.endswith(".prod"),
     )
     if _strict_settings:
+        _unsafe_placeholders = {"", "change-me", "dev", "dev-secret"}
+        _localhost_hosts = {"localhost", "127.0.0.1", "0.0.0.0"}
         if SECRET_KEY in {"", "dev", "change-me"}:
             raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set to a strong value when DEBUG=0")
-        if INTERNAL_TOKEN in {"", "change-me", "dev", "dev-secret"}:
+        if INTERNAL_TOKEN in _unsafe_placeholders:
             raise ImproperlyConfigured("INTERNAL_TOKEN must be set to a strong value when DEBUG=0")
-        if ORDER_APPROVE_SECRET in {"", "change-me", "dev", "dev-secret"}:
+        if ORDER_APPROVE_SECRET in _unsafe_placeholders:
             raise ImproperlyConfigured("ORDER_APPROVE_SECRET must be set to a strong value when DEBUG=0")
+        if METRICS_TOKEN in _unsafe_placeholders:
+            raise ImproperlyConfigured("METRICS_TOKEN must be set to a strong value when DEBUG=0")
         if not TELEGRAM_BOT_TOKEN:
             raise ImproperlyConfigured("TELEGRAM_BOT_TOKEN must be configured when DEBUG=0")
-        if "*" in ALLOWED_HOSTS:
+        if not ALLOWED_HOSTS or "*" in ALLOWED_HOSTS:
             raise ImproperlyConfigured("ALLOWED_HOSTS must not contain '*' when DEBUG=0")
+        if any(host in _localhost_hosts for host in ALLOWED_HOSTS):
+            raise ImproperlyConfigured("ALLOWED_HOSTS must not contain localhost-only hosts when DEBUG=0")
+        if not _csrf_env:
+            raise ImproperlyConfigured("CSRF_TRUSTED_ORIGINS must be explicitly configured when DEBUG=0")
+        if any(not origin.startswith("https://") for origin in CSRF_TRUSTED_ORIGINS):
+            raise ImproperlyConfigured("CSRF_TRUSTED_ORIGINS must use https:// origins when DEBUG=0")
+        if any("localhost" in origin or "127.0.0.1" in origin for origin in CSRF_TRUSTED_ORIGINS):
+            raise ImproperlyConfigured("CSRF_TRUSTED_ORIGINS must not contain local origins when DEBUG=0")
 
 # -------- Logging configuration --------
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
@@ -429,6 +464,11 @@ LOGGING = {
             "propagate": False,
         },
         "orders": {
+            "handlers": _log_handlers,
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        "core.notifications": {
             "handlers": _log_handlers,
             "level": LOG_LEVEL,
             "propagate": False,

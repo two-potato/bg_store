@@ -33,11 +33,28 @@ class Country(TimeStampedModel):
 
 class Brand(TimeStampedModel, SeoFieldsMixin):
     name = models.CharField(max_length=120, unique=True)
+    slug = models.SlugField(max_length=160, unique=True, blank=True, db_index=False)
     description = models.TextField(blank=True)
     photo = models.ImageField(upload_to='brand_photos/', null=True, blank=True)
+    landing_body = models.TextField(blank=True)
+    faq_title = models.CharField(max_length=255, blank=True)
+    faq_body = models.TextField(blank=True)
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(self.name)
+            if not base or base.isdigit():
+                base = f"brand-{self.pk}" if self.pk else "brand"
+            candidate = base
+            suffix = 2
+            while Brand.objects.filter(slug=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base}-{suffix}"
+                suffix += 1
+            self.slug = candidate
+        return super().save(*args, **kwargs)
 
 class Series(TimeStampedModel, SeoFieldsMixin):
     brand = models.ForeignKey(Brand, on_delete=models.CASCADE, related_name="series")
@@ -57,6 +74,11 @@ class Category(TimeStampedModel, SeoFieldsMixin):
     parent = models.ForeignKey("self", on_delete=models.CASCADE, null=True, blank=True, related_name="children")
     description = models.TextField(blank=True)
     photo = models.ImageField(upload_to='category_photos/', null=True, blank=True)
+    hero_title = models.CharField(max_length=255, blank=True)
+    hero_text = models.TextField(blank=True)
+    landing_body = models.TextField(blank=True)
+    faq_title = models.CharField(max_length=255, blank=True)
+    faq_body = models.TextField(blank=True)
 
     def __str__(self):
         return self.name
@@ -111,6 +133,8 @@ class Product(TimeStampedModel, SeoFieldsMixin):
     barcode = models.CharField(max_length=64, blank=True)
     price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     stock_qty = models.IntegerField(default=0)
+    min_order_qty = models.PositiveIntegerField(default=1)
+    lead_time_days = models.PositiveIntegerField(default=0)
     is_new = models.BooleanField(default=False)
     is_promo = models.BooleanField(default=False)
     attributes = models.JSONField(default=dict, blank=True)
@@ -152,6 +176,26 @@ class Product(TimeStampedModel, SeoFieldsMixin):
             self.slug = candidate
         return super().save(*args, **kwargs)
 
+    @property
+    def display_price(self):
+        return getattr(self, "_effective_price", self.price)
+
+    @property
+    def display_stock_qty(self):
+        return getattr(self, "_effective_stock_qty", self.stock_qty)
+
+    @property
+    def display_lead_time_days(self):
+        return getattr(self, "_effective_lead_time_days", self.lead_time_days)
+
+    @property
+    def display_min_order_qty(self):
+        return getattr(self, "_effective_min_order_qty", self.min_order_qty)
+
+    @property
+    def active_offer(self):
+        return getattr(self, "_active_offer", None)
+
 class ProductImage(TimeStampedModel):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="images")
     url = models.URLField()
@@ -174,11 +218,150 @@ class ProductImage(TimeStampedModel):
         return super().save(*args, **kwargs)
 
 
+class ProductDocument(TimeStampedModel):
+    class Kind(models.TextChoices):
+        CERTIFICATE = "certificate", "Сертификат"
+        SPEC = "spec", "Спецификация"
+        PDF = "pdf", "PDF"
+        OTHER = "other", "Прочее"
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="documents")
+    title = models.CharField(max_length=255)
+    kind = models.CharField(max_length=16, choices=Kind.choices, default=Kind.PDF)
+    file_url = models.URLField()
+    ordering = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["ordering", "id"]
+
+    def __str__(self):
+        return f"{self.product_id} · {self.title}"
+
+
+class Collection(TimeStampedModel, SeoFieldsMixin):
+    name = models.CharField(max_length=160, unique=True)
+    slug = models.SlugField(max_length=180, unique=True, blank=True, db_index=False)
+    description = models.TextField(blank=True)
+    photo = models.ImageField(upload_to="collection_photos/", null=True, blank=True)
+    hero_title = models.CharField(max_length=200, blank=True)
+    hero_text = models.TextField(blank=True)
+    landing_body = models.TextField(blank=True)
+    faq_title = models.CharField(max_length=255, blank=True)
+    faq_body = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    is_featured = models.BooleanField(default=False)
+    products = models.ManyToManyField(Product, through="CollectionItem", related_name="collections", blank=True)
+
+    class Meta:
+        ordering = ["-is_featured", "name"]
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(self.name)
+            if not base or base.isdigit():
+                base = f"collection-{self.pk}" if self.pk else "collection"
+            candidate = base
+            suffix = 2
+            while Collection.objects.filter(slug=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base}-{suffix}"
+                suffix += 1
+            self.slug = candidate
+        return super().save(*args, **kwargs)
+
+
+class CollectionItem(TimeStampedModel):
+    collection = models.ForeignKey(Collection, on_delete=models.CASCADE, related_name="items")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="collection_items")
+    ordering = models.PositiveIntegerField(default=0)
+    highlight = models.CharField(max_length=120, blank=True)
+
+    class Meta:
+        ordering = ["ordering", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["collection", "product"], name="unique_collection_product"),
+        ]
+
+    def __str__(self):
+        return f"{self.collection_id} · {self.product_id}"
+
+
+class SellerOffer(TimeStampedModel):
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        PAUSED = "paused", "Paused"
+        OUT_OF_STOCK = "out_of_stock", "Out of stock"
+        ARCHIVED = "archived", "Archived"
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="seller_offers")
+    seller = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="seller_offers")
+    seller_store = models.ForeignKey("commerce.SellerStore", on_delete=models.SET_NULL, null=True, blank=True, related_name="offers")
+    offer_title = models.CharField(max_length=255, blank=True)
+    price = models.DecimalField(max_digits=12, decimal_places=2)
+    min_order_qty = models.PositiveIntegerField(default=1)
+    lead_time_days = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)
+    is_featured = models.BooleanField(default=False)
+    warehouse_source = models.CharField(max_length=120, blank=True)
+
+    class Meta:
+        ordering = ["-is_featured", "price", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["product", "seller"], name="unique_product_seller_offer"),
+        ]
+        indexes = [
+            models.Index(fields=["product", "status", "price"], name="selleroffer_prod_price_idx"),
+            models.Index(fields=["seller", "status", "price"], name="selleroffer_seller_price_idx"),
+        ]
+
+    def __str__(self):
+        return f"Offer(product={self.product_id}, seller={self.seller_id}, price={self.price})"
+
+    @property
+    def available_stock_qty(self) -> int:
+        inventories = list(getattr(self, "_prefetched_objects_cache", {}).get("inventories", []) or [])
+        if inventories:
+            return sum(max(0, inv.available_qty) for inv in inventories)
+        return max(0, int(getattr(self, "stock_qty_fallback", 0) or 0))
+
+
+class SellerInventory(TimeStampedModel):
+    offer = models.ForeignKey(SellerOffer, on_delete=models.CASCADE, related_name="inventories")
+    warehouse_name = models.CharField(max_length=120)
+    warehouse_code = models.CharField(max_length=64, blank=True)
+    stock_qty = models.IntegerField(default=0)
+    reserved_qty = models.IntegerField(default=0)
+    incoming_qty = models.IntegerField(default=0)
+    eta_days = models.PositiveIntegerField(default=0)
+    is_primary = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-is_primary", "warehouse_name", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["offer", "warehouse_name"], name="unique_offer_warehouse_name"),
+        ]
+        indexes = [
+            models.Index(fields=["offer", "-is_primary"], name="sellerinv_offer_primary_idx"),
+        ]
+
+    def __str__(self):
+        return f"Inventory(offer={self.offer_id}, warehouse={self.warehouse_name})"
+
+    @property
+    def available_qty(self) -> int:
+        return max(0, int(self.stock_qty or 0) - int(self.reserved_qty or 0))
+
+
 class ProductReview(TimeStampedModel):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="reviews")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="product_reviews")
     rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
     text = models.TextField(blank=True, default="")
+    is_verified_purchase = models.BooleanField(default=False)
+    helpful_count = models.PositiveIntegerField(default=0)
+    unhelpful_count = models.PositiveIntegerField(default=0)
 
     class Meta:
         constraints = [
@@ -200,3 +383,56 @@ class ProductReviewComment(TimeStampedModel):
 
     def __str__(self):
         return f"ReviewComment(review={self.review_id}, user={self.user_id})"
+
+
+class ProductReviewPhoto(TimeStampedModel):
+    review = models.ForeignKey(ProductReview, on_delete=models.CASCADE, related_name="photos")
+    image_url = models.URLField()
+    caption = models.CharField(max_length=160, blank=True)
+    ordering = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["ordering", "id"]
+
+    def __str__(self):
+        return f"ReviewPhoto(review={self.review_id})"
+
+
+class ProductReviewVote(TimeStampedModel):
+    class Value(models.TextChoices):
+        HELPFUL = "helpful", "Helpful"
+        UNHELPFUL = "unhelpful", "Unhelpful"
+
+    review = models.ForeignKey(ProductReview, on_delete=models.CASCADE, related_name="votes")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="product_review_votes")
+    value = models.CharField(max_length=16, choices=Value.choices)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["review", "user"], name="unique_review_vote_per_user"),
+        ]
+
+    def __str__(self):
+        return f"ReviewVote(review={self.review_id}, user={self.user_id}, value={self.value})"
+
+
+class ProductQuestion(TimeStampedModel):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="questions")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="product_questions")
+    question_text = models.TextField()
+    answer_text = models.TextField(blank=True, default="")
+    answered_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="answered_product_questions",
+    )
+    answered_at = models.DateTimeField(null=True, blank=True)
+    is_public = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"ProductQuestion(product={self.product_id}, user={self.user_id})"

@@ -1,9 +1,10 @@
 from django.urls import path, include
 from .views_html import (
     account_home, account_addresses, account_legal_entities, account_orders, account_order_detail, account_comments,
+    account_order_approval_action,
     login_view, register_view, logout_view, telegram_webapp_login, cancel_legal_request, confirm_email_view,
     validate_login_form, validate_register_form,
-    account_seller_home, account_seller_product_add,
+    account_seller_home, account_seller_product_add, account_seller_product_edit,
 )
 
 urlpatterns = [
@@ -13,9 +14,11 @@ urlpatterns = [
     path("legal/request/<int:pk>/cancel/", cancel_legal_request, name="account_legal_cancel"),
     path("orders/", account_orders, name="account_orders"),
     path("orders/<int:order_id>/", account_order_detail, name="account_order_detail"),
+    path("orders/<int:order_id>/approval/", account_order_approval_action, name="account_order_approval_action"),
     path("comments/", account_comments, name="account_comments"),
     path("seller/", account_seller_home, name="account_seller_home"),
     path("seller/products/add/", account_seller_product_add, name="account_seller_products_add"),
+    path("seller/products/<int:product_id>/edit/", account_seller_product_edit, name="account_seller_product_edit"),
     path("login/", login_view, name="login"),
     path("login/validate/", validate_login_form, name="login_validate"),
     path("register/", register_view, name="register"),

@@ -273,7 +273,7 @@ class Command(BaseCommand):
             line = PRODUCT_LINES[idx % len(PRODUCT_LINES)]
             edition = EPITHETS[(idx // len(PRODUCT_LINES)) % len(EPITHETS)]
             p.name = f"{line} «{edition}» {idx + 1:04d}"
-            p.slug = f"poetic-product-{p.sku}"
+            p.slug = f"servio-demo-{p.sku}"
             p.description = (
                 f"{p.name} — выразительная позиция ассортимента с детально заполненными характеристиками. "
                 "Создано для красивой и реалистичной демо-витрины."

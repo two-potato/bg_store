@@ -23,10 +23,10 @@ def test_admin_emails_fallback_to_admins(settings):
 def test_notify_contact_feedback_exits_when_no_recipients(monkeypatch):
     sent = {"emails": 0}
 
-    def _fake_send_mail(**kwargs):
+    def _fake_send_mail_message(**kwargs):
         sent["emails"] += 1
 
-    monkeypatch.setattr(sf_tasks, "send_mail", _fake_send_mail)
+    monkeypatch.setattr(sf_tasks, "send_mail_message", _fake_send_mail_message)
 
     sf_tasks.notify_contact_feedback(
         name="Ivan",
@@ -50,31 +50,21 @@ def test_notify_contact_feedback_sends_email_and_telegram(monkeypatch, user):
 
     email_calls = []
 
-    def _fake_send_mail(**kwargs):
+    def _fake_send_mail_message(**kwargs):
         email_calls.append(kwargs)
+        return True
 
     tg_calls = []
 
-    class _Resp:
-        def raise_for_status(self):
-            return None
-
     class _Client:
-        def __init__(self, timeout):
-            self.timeout = timeout
+        pass
 
-        async def __aenter__(self):
-            return self
+    async def _fake_apost_notify_json(client, path, payload, **kwargs):
+        tg_calls.append((path, payload, kwargs))
+        return True, None
 
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-        async def post(self, url, json, headers):
-            tg_calls.append((url, json, headers))
-            return _Resp()
-
-    monkeypatch.setattr(sf_tasks, "send_mail", _fake_send_mail)
-    monkeypatch.setattr(sf_tasks.httpx, "AsyncClient", _Client)
+    monkeypatch.setattr(sf_tasks, "send_mail_message", _fake_send_mail_message)
+    monkeypatch.setattr(sf_tasks, "apost_notify_json", _fake_apost_notify_json)
 
     sf_tasks.notify_contact_feedback(
         name="Ivan",
@@ -85,8 +75,8 @@ def test_notify_contact_feedback_sends_email_and_telegram(monkeypatch, user):
 
     assert len(email_calls) == 1
     assert email_calls[0]["recipient_list"] == ["admin@example.com"]
-    assert len(tg_calls) == 2
-    assert tg_calls[0][0].endswith("/notify/send_text")
+    assert len(tg_calls) == 3
+    assert tg_calls[0][0] == "/notify/send_text"
     assert tg_calls[0][1]["telegram_id"] == 1001
     assert tg_calls[1][1]["telegram_id"] == 3001
-    assert "X-Internal-Token" in tg_calls[0][2]
+    assert tg_calls[2][0] == "/notify/send_group"

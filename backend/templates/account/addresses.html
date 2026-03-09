@@ -8,14 +8,20 @@
 
   <div class="grid grid-cols-1 xl:grid-cols-5 gap-3">
     <section class="xl:col-span-3 account-2026__panel">
-      <h2 class="account-2026__panel-title">Адреса доставки</h2>
+      <div class="account-2026__panel-head">
+        <h2 class="account-2026__panel-title">Адреса доставки</h2>
+        <span class="account-2026__panel-note">Используются в checkout и B2B workflow</span>
+      </div>
       <div id="addresses-list">
         {% include "account/partials/addresses_list.html" %}
       </div>
     </section>
 
-    <section class="xl:col-span-2 account-2026__panel">
-      <h2 class="account-2026__panel-title">Добавить адрес</h2>
+    <section class="xl:col-span-2 account-2026__panel" id="add-address">
+      <div class="account-2026__panel-head">
+        <h2 class="account-2026__panel-title">Добавить адрес</h2>
+        <a class="account-2026__panel-link" href="/checkout/" hx-boost="false">Открыть checkout</a>
+      </div>
       <form method="post" novalidate hx-post="/account/addresses/" hx-target="#addresses-list" hx-select="*" hx-swap="innerHTML" class="account-2026__form">
         {% csrf_token %}
         <div id="address-form-errors" aria-live="polite"></div>

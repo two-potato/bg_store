@@ -36,69 +36,91 @@ def _compact_terms(values: List[str]) -> List[str]:
 
 def product_doc(product):
     store = getattr(getattr(product, "seller", None), "seller_store", None)
-    country_name = product.country_of_origin.name if product.country_of_origin else ""
-    tags = list(product.tags.values_list("name", flat=True)[:20]) if getattr(product, "pk", None) else []
-    series_name = product.series.name if product.series else ""
+    country = getattr(product, "country_of_origin", None)
+    country_name = getattr(country, "name", "") if country else ""
+    tags_manager = getattr(product, "tags", None)
+    tags = list(tags_manager.values_list("name", flat=True)[:20]) if tags_manager is not None and getattr(product, "pk", None) else []
+    series = getattr(product, "series", None)
+    series_name = getattr(series, "name", "") if series else ""
+    brand = getattr(product, "brand", None)
+    category = getattr(product, "category", None)
+    seller = getattr(product, "seller", None)
     search_terms = _compact_terms(
         [
-            product.name,
-            product.sku,
-            product.manufacturer_sku,
-            product.barcode,
-            product.brand.name if product.brand else "",
+            getattr(product, "name", ""),
+            getattr(product, "sku", ""),
+            getattr(product, "manufacturer_sku", ""),
+            getattr(product, "barcode", ""),
+            getattr(brand, "name", "") if brand else "",
             series_name,
-            product.category.name if product.category else "",
+            getattr(category, "name", "") if category else "",
             country_name,
-            product.material,
-            product.purpose,
-            product.flavor,
+            getattr(product, "material", ""),
+            getattr(product, "purpose", ""),
+            getattr(product, "flavor", ""),
             store.name if store else "",
-            product.seller.username if product.seller else "",
+            getattr(seller, "username", "") if seller else "",
+            *tags,
+        ]
+    )
+    semantic_terms = _compact_terms(
+        [
+            getattr(product, "name", ""),
+            getattr(brand, "name", "") if brand else "",
+            getattr(category, "name", "") if category else "",
+            getattr(product, "description", "") or "",
+            getattr(product, "material", "") or "",
+            getattr(product, "purpose", "") or "",
+            getattr(product, "flavor", "") or "",
             *tags,
         ]
     )
     suggest_inputs = _compact_terms(
         [
-            product.name,
-            f"{product.brand.name} {product.name}" if product.brand else product.name,
-            f"{product.category.name} {product.name}" if product.category else product.name,
-            f"{store.name} {product.name}" if store else product.name,
-            product.sku,
+            getattr(product, "name", ""),
+            f"{brand.name} {getattr(product, 'name', '')}" if brand else getattr(product, "name", ""),
+            f"{category.name} {getattr(product, 'name', '')}" if category else getattr(product, "name", ""),
+            f"{store.name} {getattr(product, 'name', '')}" if store else getattr(product, "name", ""),
+            getattr(product, "sku", ""),
             *tags,
         ]
     )
     return {
         "id": product.id,
-        "name": product.name,
-        "sku": product.sku,
-        "manufacturer_sku": product.manufacturer_sku or "",
-        "barcode": product.barcode or "",
-        "brand": product.brand.name if product.brand else "",
+        "name": getattr(product, "name", ""),
+        "sku": getattr(product, "sku", ""),
+        "manufacturer_sku": getattr(product, "manufacturer_sku", "") or "",
+        "barcode": getattr(product, "barcode", "") or "",
+        "brand": getattr(brand, "name", "") if brand else "",
         "series": series_name,
-        "category": product.category.name if product.category else "",
+        "category": getattr(category, "name", "") if category else "",
         "country_of_origin": country_name,
         "country_of_origin_keyword": (country_name or "").lower(),
         "store_name": store.name if store else "",
         "store_description": store.description if store else "",
-        "seller_username": product.seller.username if product.seller else "",
-        "material": product.material or "",
-        "purpose": product.purpose or "",
-        "flavor": product.flavor or "",
+        "seller_username": getattr(seller, "username", "") if seller else "",
+        "material": getattr(product, "material", "") or "",
+        "purpose": getattr(product, "purpose", "") or "",
+        "flavor": getattr(product, "flavor", "") or "",
         "tags": tags,
-        "description": product.description or "",
-        "price": float(product.price or 0),
-        "is_new": bool(product.is_new),
-        "is_promo": bool(product.is_promo),
-        "in_stock": int(product.stock_qty or 0) > 0,
+        "description": getattr(product, "description", "") or "",
+        "price": float(getattr(product, "price", 0) or 0),
+        "is_new": bool(getattr(product, "is_new", False)),
+        "is_promo": bool(getattr(product, "is_promo", False)),
+        "in_stock": int(getattr(product, "stock_qty", 0) or 0) > 0,
         "search_terms": search_terms,
+        "semantic_terms": semantic_terms,
+        "semantic_text": " | ".join(semantic_terms),
         "suggest": {
             "input": suggest_inputs,
-            "weight": 10 + (2 if bool(product.is_new) else 0) + (1 if bool(product.is_promo) else 0),
+            "weight": 10 + (2 if bool(getattr(product, "is_new", False)) else 0) + (1 if bool(getattr(product, "is_promo", False)) else 0),
         },
     }
 
 
 def upsert_product(product):
+    if not getattr(settings, "ES_ENABLED", True):
+        return
     url = f"{_es_url()}/{_es_index()}/_doc/{product.id}"
     try:
         r = requests.put(url, json=product_doc(product), timeout=_timeout())
@@ -108,6 +130,8 @@ def upsert_product(product):
 
 
 def delete_product(product_id: int):
+    if not getattr(settings, "ES_ENABLED", True):
+        return
     url = f"{_es_url()}/{_es_index()}/_doc/{product_id}"
     try:
         r = requests.delete(url, timeout=_timeout())

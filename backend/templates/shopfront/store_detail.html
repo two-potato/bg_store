@@ -15,12 +15,15 @@
       </div>
       <div class="store-page-2026__hero-copy">
         <h1>{{ store.name }}</h1>
-        <p>{% if store.description %}{{ store.description }}{% else %}Описание магазина пока не заполнено.{% endif %}</p>
-        <div class="store-page-2026__meta">Юр. лицо: {{ store.legal_entity.name }} · ИНН {{ store.legal_entity.inn }}</div>
+        <p>{% if store.description %}{{ store.description }}{% else %}Поставщик в каталоге Servio с ассортиментом для профессиональной кухни, сервировки и операционных закупок HoReCa.{% endif %}</p>
+        <div class="store-page-2026__meta">
+          Юр. лицо: {{ store.legal_entity.name }} · ИНН {{ store.legal_entity.inn }}
+          {% if store_rating.rating_count %}· Рейтинг магазина {{ store_rating.rating_avg|floatformat:1 }} / 5{% endif %}
+        </div>
       </div>
       <div class="store-page-2026__hero-actions">
         <a class="btn btn-sm btn-outline" href="/sellers/{{ store.owner.profile.slug }}/" hx-boost="false">Профиль продавца</a>
-        <a class="btn btn-sm btn-primary" href="/catalog/?seller={{ store.owner.id }}" hx-boost="false">Все товары продавца</a>
+        <a class="btn btn-sm btn-primary" href="/catalog/?seller={{ store.owner.id }}" hx-boost="false">Все товары поставщика</a>
       </div>
     </div>
   </header>
@@ -30,5 +33,60 @@
     <p>Всего позиций: {{ products|length }}</p>
   </div>
   {% include "shopfront/components/product_grid.html" with products=products %}
+
+  <section id="store-reviews" class="page-2026__card mt-6">
+    <div class="page-2026__header">
+      <h2>Отзывы о магазине</h2>
+      <p>{% if store_rating_count %}{{ store_rating_avg|floatformat:1 }} / 5 · {{ store_rating_count }} оценок{% else %}Пока нет отзывов о магазине{% endif %}</p>
+    </div>
+
+    {% if request.user.is_authenticated %}
+      <form action="/stores/{{ store.slug }}/review/" method="post" class="grid gap-3 mb-5">
+        {% csrf_token %}
+        <div class="flex flex-wrap gap-2">
+          {% for value in "12345" %}
+            <label class="btn btn-sm btn-outline">
+              <input type="radio" name="rating" value="{{ value }}" class="hidden" {% if store_user_review and store_user_review.rating|stringformat:"s" == value %}checked{% endif %} required>
+              {{ value }}
+            </label>
+          {% endfor %}
+        </div>
+        <textarea name="text"
+                  class="textarea textarea-bordered w-full"
+                  rows="3"
+                  placeholder="Опишите опыт работы с магазином: скорость ответа, качество поставки, упаковка, коммуникация">{{ store_user_review.text|default:"" }}</textarea>
+        <div class="flex flex-wrap gap-2">
+          {% if store_user_review %}
+            <button class="btn btn-outline btn-sm" formaction="/stores/{{ store.slug }}/review/delete/" formmethod="post">Удалить отзыв</button>
+          {% endif %}
+          <button class="btn btn-primary btn-sm" type="submit">Сохранить отзыв</button>
+        </div>
+      </form>
+    {% else %}
+      <p class="text-sm text-base-content/60 mb-4">Чтобы оставить отзыв о магазине, <a class="link" href="/account/login/" hx-boost="false">войдите в аккаунт</a>.</p>
+    {% endif %}
+
+    <div class="grid gap-3">
+      {% for review in store_reviews %}
+        <article class="rounded-3xl border border-base-300 bg-base-100 p-4">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="font-semibold">{{ review.user.username }}</div>
+              <div class="text-xs text-base-content/50">{{ review.created_at|date:"d.m.Y H:i" }}</div>
+            </div>
+            <div class="text-sm font-semibold">★ {{ review.rating }}/5</div>
+          </div>
+          {% if review.is_verified_buyer %}
+            <div class="badge badge-success badge-sm mt-2">Проверенный покупатель</div>
+          {% endif %}
+          {% if review.text %}
+            <p class="mt-3 text-sm">{{ review.text }}</p>
+          {% endif %}
+        </article>
+      {% empty %}
+        <div class="text-sm text-base-content/60">Пока никто не оставил отзыв о работе этого магазина.</div>
+      {% endfor %}
+    </div>
+  </section>
 </section>
 {% endblock %}

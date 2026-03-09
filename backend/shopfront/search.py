@@ -112,6 +112,8 @@ def _search_payload(query: str, limit: int, country_limit: int):
 
 
 def _es_search_bundle(query: str, limit: int, country_limit: int) -> Tuple[List[int], List[str], List[str]]:
+    if not getattr(settings, "ES_ENABLED", True):
+        raise ESSearchUnavailable("disabled")
     payload = _search_payload(query=query, limit=limit, country_limit=country_limit)
     url = f"{_es_url()}/{_es_index()}/_search"
     try:

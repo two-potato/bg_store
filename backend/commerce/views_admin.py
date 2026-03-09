@@ -1,6 +1,8 @@
 from rest_framework import views, permissions
 from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema
 from .models import LegalEntity, MembershipRequest, LegalEntityCreationRequest, LegalEntityMembership
+from .serializers import SimpleOkSerializer, DetailSerializer
 from core.logging_utils import LoggedAPIViewMixin
 import logging
 
@@ -10,8 +12,12 @@ class IsAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
         return request.user and request.user.is_staff
 
+
+@extend_schema(request=None, responses={200: SimpleOkSerializer, 400: DetailSerializer})
 class ApproveMembershipView(LoggedAPIViewMixin, views.APIView):
     permission_classes = [IsAdmin]
+    serializer_class = SimpleOkSerializer
+
     def post(self, request, pk):
         mr = MembershipRequest.objects.select_related("legal_entity","applicant").get(pk=pk)
         if getattr(mr.status, 'code', None) != 'pending':
@@ -27,8 +33,12 @@ class ApproveMembershipView(LoggedAPIViewMixin, views.APIView):
         log.info("membership_request_approved", extra={"request_id": mr.id, "legal_entity_id": mr.legal_entity_id, "applicant_id": mr.applicant_id, "admin_user_id": request.user.id})
         return Response({"ok": True})
 
+
+@extend_schema(request=None, responses={200: SimpleOkSerializer, 400: DetailSerializer})
 class RejectMembershipView(LoggedAPIViewMixin, views.APIView):
     permission_classes = [IsAdmin]
+    serializer_class = SimpleOkSerializer
+
     def post(self, request, pk):
         mr = MembershipRequest.objects.get(pk=pk)
         if getattr(mr.status, 'code', None) != 'pending':
@@ -40,8 +50,12 @@ class RejectMembershipView(LoggedAPIViewMixin, views.APIView):
         log.info("membership_request_rejected", extra={"request_id": mr.id, "admin_user_id": request.user.id})
         return Response({"ok": True})
 
+
+@extend_schema(request=None, responses={200: SimpleOkSerializer, 400: DetailSerializer})
 class ApproveEntityCreationView(LoggedAPIViewMixin, views.APIView):
     permission_classes = [IsAdmin]
+    serializer_class = SimpleOkSerializer
+
     def post(self, request, pk):
         cr = LegalEntityCreationRequest.objects.get(pk=pk)
         if getattr(cr.status, 'code', None) != 'pending':
@@ -57,8 +71,12 @@ class ApproveEntityCreationView(LoggedAPIViewMixin, views.APIView):
         log.info("entity_creation_request_approved", extra={"request_id": cr.id, "legal_entity_id": le.id, "applicant_id": cr.applicant_id, "admin_user_id": request.user.id})
         return Response({"ok": True, "legal_entity_id": le.id})
 
+
+@extend_schema(request=None, responses={200: SimpleOkSerializer, 400: DetailSerializer})
 class RejectEntityCreationView(LoggedAPIViewMixin, views.APIView):
     permission_classes = [IsAdmin]
+    serializer_class = SimpleOkSerializer
+
     def post(self, request, pk):
         cr = LegalEntityCreationRequest.objects.get(pk=pk)
         if getattr(cr.status, 'code', None) != 'pending':

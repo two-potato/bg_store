@@ -10,7 +10,7 @@
     <link rel="canonical" href="{{ seo_canonical }}">
 
     <meta property="og:type" content="{{ seo_og_type }}">
-    <meta property="og:site_name" content="PotatoFarm">
+    <meta property="og:site_name" content="Servio">
     <meta property="og:locale" content="ru_RU">
     <meta property="og:title" content="{{ seo_title }}">
     <meta property="og:description" content="{{ seo_description }}">
@@ -35,45 +35,68 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
-    <!-- HTMX + hyperscript -->
+    <!-- HTMX -->
     <script src="{% static 'vendor/htmx/htmx.min.js' %}"></script>
-    <script src="https://unpkg.com/hyperscript.org@0.9.12"></script>
-    <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+    {{ analytics_runtime_config|json_script:"servio-analytics-config" }}
+    {{ analytics_identity_payload|json_script:"servio-analytics-identity" }}
+    {{ analytics_require_consent|json_script:"servio-analytics-consent-mode" }}
     <!-- Tailwind (built) + extras -->
     <link rel="stylesheet" href="{% static 'css/app.css' %}">
     <link rel="stylesheet" href="{% static 'vendor/animate/animate.min.css' %}">
     <link rel="stylesheet" href="{% static 'vendor/hover/hover-min.css' %}">
-    <link rel="stylesheet" href="{% static 'shopfront/theme.css' %}">
-    <link rel="stylesheet" href="{% static 'shopfront/unified-theme.css' %}?v=20260307-uihotfix3">
-    <link rel="stylesheet" href="{% static 'shopfront/refactor.frontend.css' %}?v=20260307-refactor1">
+    <link rel="stylesheet" href="{% static 'shopfront/css/legacy/foundation.css' %}?v=20260309-legacy-split1">
+    <link rel="stylesheet" href="{% static 'shopfront/css/legacy/catalog-mobile.css' %}?v=20260309-legacy-split1">
+    <link rel="stylesheet" href="{% static 'shopfront/css/legacy/marketplace-surfaces.css' %}?v=20260309-legacy-split1">
+    <link rel="stylesheet" href="{% static 'shopfront/css/legacy/footer-and-grid.css' %}?v=20260309-legacy-split1">
+    <link rel="stylesheet" href="{% static 'shopfront/css/legacy/entity-pages-and-header.css' %}?v=20260309-legacy-split1">
+    <link rel="stylesheet" href="{% static 'shopfront/css/legacy/catalog-compact-and-grid.css' %}?v=20260309-legacy-split1">
+    <link rel="stylesheet" href="{% static 'shopfront/css/tokens.css' %}?v=20260309-plaincss1">
+    <link rel="stylesheet" href="{% static 'shopfront/css/base.css' %}?v=20260309-41">
+    <link rel="stylesheet" href="{% static 'shopfront/css/layout.css' %}?v=20260309-plaincss1">
+    <link rel="stylesheet" href="{% static 'shopfront/css/components/header.css' %}?v=20260310-navmenus1">
+    <link rel="stylesheet" href="{% static 'shopfront/css/components/home.css' %}?v=20260309-plaincss1">
+    <link rel="stylesheet" href="{% static 'shopfront/css/components/brands.css' %}?v=20260309-1">
+    <link rel="stylesheet" href="{% static 'shopfront/css/components/catalog.css' %}?v=20260309-plaincss1">
+    <link rel="stylesheet" href="{% static 'shopfront/css/components/product.css' %}?v=20260309-plaincss2">
+    <link rel="stylesheet" href="{% static 'shopfront/css/components/live-search.css' %}?v=20260309-plaincss1">
+    <link rel="stylesheet" href="{% static 'shopfront/css/components/account.css' %}?v=20260310-account3">
+    <link rel="stylesheet" href="{% static 'shopfront/css/components/toast.css' %}?v=20260309-plaincss1">
+    <link rel="stylesheet" href="{% static 'shopfront/css/components/footer.css' %}?v=20260309-plaincss1">
+    {% block extra_head %}{% endblock %}
     <!-- Telegram WebApp helpers -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script defer src="{% static 'shopfront/telegram.js' %}"></script>
     <script defer src="{% static 'shopfront/htmx.csrf.js' %}"></script>
     <script defer src="{% static 'shopfront/ui.toast.js' %}"></script>
-    <script defer src="{% static 'shopfront/ui.cart.js' %}?v=20260307-cartfix3"></script>
-    <script defer src="{% static 'shopfront/ui.carousel.js' %}"></script>
+    <script defer src="{% static 'shopfront/ui.runtime.js' %}"></script>
+    <script defer src="{% static 'shopfront/analytics.js' %}?v=20260309-analytics2"></script>
+    <script defer src="{% static 'shopfront/ui.cart.js' %}?v=20260309-cartfix4"></script>
+    <script defer src="{% static 'shopfront/ui.product-cards.js' %}"></script>
+    <script defer src="{% static 'shopfront/ui.interactions.js' %}"></script>
+    <script defer src="{% static 'shopfront/ui.social.js' %}"></script>
     <script defer src="{% static 'shopfront/ui.base.js' %}"></script>
     <script defer src="{% static 'shopfront/page.addresses.js' %}"></script>
-    <script defer src="{% static 'shopfront/page.checkout.js' %}"></script>
+    <script defer src="{% static 'shopfront/page.checkout.js' %}?v=20260309-41"></script>
     <script defer src="{% static 'shopfront/page.product.js' %}"></script>
     <script defer src="{% static 'shopfront/page.legal.js' %}"></script>
     <script defer src="{% static 'shopfront/auth.js' %}"></script>
     <script defer src="{% static 'shopfront/cookie-consent.js' %}"></script>
+    {% if ga_measurement_id %}
     <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-9QEFS1CQVC"></script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_measurement_id }}"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-
-      gtag('config', 'G-9QEFS1CQVC');
+      gtag('config', '{{ ga_measurement_id }}');
     </script>
+    {% endif %}
     {% if seo_json_ld %}
     <script type="application/ld+json">{{ seo_json_ld|safe }}</script>
     {% endif %}
+    {% block extra_scripts_head %}{% endblock %}
   </head>
-  <body id="twa-root" class="bg-base-100 text-base-content app-theme" hx-boost="true" hx-target="main" hx-select="main" hx-swap="outerHTML" hx-indicator="#htmx-indicator">
+  <body id="twa-root" class="bg-base-100 text-base-content app-theme" data-page-type="{{ page_type }}" hx-boost="true" hx-target="main" hx-select="main" hx-swap="outerHTML" hx-indicator="#htmx-indicator">
     <!-- Google Tag Manager (noscript) -->
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-N36D6TRQ"
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
@@ -81,6 +104,15 @@
     {% include 'shopfront/components/navbar.html' %}
 
     <main class="container mx-auto px-3 my-3 app-main">
+      {% if messages %}
+        <section class="mb-4 grid gap-2" aria-label="Системные сообщения">
+          {% for message in messages %}
+            <div class="alert {% if message.tags == 'error' %}alert-error{% elif message.tags == 'warning' %}alert-warning{% elif message.tags == 'success' %}alert-success{% else %}alert-info{% endif %} text-sm">
+              <span>{{ message }}</span>
+            </div>
+          {% endfor %}
+        </section>
+      {% endif %}
       {% block content %}{% endblock %}
     </main>
     {% include 'shopfront/components/site_footer.html' %}
@@ -94,6 +126,7 @@
     <!-- Toast stack -->
     {% include 'shopfront/components/toast_stack.html' %}
     {% include 'shopfront/components/cookie_consent.html' %}
+    {% block extra_scripts %}{% endblock %}
 
   </body>
 </html>

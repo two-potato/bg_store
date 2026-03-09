@@ -1,10 +1,13 @@
 {% extends "shopfront/base.html" %}
 {% block content %}
+{% if payment_started_tracking_payload %}
+  <script type="application/json" data-analytics-payload>{{ payment_started_tracking_payload|safe }}</script>
+{% endif %}
 <nav aria-label="breadcrumb" class="mb-3 text-sm text-base-content/60">
   <a class="link" href="/">Главная</a> /
-  <a class="link" href="/account/orders/">Мои заказы</a> /
+  <a class="link" href="{{ order_detail_url }}">Заказ #{{ order.id }}</a> /
   <span>Тестовый эквайринг</span>
 </nav>
 
-{% include "shopfront/partials/fake_payment_panel.html" with order=order payment=payment %}
+{% include "shopfront/partials/fake_payment_panel.html" with order=order payment=payment order_detail_url=order_detail_url payment_event_url=payment_event_url %}
 {% endblock %}

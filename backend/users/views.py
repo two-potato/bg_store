@@ -1,8 +1,15 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import permissions
+from drf_spectacular.utils import extend_schema
 from django.contrib.auth import get_user_model
 from .models import UserProfile
+from .serializers import (
+    MeSerializer,
+    TelegramWebAppAuthRequestSerializer,
+    TelegramWebAppAuthResponseSerializer,
+    UserDetailSerializer,
+)
 import json
 import urllib.parse
 import hmac
@@ -48,6 +55,7 @@ def verify_init_data(init_data: str) -> dict | None:
         log.exception("tg_init_data_verify_error")
         return None
 
+@extend_schema(responses=MeSerializer)
 @api_view(["GET"])
 @log_calls()
 def me(request):
@@ -61,6 +69,10 @@ def me(request):
         "seller_store": getattr(store, "name", None),
     })
 
+@extend_schema(
+    request=TelegramWebAppAuthRequestSerializer,
+    responses={200: TelegramWebAppAuthResponseSerializer, 403: UserDetailSerializer},
+)
 @api_view(["POST"])
 @permission_classes([permissions.AllowAny])
 @log_calls()

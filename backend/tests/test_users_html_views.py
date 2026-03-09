@@ -174,6 +174,7 @@ def test_login_register_logout(client, user, settings):
     # valid
     r2 = client.post("/account/login/", {"identifier": user.username, "password": "pass"})
     assert r2.status_code in (302, 303)
+    client.get("/account/logout/")
     # register
     r3 = client.get("/account/register/")
     assert r3.status_code in (200, 302, 303)

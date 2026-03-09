@@ -3,10 +3,13 @@
 <section id="account-main-content" class="account-2026__main">
   <div class="account-2026__hero compact">
     <div class="account-2026__hero-title">Мои заказы</div>
-    <div class="account-2026__hero-sub">История заказов с быстрым просмотром без перезагрузки.</div>
+    <div class="account-2026__hero-sub">История заказов, согласование и быстрый переход к деталям без полной перезагрузки страницы.</div>
   </div>
   <section class="account-2026__panel">
-    <h2 class="account-2026__panel-title">Список заказов</h2>
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Лента заказов</h2>
+      <a class="account-2026__panel-link" href="/catalog/" hx-boost="false">Перейти в каталог</a>
+    </div>
     {% if orders %}
       {% include 'account/components/order_table.html' with orders=orders %}
     {% else %}

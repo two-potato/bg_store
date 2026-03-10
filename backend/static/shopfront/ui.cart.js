@@ -26,41 +26,37 @@
     var addBtn = node.querySelector('.add');
     var step = node.querySelector('.stepper');
     var label = node.querySelector('.qty');
+    var footerActions = node.closest('.product-card__footer-actions');
     if (qty > 0) {
       node.classList.add('is-in-cart');
+      footerActions?.classList.add('has-in-cart');
       if (iconOnly) {
-        addBtn?.classList.add('is-active');
-        addBtn?.classList.remove('hidden');
-        addBtn?.setAttribute('title', 'Товар уже в корзине');
-        addBtn?.setAttribute('aria-label', 'Товар уже в корзине');
-        if (addBtn?.style) addBtn.style.removeProperty('display');
+        addBtn?.classList.add('hidden');
+        addBtn?.classList.remove('is-active');
+        addBtn?.setAttribute('title', 'Добавить в корзину');
+        addBtn?.setAttribute('aria-label', 'Добавить в корзину');
+        if (addBtn?.style) addBtn.style.setProperty('display', 'none', 'important');
       } else {
         addBtn?.classList.add('hidden');
         if (addBtn?.style) addBtn.style.setProperty('display', 'none', 'important');
       }
       if (step) {
-        if (iconOnly) {
-          step.classList.add('hidden');
-          if (step.style) step.style.setProperty('display', 'none', 'important');
-        } else {
-          step.classList.remove('hidden');
-          if (step.style) step.style.setProperty('display', 'inline-flex', 'important');
-        }
+        step.classList.remove('hidden');
+        if (step.style) step.style.setProperty('display', 'inline-flex', 'important');
       }
       if (label) label.textContent = String(qty);
     } else {
       node.classList.remove('is-in-cart');
-      addBtn?.classList.remove('is-active');
+      footerActions?.classList.remove('has-in-cart');
       if (step) {
         step.classList.add('hidden');
         if (step.style) step.style.setProperty('display', 'none', 'important');
       }
       if (label) label.textContent = '0';
       addBtn?.classList.remove('hidden');
-      if (iconOnly) {
-        addBtn?.setAttribute('title', 'Добавить в корзину');
-        addBtn?.setAttribute('aria-label', 'Добавить в корзину');
-      }
+      addBtn?.classList.remove('is-active');
+      addBtn?.setAttribute('title', 'Добавить в корзину');
+      addBtn?.setAttribute('aria-label', 'Добавить в корзину');
       if (addBtn?.style) addBtn.style.removeProperty('display');
     }
   }

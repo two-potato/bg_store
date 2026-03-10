@@ -156,6 +156,7 @@ Usage:
   <div class="card-footer product-card__footer mt-auto">
     <div class="product-card__price">{{ p.display_price }} <span class="product-card__currency">₽</span></div>
     <div class="product-card__footer-actions">
+      {% include "shopfront/components/cart_control.html" with pid=p.id in_stock=p.display_stock_qty icon_only=1 cart_product_ids=cart_product_ids %}
       <form method="post" action="/buy-now/" class="product-card__buy-now-form">
         {% csrf_token %}
         <input type="hidden" name="product_id" value="{{ p.id }}">
@@ -167,7 +168,6 @@ Usage:
           <span class="sr-only">{% if p.display_stock_qty <= 0 %}Нет в наличии{% else %}Купить в один клик{% endif %}</span>
         </button>
       </form>
-      {% include "shopfront/components/cart_control.html" with pid=p.id in_stock=p.display_stock_qty icon_only=1 cart_product_ids=cart_product_ids %}
     </div>
   </div>
 </div>

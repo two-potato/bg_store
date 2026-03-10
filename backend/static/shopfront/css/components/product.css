@@ -218,6 +218,7 @@ body.app-theme .product-card__buy-now-form {
   display: inline-flex;
   align-items: center;
   flex: 0 0 auto;
+  order: 2;
 }
 
 body.app-theme .product-card__footer-actions > * {
@@ -229,6 +230,11 @@ body.app-theme .product-card__footer-actions .cart-control--icon {
   align-items: center;
   justify-content: center;
   min-height: 0;
+  order: 1;
+}
+
+body.app-theme .product-card__footer-actions.has-in-cart .product-card__buy-now-form {
+  display: none;
 }
 
 body.app-theme .product-card__footer-btn {
@@ -374,16 +380,47 @@ body.app-theme #product-grid .cart-control--icon:not(.is-in-cart) .add {
 
 body.app-theme .products-grid .cart-control--icon.is-in-cart .stepper,
 body.app-theme #product-grid .cart-control--icon.is-in-cart .stepper {
-  display: none !important;
+  display: inline-flex !important;
 }
 
 body.app-theme .products-grid .cart-control--icon.is-in-cart .add,
 body.app-theme #product-grid .cart-control--icon.is-in-cart .add {
-  display: inline-flex !important;
-  background: var(--servio-gradient) !important;
-  color: #fff !important;
-  border: none !important;
-  box-shadow: 0 14px 28px rgba(52, 104, 255, 0.26) !important;
+  display: none !important;
+}
+
+body.app-theme .products-grid .product-card__footer .cart-control--icon,
+body.app-theme #product-grid .product-card__footer .cart-control--icon {
+  min-width: 36px;
+}
+
+body.app-theme .products-grid .product-card__footer .cart-control--icon .stepper,
+body.app-theme #product-grid .product-card__footer .cart-control--icon .stepper {
+  min-height: 36px;
+  padding: 2px;
+  gap: 4px !important;
+}
+
+body.app-theme .products-grid .product-card__footer .cart-control--icon .qty,
+body.app-theme #product-grid .product-card__footer .cart-control--icon .qty {
+  width: 20px;
+  min-width: 20px;
+  font-size: 0.82rem;
+}
+
+body.app-theme .products-grid .product-card__footer .cart-control--icon .cart-step-btn,
+body.app-theme #product-grid .product-card__footer .cart-control--icon .cart-step-btn {
+  min-width: 28px;
+  width: 28px;
+  min-height: 28px;
+  height: 28px;
+  padding: 0;
+}
+
+body.app-theme .catalog-tags-strip .carousel-neo__track,
+body.app-theme .catalog-tags-strip .tag-cloud-2026 {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  white-space: nowrap;
 }
 
 @media (max-width: 767px) {

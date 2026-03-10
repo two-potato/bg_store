@@ -1,0 +1,78 @@
+name: Start Production Metrics
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: production-metrics
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  metrics:
+    name: Start metrics on potatofarm.ru
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          SSH_PORT: ${{ secrets.PROD_SSH_PORT }}
+        run: |
+          set -eu
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$SSH_HOST"
+          : "${SSH_PORT:=22}"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          for attempt in 1 2 3; do
+            if ssh-keyscan -T 10 -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "SSH keyscan did not return a host key, continuing with StrictHostKeyChecking=accept-new"
+            else
+              sleep 3
+            fi
+          done
+
+      - name: Start metrics stack
+        env:
+          SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          SSH_PORT: ${{ secrets.PROD_SSH_PORT }}
+          SSH_USER: ${{ secrets.PROD_SSH_USER }}
+          APP_DIR: ${{ secrets.PROD_APP_DIR }}
+          DEPLOY_REF: ${{ github.sha }}
+        run: |
+          set -eu
+          : "${SSH_PORT:=22}"
+          : "${SSH_USER:=root}"
+          : "${APP_DIR:=/opt/servio}"
+          timeout --foreground 600 ssh \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
+            -o TCPKeepAlive=yes \
+            -o StrictHostKeyChecking=accept-new \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "APP_DIR='$APP_DIR' DEPLOY_REF='$DEPLOY_REF' bash -s" <<'EOSSH'
+          set -euo pipefail
+          cd "$APP_DIR"
+          git fetch --all --prune
+          git reset --hard
+          git clean -fd
+          git checkout -f main
+          git reset --hard "$DEPLOY_REF"
+          git clean -fd
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d nginx
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.metrics.yml up -d --remove-orphans grafana prometheus loki promtail alertmanager nginx-exporter postgres-exporter redis-exporter es-exporter node-exporter cadvisor blackbox
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.metrics.yml ps
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.metrics.yml logs --tail=80 nginx grafana prometheus loki alertmanager || true
+          EOSSH

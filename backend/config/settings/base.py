@@ -23,7 +23,7 @@ def _env_csv(name: str, default: list[str] | None = None) -> list[str]:
 
 
 DEBUG = _env_bool("DEBUG", False)
-ALLOWED_HOSTS = _env_csv("ALLOWED_HOSTS", ["*"])
+ALLOWED_HOSTS = _env_csv("ALLOWED_HOSTS", ["localhost", "127.0.0.1"])
 
 INSTALLED_APPS = [
     "jazzmin",
@@ -117,7 +117,7 @@ elif _cache_backend == "locmem":  # pragma: no cover - env-specific branch
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-            "LOCATION": os.getenv("CACHE_LOCATION", "bg-shop-cache"),
+            "LOCATION": os.getenv("CACHE_LOCATION", "servio-cache"),
             "TIMEOUT": int(os.getenv("CACHE_DEFAULT_TIMEOUT", "300")),
             "KEY_PREFIX": os.getenv("CACHE_KEY_PREFIX", "servio"),
         }
@@ -213,6 +213,9 @@ SOCIALACCOUNT_PROVIDERS = {
 }
 SOCIALACCOUNT_LOGIN_ON_GET = True
 SOCIALACCOUNT_AUTO_SIGNUP = True
+SESSION_COOKIE_HTTPONLY = True
+X_FRAME_OPTIONS = "DENY"
+GTM_CONTAINER_ID = os.getenv("GTM_CONTAINER_ID", "GTM-N36D6TRQ").strip()
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
@@ -280,6 +283,8 @@ CACHE_TTL_LIVE_SEARCH = int(os.getenv("CACHE_TTL_LIVE_SEARCH", "60"))
 CACHE_TTL_ES_SEARCH = int(os.getenv("CACHE_TTL_ES_SEARCH", "120"))
 CACHE_TTL_CATALOG_API = int(os.getenv("CACHE_TTL_CATALOG_API", "120"))
 CACHE_TTL_COMMERCE_LOOKUPS = int(os.getenv("CACHE_TTL_COMMERCE_LOOKUPS", "600"))
+CACHE_TTL_PDP_SUMMARY = int(os.getenv("CACHE_TTL_PDP_SUMMARY", "300"))
+CACHE_TTL_PDP_RECOMMENDATIONS = int(os.getenv("CACHE_TTL_PDP_RECOMMENDATIONS", "180"))
 
 # Admin email notifications (orders lifecycle)
 ADMIN_NOTIFY_EMAILS = [

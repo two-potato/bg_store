@@ -127,7 +127,13 @@ def robots_txt(request):
         "Allow: /",
         "Disallow: /admin/",
         "Disallow: /api/",
+        "Disallow: /api/docs/",
+        "Disallow: /api/schema/",
         "Disallow: /account/",
+        "Disallow: /checkout/",
+        "Disallow: /payments/fake/",
+        "Disallow: /metrics",
+        "Disallow: /metrics/",
         f"Sitemap: https://{host}/sitemap.xml",
     ]
     return HttpResponse("\n".join(lines) + "\n", content_type="text/plain; charset=utf-8")
@@ -137,47 +143,64 @@ def robots_txt(request):
 def sitemap_xml(request):
     host = request.get_host().split(":")[0]
     base = f"https://{host}"
-    static_paths = [
-        reverse("home"),
-        reverse("catalog"),
-        reverse("buyers"),
-        reverse("suppliers"),
-        reverse("brands"),
-        reverse("promotions"),
-        reverse("blog"),
-        reverse("about"),
-        reverse("delivery"),
-        reverse("payment"),
-        reverse("returns"),
-        reverse("faq"),
-        reverse("contacts"),
-        reverse("cart_page"),
-        reverse("checkout"),
-        reverse("twa_home"),
+    static_entries = [
+        (reverse("home"), timezone.now()),
+        (reverse("catalog"), timezone.now()),
+        (reverse("buyers"), timezone.now()),
+        (reverse("suppliers"), timezone.now()),
+        (reverse("brands"), timezone.now()),
+        (reverse("promotions"), timezone.now()),
+        (reverse("blog"), timezone.now()),
+        (reverse("about"), timezone.now()),
+        (reverse("delivery"), timezone.now()),
+        (reverse("payment"), timezone.now()),
+        (reverse("returns"), timezone.now()),
+        (reverse("faq"), timezone.now()),
+        (reverse("contacts"), timezone.now()),
     ]
-    urls = [base + path for path in static_paths]
+    urls = [(base + path, updated_at) for path, updated_at in static_entries]
     urls.extend(
-        [base + reverse("product", kwargs={"slug": slug}) for slug in Product.objects.exclude(slug="").values_list("slug", flat=True)[:50000]]
+        [
+            (base + reverse("product", kwargs={"slug": slug}), updated_at)
+            for slug, updated_at in Product.objects.exclude(slug="").values_list("slug", "updated_at")[:50000]
+        ]
     )
     urls.extend(
-        [base + reverse("category_detail", kwargs={"category_slug": slug}) for slug in Category.objects.exclude(slug="").values_list("slug", flat=True)[:50000]]
+        [
+            (base + reverse("category_detail", kwargs={"category_slug": slug}), updated_at)
+            for slug, updated_at in Category.objects.exclude(slug="").values_list("slug", "updated_at")[:50000]
+        ]
     )
     urls.extend(
-        [base + reverse("seller_store_detail", kwargs={"store_slug": slug}) for slug in SellerStore.objects.exclude(slug="").values_list("slug", flat=True)[:50000]]
+        [
+            (base + reverse("seller_store_detail", kwargs={"store_slug": slug}), updated_at)
+            for slug, updated_at in SellerStore.objects.exclude(slug="").values_list("slug", "updated_at")[:50000]
+        ]
     )
     urls.extend(
-        [base + reverse("seller_profile", kwargs={"seller_slug": slug}) for slug in UserProfile.objects.exclude(slug="").values_list("slug", flat=True)[:50000]]
+        [
+            (base + reverse("seller_profile", kwargs={"seller_slug": slug}), updated_at)
+            for slug, updated_at in UserProfile.objects.exclude(slug="").values_list("slug", "updated_at")[:50000]
+        ]
     )
     urls.extend(
-        [base + reverse("brand_detail", kwargs={"brand_slug": slug}) for slug in Brand.objects.exclude(slug="").values_list("slug", flat=True)[:50000]]
+        [
+            (base + reverse("brand_detail", kwargs={"brand_slug": slug}), updated_at)
+            for slug, updated_at in Brand.objects.exclude(slug="").values_list("slug", "updated_at")[:50000]
+        ]
     )
     urls.extend(
-        [base + reverse("collection_detail", kwargs={"collection_slug": slug}) for slug in Collection.objects.filter(is_active=True).exclude(slug="").values_list("slug", flat=True)[:50000]]
+        [
+            (base + reverse("collection_detail", kwargs={"collection_slug": slug}), updated_at)
+            for slug, updated_at in Collection.objects.filter(is_active=True).exclude(slug="").values_list("slug", "updated_at")[:50000]
+        ]
     )
 
     body = ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>", "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">"]
-    for loc in urls:
-        body.append(f"  <url><loc>{escape(loc)}</loc></url>")
+    for loc, lastmod in urls:
+        body.append(
+            f"  <url><loc>{escape(loc)}</loc><lastmod>{lastmod.date().isoformat()}</lastmod></url>"
+        )
     body.append("</urlset>")
     return HttpResponse("\n".join(body), content_type="application/xml; charset=utf-8")
 
@@ -509,30 +532,50 @@ def _recently_viewed_products(request, exclude_product_id: int | None = None, li
     return _ordered_products_with_related(ids[:limit], include_rating=True)
 
 
+def _cached_id_list(cache_key: str, ttl: int, builder) -> list[int]:
+    ids = _cache_get(cache_key)
+    if ids is None:
+        ids = list(builder())
+        _cache_set(cache_key, ids, timeout=ttl)
+    return [int(pid) for pid in ids if str(pid).isdigit()]
+
+
 def _seller_rating_summary(seller_id: int | None) -> dict:
     if not seller_id:
         return {"rating_avg": 0, "rating_count": 0}
+    cache_key = f"shopfront:seller_rating:v1:{seller_id}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
     agg = ProductReview.objects.filter(product__seller_id=seller_id).aggregate(
         rating_avg=Coalesce(Avg("rating"), Value(0.0), output_field=FloatField()),
         rating_count=Count("id"),
     )
-    return {
+    payload = {
         "rating_avg": agg["rating_avg"] or 0,
         "rating_count": agg["rating_count"] or 0,
     }
+    _cache_set(cache_key, payload, timeout=getattr(settings, "CACHE_TTL_PDP_SUMMARY", 300))
+    return payload
 
 
 def _store_rating_summary(store: SellerStore | None) -> dict:
     if store is None:
         return {"rating_avg": 0, "rating_count": 0}
+    cache_key = f"shopfront:store_rating:v1:{store.id}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
     agg = StoreReview.objects.filter(store=store).aggregate(
         rating_avg=Coalesce(Avg("rating"), Value(0.0), output_field=FloatField()),
         rating_count=Count("id"),
     )
-    return {
+    payload = {
         "rating_avg": agg["rating_avg"] or 0,
         "rating_count": agg["rating_count"] or 0,
     }
+    _cache_set(cache_key, payload, timeout=getattr(settings, "CACHE_TTL_PDP_SUMMARY", 300))
+    return payload
 
 
 def _store_reviews_context(store: SellerStore, user):
@@ -1982,54 +2025,82 @@ class ProductDetailView(TemplateView):
             and p.category_id
             and CategorySubscription.objects.filter(user=self.request.user, category_id=p.category_id).exists()
         )
-        similar_ids: list[int] = []
-        if p.category_id:
-            similar_ids.extend(
-                list(
-                    Product.objects.filter(category_id=p.category_id)
+        def _build_similar_ids():
+            similar_ids_local: list[int] = []
+            if p.category_id:
+                similar_ids_local.extend(
+                    list(
+                        Product.objects.filter(category_id=p.category_id)
+                        .exclude(id=p.id)
+                        .order_by("-is_promo", "-is_new", "name", "id")
+                        .values_list("id", flat=True)[:12]
+                    )
+                )
+            if len(similar_ids_local) < 12 and p.brand_id:
+                more_ids = list(
+                    Product.objects.filter(brand_id=p.brand_id)
                     .exclude(id=p.id)
+                    .exclude(id__in=similar_ids_local)
                     .order_by("-is_promo", "-is_new", "name", "id")
-                    .values_list("id", flat=True)[:12]
+                    .values_list("id", flat=True)[: 12 - len(similar_ids_local)]
                 )
-            )
-        if len(similar_ids) < 12 and p.brand_id:
-            more_ids = list(
-                Product.objects.filter(brand_id=p.brand_id)
-                .exclude(id=p.id)
-                .exclude(id__in=similar_ids)
-                .order_by("-is_promo", "-is_new", "name", "id")
-                .values_list("id", flat=True)[: 12 - len(similar_ids)]
-            )
-            similar_ids.extend(more_ids)
+                similar_ids_local.extend(more_ids)
+            return similar_ids_local[:12]
+
+        similar_ids = _cached_id_list(
+            f"shopfront:pdp:similar:v2:{p.id}",
+            getattr(settings, "CACHE_TTL_PDP_RECOMMENDATIONS", 180),
+            _build_similar_ids,
+        )
         ctx["similar_products"] = _ordered_products_with_related(similar_ids[:12], include_rating=True)
-        accessory_ids: list[int] = []
-        if p.seller_id:
-            accessory_ids.extend(
-                list(
-                    Product.objects.filter(seller_id=p.seller_id)
-                    .exclude(id__in=[p.id] + similar_ids)
-                    .order_by("-is_promo", "-is_new", "name", "id")
-                    .values_list("id", flat=True)[:8]
+        product_tag_ids = [tag.id for tag in p.tags.all()]
+
+        def _build_accessory_ids():
+            accessory_ids_local: list[int] = []
+            if p.seller_id:
+                accessory_ids_local.extend(
+                    list(
+                        Product.objects.filter(seller_id=p.seller_id)
+                        .exclude(id__in=[p.id] + similar_ids)
+                        .order_by("-is_promo", "-is_new", "name", "id")
+                        .values_list("id", flat=True)[:8]
+                    )
                 )
-            )
-        if len(accessory_ids) < 8 and p.tags.exists():
-            accessory_ids.extend(
-                list(
-                    Product.objects.filter(tags__in=p.tags.all())
-                    .exclude(id__in=[p.id] + similar_ids + accessory_ids)
-                    .distinct()
-                    .order_by("-is_promo", "-is_new", "name", "id")
-                    .values_list("id", flat=True)[: 8 - len(accessory_ids)]
+            if len(accessory_ids_local) < 8 and product_tag_ids:
+                accessory_ids_local.extend(
+                    list(
+                        Product.objects.filter(tags__in=product_tag_ids)
+                        .exclude(id__in=[p.id] + similar_ids + accessory_ids_local)
+                        .distinct()
+                        .order_by("-is_promo", "-is_new", "name", "id")
+                        .values_list("id", flat=True)[: 8 - len(accessory_ids_local)]
+                    )
                 )
-            )
+            return accessory_ids_local[:8]
+
+        accessory_ids = _cached_id_list(
+            f"shopfront:pdp:accessories:v2:{p.id}",
+            getattr(settings, "CACHE_TTL_PDP_RECOMMENDATIONS", 180),
+            _build_accessory_ids,
+        )
         ctx["accessory_products"] = _ordered_products_with_related(accessory_ids[:8], include_rating=True)
         ctx["recently_viewed_products"] = _recently_viewed_products(self.request, exclude_product_id=p.id, limit=8)
+        fbt_ids = _cached_id_list(
+            f"shopfront:pdp:fbt:v1:{p.id}",
+            getattr(settings, "CACHE_TTL_PDP_RECOMMENDATIONS", 180),
+            lambda: frequently_bought_together_ids(p, limit=8),
+        )
         ctx["frequently_bought_together_products"] = _ordered_products_with_related(
-            frequently_bought_together_ids(p, limit=8),
+            fbt_ids,
             include_rating=True,
         )
+        seller_cross_ids = _cached_id_list(
+            f"shopfront:pdp:seller_cross:v1:{p.id}",
+            getattr(settings, "CACHE_TTL_PDP_RECOMMENDATIONS", 180),
+            lambda: seller_cross_sell_ids(p, limit=8),
+        )
         ctx["seller_cross_sell_products"] = _ordered_products_with_related(
-            seller_cross_sell_ids(p, limit=8),
+            seller_cross_ids,
             include_rating=True,
         )
         ctx["frequently_bought_together_tracking_payload"] = _recommendation_impression_payload(

@@ -20,8 +20,11 @@ services:
       LOG_CALLS_ENABLED: "0"
       REQUEST_LOG_LEVEL: WARNING
       ENABLE_CATALOG_RATING: "0"
-      GUNICORN_WORKERS: "4"
-      GUNICORN_TIMEOUT: "180"
+      GUNICORN_WORKERS: "${GUNICORN_WORKERS:-6}"
+      GUNICORN_TIMEOUT: "${GUNICORN_TIMEOUT:-180}"
+      GUNICORN_KEEPALIVE: "${GUNICORN_KEEPALIVE:-15}"
+      GUNICORN_MAX_REQUESTS: "${GUNICORN_MAX_REQUESTS:-1200}"
+      GUNICORN_MAX_REQUESTS_JITTER: "${GUNICORN_MAX_REQUESTS_JITTER:-120}"
     depends_on:
       - db
       - redis
@@ -114,7 +117,7 @@ services:
   db:
     image: public.ecr.aws/docker/library/postgres:16
     container_name: servio-db
-    command: ["postgres", "-c", "max_connections=1000", "-c", "shared_buffers=256MB"]
+    command: ["postgres", "-c", "max_connections=1000", "-c", "shared_buffers=512MB"]
     env_file: ./backend/.env
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -144,6 +147,7 @@ services:
     environment:
       discovery.type: single-node
       xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "${ES_JAVA_OPTS:--Xms2g -Xmx2g}"
     volumes:
       - esdata:/usr/share/elasticsearch/data
     logging: *default-logging

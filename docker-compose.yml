@@ -168,7 +168,7 @@ services:
       - ./backend/media:/media:ro
       - ./deploy/letsencrypt:/etc/letsencrypt:ro
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health/"]
+      test: ["CMD-SHELL", "wget -qO- --header='Host: potatofarm.ru' http://127.0.0.1/health/ >/dev/null 2>&1"]
       interval: 10s
       timeout: 5s
       start_period: 20s

@@ -177,10 +177,11 @@ def sitemap_xml(request):
             for slug, updated_at in SellerStore.objects.exclude(slug="").values_list("slug", "updated_at")[:50000]
         ]
     )
+    profile_lastmod = timezone.now()
     urls.extend(
         [
-            (base + reverse("seller_profile", kwargs={"seller_slug": slug}), updated_at)
-            for slug, updated_at in UserProfile.objects.exclude(slug="").values_list("slug", "updated_at")[:50000]
+            (base + reverse("seller_profile", kwargs={"seller_slug": slug}), profile_lastmod)
+            for slug in UserProfile.objects.exclude(slug="").values_list("slug", flat=True)[:50000]
         ]
     )
     urls.extend(

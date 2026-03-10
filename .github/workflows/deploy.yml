@@ -48,7 +48,13 @@ jobs:
           : "${SSH_PORT:=22}"
           : "${SSH_USER:=root}"
           : "${APP_DIR:=/opt/servio}"
-          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "APP_DIR='$APP_DIR' DEPLOY_REF='$DEPLOY_REF' ALLOWED_SSH_PORT='$SSH_PORT' bash -s" <<'EOSSH'
+          ssh \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=20 \
+            -o TCPKeepAlive=yes \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "APP_DIR='$APP_DIR' DEPLOY_REF='$DEPLOY_REF' ALLOWED_SSH_PORT='$SSH_PORT' bash -s" <<'EOSSH'
           set -euo pipefail
           cd "$APP_DIR"
           git fetch --all --prune

@@ -22,6 +22,50 @@ export NGINX_HTTP_PORT="${NGINX_HTTP_PORT:-80}"
 
 mkdir -p "$ROOT_DIR/deploy/letsencrypt" "$ROOT_DIR/deploy/letsencrypt-lib" "$ROOT_DIR/deploy/certbot-www"
 
+compose_run_backend() {
+  $COMPOSE run --rm --no-deps backend "$@"
+}
+
+wait_for_service_health() {
+  local service="$1"
+  local timeout="${2:-180}"
+  local start_ts
+  start_ts="$(date +%s)"
+
+  while true; do
+    local container_id
+    container_id="$($COMPOSE ps -q "$service" | head -n1)"
+    if [ -n "$container_id" ]; then
+      local status
+      status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id" 2>/dev/null || true)"
+      case "$status" in
+        healthy|running)
+          echo "[deploy] Service '$service' is $status"
+          return 0
+          ;;
+        unhealthy|exited|dead)
+          echo "[deploy] Service '$service' is $status"
+          docker logs --tail 120 "$container_id" || true
+          return 1
+          ;;
+      esac
+    fi
+
+    local now_ts
+    now_ts="$(date +%s)"
+    if [ $((now_ts - start_ts)) -ge "$timeout" ]; then
+      echo "[deploy] Timed out waiting for '$service' health after ${timeout}s"
+      if [ -n "${container_id:-}" ]; then
+        docker logs --tail 120 "$container_id" || true
+      fi
+      return 1
+    fi
+
+    echo "[deploy] Waiting for '$service' to become healthy..."
+    sleep 5
+  done
+}
+
 ensure_named_volumes() {
   local volumes=(
     "servio_pgdata"
@@ -110,12 +154,19 @@ echo "[deploy] Pulling/building and starting services"
 ensure_named_volumes
 $COMPOSE up -d --build --remove-orphans
 
+echo "[deploy] Waiting for core services"
+wait_for_service_health db 120
+wait_for_service_health redis 120
+wait_for_service_health bot 180
+wait_for_service_health bot-notify 180
+wait_for_service_health backend 240
+
 echo "[deploy] Running migrations"
-$COMPOSE exec -T backend /app/.venv/bin/python manage.py migrate --noinput
+compose_run_backend /app/.venv/bin/python manage.py migrate --noinput
 
 echo "[deploy] Restoring sellers/stores links when missing"
-if $COMPOSE exec -T backend /app/.venv/bin/python manage.py help seed_sellers >/dev/null 2>&1; then
-  if ! $COMPOSE exec -T backend /app/.venv/bin/python manage.py seed_sellers; then
+if compose_run_backend /app/.venv/bin/python manage.py help seed_sellers >/dev/null 2>&1; then
+  if ! compose_run_backend /app/.venv/bin/python manage.py seed_sellers; then
     echo "[deploy] WARNING: seed_sellers failed, continuing deploy"
   fi
 else
@@ -123,13 +174,13 @@ else
 fi
 
 echo "[deploy] Clearing application cache"
-$COMPOSE exec -T backend /app/.venv/bin/python manage.py shell -c "from django.core.cache import cache; cache.clear()"
+compose_run_backend /app/.venv/bin/python manage.py shell -c "from django.core.cache import cache; cache.clear()"
 
 echo "[deploy] Fixing staticfiles volume permissions"
 $COMPOSE exec -T --user root backend sh -lc "mkdir -p /app/staticfiles && chown -R app:app /app/staticfiles"
 
 echo "[deploy] Collecting static files"
-$COMPOSE exec -T backend /app/.venv/bin/python manage.py collectstatic --noinput --verbosity 0
+compose_run_backend /app/.venv/bin/python manage.py collectstatic --noinput --verbosity 0
 
 echo "[deploy] Service status"
 $COMPOSE ps

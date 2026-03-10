@@ -6,7 +6,7 @@
 {% include "shopfront/components/catalog_header.html" %}
 {% include "shopfront/components/tag_chips.html" %}
 
-<section class="catalog-layout-neo">
+<section class="catalog-layout-neo catalog-layout-neo--listing">
   {% include "shopfront/components/product_grid.html" with products=products %}
     {% if not products %}
       <div class="mt-4 rounded-2xl border border-base-200/80 bg-base-100 p-4">

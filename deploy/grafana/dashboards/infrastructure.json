@@ -63,7 +63,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name=~\"bg-.*\"}[5m]))",
+          "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name=~\"servio-.*\",image!=\"\"}[5m]))",
           "legendFormat": "{{name}}"
         }
       ]
@@ -84,7 +84,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (name) (container_memory_working_set_bytes{name=~\"bg-.*\"})",
+          "expr": "sum by (name) (container_memory_working_set_bytes{name=~\"servio-.*\",image!=\"\"})",
           "legendFormat": "{{name}}"
         }
       ]
@@ -161,6 +161,6 @@
   },
   "timezone": "browser",
   "title": "Infrastructure",
-  "uid": "bg-infra",
+  "uid": "servio-infra",
   "version": 1
 }

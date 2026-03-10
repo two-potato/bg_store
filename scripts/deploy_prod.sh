@@ -4,7 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.metrics.yml"
+COMPOSE_CORE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
+COMPOSE_FULL="docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.metrics.yml"
+COMPOSE="$COMPOSE_CORE"
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-admin@potatofarm.ru}"
 LETSENCRYPT_DOMAIN="${LETSENCRYPT_DOMAIN:-potatofarm.ru}"
 LETSENCRYPT_DOMAIN_WWW="${LETSENCRYPT_DOMAIN_WWW:-www.potatofarm.ru}"
@@ -12,6 +14,7 @@ LETSENCRYPT_EXTRA_DOMAINS="${LETSENCRYPT_EXTRA_DOMAINS:-grafana.potatofarm.ru}"
 LETSENCRYPT_CERT_PATH="$ROOT_DIR/deploy/letsencrypt/live/$LETSENCRYPT_DOMAIN/fullchain.pem"
 ALLOWED_SSH_PORT_RAW="${ALLOWED_SSH_PORT:-22}"
 DEPLOY_CONFIGURE_FIREWALL="${DEPLOY_CONFIGURE_FIREWALL:-0}"
+DEPLOY_INCLUDE_METRICS="${DEPLOY_INCLUDE_METRICS:-0}"
 ALLOWED_SSH_PORT="$(printf '%s' "$ALLOWED_SSH_PORT_RAW" | grep -Eo '[0-9]{1,5}' | head -n1 || true)"
 if [[ -n "$ALLOWED_SSH_PORT" ]] && [ "$ALLOWED_SSH_PORT" -ge 1 ] && [ "$ALLOWED_SSH_PORT" -le 65535 ]; then
   :
@@ -159,7 +162,7 @@ issue_or_renew_cert_standalone() {
   done
 
   log_step "Requesting/renewing Let's Encrypt certificate for $LETSENCRYPT_DOMAIN"
-  $COMPOSE stop nginx || true
+  $COMPOSE_CORE stop nginx || true
   docker run --rm \
     -p 80:80 -p 443:443 \
     -v "$ROOT_DIR/deploy/letsencrypt:/etc/letsencrypt" \
@@ -175,7 +178,7 @@ issue_or_renew_cert_standalone() {
 
 if [ ! -f "$LETSENCRYPT_CERT_PATH" ]; then
   log_step "TLS certificate not found, performing first-time issuance"
-  run_with_timeout 900 $COMPOSE up -d --build --remove-orphans db redis es bot bot-notify backend celery-worker celery-beat
+  run_with_timeout 900 $COMPOSE_CORE up -d --build --remove-orphans db redis es bot bot-notify backend celery-worker celery-beat
   issue_or_renew_cert_standalone
 fi
 
@@ -192,7 +195,7 @@ fi
 
 log_step "Pulling/building and starting services"
 ensure_named_volumes
-run_with_timeout 1200 $COMPOSE up -d --build --remove-orphans
+run_with_timeout 900 $COMPOSE_CORE up -d --build --remove-orphans
 
 log_step "Waiting for core services"
 wait_for_service_health db 120
@@ -228,5 +231,12 @@ $COMPOSE ps
 log_step "Health checks"
 run_with_timeout 60 curl -fsS http://localhost/health/ >/dev/null
 log_step "OK"
+
+if [ "$DEPLOY_INCLUDE_METRICS" = "1" ]; then
+  log_step "Starting metrics stack"
+  run_with_timeout 900 $COMPOSE_FULL up -d --build --remove-orphans
+else
+  log_step "Skipping metrics stack during core rollout (set DEPLOY_INCLUDE_METRICS=1 to enable)"
+fi
 
 configure_firewall

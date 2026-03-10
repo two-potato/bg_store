@@ -57,7 +57,7 @@ jobs:
           : "${SSH_PORT:=22}"
           : "${SSH_USER:=root}"
           : "${APP_DIR:=/opt/servio}"
-          ssh \
+          timeout --foreground 1800 ssh \
             -o ServerAliveInterval=30 \
             -o ServerAliveCountMax=20 \
             -o TCPKeepAlive=yes \

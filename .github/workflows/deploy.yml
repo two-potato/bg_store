@@ -52,6 +52,10 @@ jobs:
           SSH_USER: ${{ secrets.PROD_SSH_USER }}
           APP_DIR: ${{ secrets.PROD_APP_DIR }}
           DEPLOY_REF: ${{ github.sha }}
+          POSTHOG_API_KEY: ${{ secrets.PROD_POSTHOG_API_KEY }}
+          POSTHOG_HOST: ${{ secrets.PROD_POSTHOG_HOST }}
+          CLARITY_PROJECT_ID: ${{ secrets.PROD_CLARITY_PROJECT_ID }}
+          ANALYTICS_REQUIRE_CONSENT: ${{ secrets.PROD_ANALYTICS_REQUIRE_CONSENT }}
           DEPLOY_INCLUDE_METRICS: "1"
         run: |
           set -eu

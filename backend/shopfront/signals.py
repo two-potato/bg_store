@@ -30,6 +30,16 @@ def _invalidate_tags_cache(**kwargs):
 
 @receiver([post_save, post_delete], sender=Product)
 @receiver([post_save, post_delete], sender=ProductImage)
-@receiver([post_save, post_delete], sender=ProductReview)
 def _invalidate_products_cache(**kwargs):
     _invalidate("shopfront:home:product_ids:v1:12")
+
+
+@receiver([post_save, post_delete], sender=ProductReview)
+def _invalidate_product_review_cache(sender, instance: ProductReview, **kwargs):
+    keys = [
+        "shopfront:home:product_ids:v1:12",
+        f"shopfront:product_rating:v1:{instance.product_id}",
+    ]
+    if instance.product.seller_id:
+        keys.append(f"shopfront:seller_rating:v1:{instance.product.seller_id}")
+    _invalidate(*keys)

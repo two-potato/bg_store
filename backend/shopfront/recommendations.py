@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 
+from django.core.cache import cache
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
 
@@ -16,6 +17,9 @@ User = get_user_model()
 def record_recent_view(user, product: Product, limit: int = 24) -> None:
     if not getattr(user, "is_authenticated", False):
         return
+    cache_key = f"shopfront:recent-view-touch:v1:{user.id}:{product.id}"
+    if cache.get(cache_key):
+        return
     obj, created = RecentlyViewedProduct.objects.get_or_create(user=user, product=product)
     if not created:
         obj.save(update_fields=["updated_at"])
@@ -26,6 +30,7 @@ def record_recent_view(user, product: Product, limit: int = 24) -> None:
     )
     if stale_ids:
         RecentlyViewedProduct.objects.filter(id__in=stale_ids).delete()
+    cache.set(cache_key, True, timeout=1800)
 
 
 def recently_viewed_ids_for_user(user, limit: int = 12) -> list[int]:

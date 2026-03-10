@@ -1,4 +1,6 @@
 from django.db.models import Avg, Count, Prefetch
+from django.core.cache import cache
+from django.conf import settings
 from django.shortcuts import render
 
 from catalog.models import (
@@ -21,6 +23,20 @@ PAID_OR_CONFIRMED_ORDER_STATUSES = [
 ]
 
 
+def _product_rating_summary(product_id: int) -> dict:
+    cache_key = f"shopfront:product_rating:v1:{product_id}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+    agg = ProductReview.objects.filter(product_id=product_id).aggregate(avg=Avg("rating"), count=Count("id"))
+    payload = {
+        "rating_avg": agg["avg"] or 0,
+        "rating_count": agg["count"] or 0,
+    }
+    cache.set(cache_key, payload, timeout=getattr(settings, "CACHE_TTL_PDP_SUMMARY", 300))
+    return payload
+
+
 def build_reviews_context(product: Product, user, *, seller_rating_summary) -> dict:
     reviews_qs = (
         product.reviews.select_related("user", "user__profile")
@@ -35,7 +51,7 @@ def build_reviews_context(product: Product, user, *, seller_rating_summary) -> d
             ),
         )
     )
-    agg = reviews_qs.aggregate(avg=Avg("rating"), count=Count("id"))
+    product_rating = _product_rating_summary(product.id)
     user_review = None
     if getattr(user, "is_authenticated", False):
         user_review = reviews_qs.filter(user=user).first()
@@ -44,8 +60,8 @@ def build_reviews_context(product: Product, user, *, seller_rating_summary) -> d
     return {
         "p": product,
         "reviews": reviews_qs[:30],
-        "rating_avg": agg["avg"] or 0,
-        "rating_count": agg["count"] or 0,
+        "rating_avg": product_rating["rating_avg"],
+        "rating_count": product_rating["rating_count"],
         "user_review": user_review,
         "questions": questions_qs,
         "seller_rating_avg": seller_summary["rating_avg"],

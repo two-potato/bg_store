@@ -2112,7 +2112,6 @@ class ProductDetailView(TemplateView):
             "product_seller_cross_sell",
             ctx["seller_cross_sell_products"],
         )
-        ctx["saved_lists"] = _saved_list_queryset(self.request.user)[:8] if self.request.user.is_authenticated else []
         ctx["product_tracking_payload"] = json.dumps(
             {
                 "event": "product_view",

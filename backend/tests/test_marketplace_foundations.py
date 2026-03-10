@@ -1,7 +1,10 @@
 import pytest
+from datetime import timedelta
+from django.core.cache import cache
 from django.contrib.auth import get_user_model
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.test import RequestFactory
+from django.utils import timezone
 
 from catalog.models import Brand, Category, Product, SellerOffer, SellerInventory
 from commerce.models import LegalEntity, SellerStore
@@ -11,7 +14,8 @@ from shopfront.catalog_selectors import category_descendant_ids, category_option
 from shopfront.cart_checkout_service import cart_badge_context, cart_summary
 from shopfront.checkout_flow_service import ensure_checkout_idempotency_key
 from shopfront.cart_store import merge_session_cart_with_persistent
-from shopfront.models import PersistentCart
+from shopfront.models import PersistentCart, RecentlyViewedProduct
+from shopfront.recommendations import record_recent_view
 from catalog.offer_service import apply_offer_snapshot
 
 
@@ -139,3 +143,30 @@ def test_ensure_checkout_idempotency_key_persists_between_calls():
     assert first == "generated-key"
     assert second == "generated-key"
     assert generated == ["generated-key"]
+
+
+def test_record_recent_view_throttles_repeat_db_touches():
+    cache.clear()
+    user = get_user_model().objects.create_user(username="recent-view-user", password="pass")
+    brand = Brand.objects.create(name="Recent Brand")
+    category = Category.objects.create(name="Recent Category")
+    product = Product.objects.create(
+        sku="90002222",
+        name="Recent View Product",
+        brand=brand,
+        category=category,
+        price=99,
+        stock_qty=3,
+    )
+
+    record_recent_view(user, product)
+    record = RecentlyViewedProduct.objects.get(user=user, product=product)
+    old_ts = timezone.now() - timedelta(days=1)
+    record.updated_at = old_ts
+    record.save(update_fields=["updated_at"])
+
+    record_recent_view(user, product)
+    record.refresh_from_db()
+
+    assert RecentlyViewedProduct.objects.filter(user=user, product=product).count() == 1
+    assert record.updated_at == old_ts

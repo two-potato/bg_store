@@ -11,6 +11,7 @@ LETSENCRYPT_DOMAIN_WWW="${LETSENCRYPT_DOMAIN_WWW:-www.potatofarm.ru}"
 LETSENCRYPT_EXTRA_DOMAINS="${LETSENCRYPT_EXTRA_DOMAINS:-grafana.potatofarm.ru}"
 LETSENCRYPT_CERT_PATH="$ROOT_DIR/deploy/letsencrypt/live/$LETSENCRYPT_DOMAIN/fullchain.pem"
 ALLOWED_SSH_PORT_RAW="${ALLOWED_SSH_PORT:-22}"
+DEPLOY_CONFIGURE_FIREWALL="${DEPLOY_CONFIGURE_FIREWALL:-0}"
 ALLOWED_SSH_PORT="$(printf '%s' "$ALLOWED_SSH_PORT_RAW" | grep -Eo '[0-9]{1,5}' | head -n1 || true)"
 if [[ -n "$ALLOWED_SSH_PORT" ]] && [ "$ALLOWED_SSH_PORT" -ge 1 ] && [ "$ALLOWED_SSH_PORT" -le 65535 ]; then
   :
@@ -83,6 +84,11 @@ ensure_named_volumes() {
 }
 
 configure_firewall() {
+  if [ "$DEPLOY_CONFIGURE_FIREWALL" != "1" ]; then
+    echo "[deploy] Firewall hardening skipped (set DEPLOY_CONFIGURE_FIREWALL=1 to enable)"
+    return
+  fi
+
   if ! command -v ufw >/dev/null 2>&1; then
     echo "[deploy] ufw not found, skipping firewall hardening"
     return

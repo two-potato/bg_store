@@ -238,6 +238,48 @@ run_with_timeout 120 $COMPOSE exec -T --user root backend sh -lc "mkdir -p /app/
 log_step "Collecting static files"
 run_with_timeout 300 $COMPOSE exec -T backend /app/.venv/bin/python manage.py collectstatic --noinput --verbosity 0
 
+log_step "Reconciling runtime env for backend"
+python3 - <<'PY2'
+from pathlib import Path
+import os
+path = Path('backend/.env')
+text = path.read_text()
+updates = {}
+for key in ('POSTHOG_API_KEY', 'POSTHOG_HOST', 'CLARITY_PROJECT_ID', 'ANALYTICS_REQUIRE_CONSENT'):
+    value = os.getenv(key, '').strip()
+    if value:
+        updates[key] = value
+lines = text.splitlines()
+current = {}
+for line in lines:
+    if '=' in line and not line.lstrip().startswith('#'):
+        k, v = line.split('=', 1)
+        current[k] = v
+allowed = [item.strip() for item in current.get('ALLOWED_HOSTS', '').split(',') if item.strip()]
+for host in ('potatofarm.ru', 'www.potatofarm.ru', 'grafana.potatofarm.ru', 'backend'):
+    if host not in allowed:
+        allowed.append(host)
+updates['ALLOWED_HOSTS'] = ','.join(allowed)
+seen = set()
+out = []
+for line in lines:
+    replaced = False
+    for key, value in updates.items():
+        if line.startswith(key + '='):
+            out.append(f'{key}={value}')
+            seen.add(key)
+            replaced = True
+            break
+    if not replaced:
+        out.append(line)
+for key, value in updates.items():
+    if key not in seen:
+        out.append(f'{key}={value}')
+path.write_text('\n'.join(out) + '\n')
+PY2
+run_with_timeout 300 $COMPOSE_CORE up -d backend nginx
+wait_for_service_health backend 240
+
 log_step "Service status"
 $COMPOSE ps
 

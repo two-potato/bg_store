@@ -218,11 +218,11 @@ wait_for_service_health bot-notify 180
 wait_for_service_health backend 240
 
 log_step "Running migrations"
-run_with_timeout 300 compose_exec_backend /app/.venv/bin/python manage.py migrate --noinput
+run_with_timeout 300 $COMPOSE exec -T backend /app/.venv/bin/python manage.py migrate --noinput
 
 log_step "Restoring sellers/stores links when missing"
 if compose_exec_backend /app/.venv/bin/python manage.py help seed_sellers >/dev/null 2>&1; then
-  if ! run_with_timeout 300 compose_exec_backend /app/.venv/bin/python manage.py seed_sellers; then
+  if ! run_with_timeout 300 $COMPOSE exec -T backend /app/.venv/bin/python manage.py seed_sellers; then
     log_step "WARNING: seed_sellers failed, continuing deploy"
   fi
 else
@@ -230,13 +230,13 @@ else
 fi
 
 log_step "Clearing application cache"
-run_with_timeout 120 compose_exec_backend /app/.venv/bin/python manage.py shell -c "from django.core.cache import cache; cache.clear()"
+run_with_timeout 120 $COMPOSE exec -T backend /app/.venv/bin/python manage.py shell -c "from django.core.cache import cache; cache.clear()"
 
 log_step "Fixing staticfiles volume permissions"
 run_with_timeout 120 $COMPOSE exec -T --user root backend sh -lc "mkdir -p /app/staticfiles && chown -R app:app /app/staticfiles"
 
 log_step "Collecting static files"
-run_with_timeout 300 compose_exec_backend /app/.venv/bin/python manage.py collectstatic --noinput --verbosity 0
+run_with_timeout 300 $COMPOSE exec -T backend /app/.venv/bin/python manage.py collectstatic --noinput --verbosity 0
 
 log_step "Service status"
 $COMPOSE ps

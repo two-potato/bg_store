@@ -104,8 +104,8 @@ PY2
           git checkout -f main
           git reset --hard "$DEPLOY_REF"
           git clean -fd
-          docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build nginx
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build backend nginx
           docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.metrics.yml up -d --build --remove-orphans grafana prometheus loki promtail alertmanager nginx-exporter postgres-exporter redis-exporter es-exporter node-exporter cadvisor blackbox
           docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.metrics.yml ps
-          docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.metrics.yml logs --tail=80 nginx grafana prometheus loki alertmanager || true
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.metrics.yml logs --tail=80 backend nginx grafana prometheus loki alertmanager || true
           EOSSH

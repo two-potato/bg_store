@@ -277,14 +277,15 @@ for key, value in updates.items():
         out.append(f'{key}={value}')
 path.write_text('\n'.join(out) + '\n')
 PY2
-run_with_timeout 300 $COMPOSE_CORE up -d backend nginx
+run_with_timeout 300 $COMPOSE_CORE up -d --force-recreate backend nginx
 wait_for_service_health backend 240
+wait_for_service_health nginx 180
 
 log_step "Service status"
 $COMPOSE ps
 
 log_step "Health checks"
-run_with_timeout 60 curl -fsS http://localhost/health/ >/dev/null
+run_with_timeout 60 curl -fsS --retry 5 --retry-delay 2 --retry-connrefused http://localhost/health/ >/dev/null
 log_step "OK"
 
 if [ "$DEPLOY_INCLUDE_METRICS" = "1" ]; then

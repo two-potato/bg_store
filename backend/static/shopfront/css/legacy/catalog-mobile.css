@@ -8,8 +8,8 @@
   }
 
   body.app-theme .site-header-v3__mobile-search-wrap .site-header-v2__search {
-    min-height: 2.55rem !important;
-    border-radius: 999px !important;
+    min-height: 2.55rem;
+    border-radius: 999px;
   }
 
   body.app-theme .site-header-v3__mobile-search-wrap .site-header-v2__search-btn {
@@ -17,18 +17,18 @@
     min-width: 2.55rem;
     height: 2.55rem;
     min-height: 2.55rem;
-    padding: 0 !important;
-    border-radius: 999px !important;
+    padding: 0;
+    border-radius: 999px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
   }
 
   body.app-theme .catalog-toolbar--single-row {
-    display: flex !important;
+    display: flex;
     align-items: center;
     gap: 0.4rem;
-    flex-wrap: nowrap !important;
+    flex-wrap: nowrap;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 0.1rem;
@@ -43,20 +43,20 @@
     min-width: 2.25rem;
     height: 2.25rem;
     min-height: 2.25rem;
-    padding: 0 !important;
+    padding: 0;
     justify-content: center;
-    border-radius: 999px !important;
+    border-radius: 999px;
   }
 
   body.app-theme .catalog-toolbar__pills {
-    display: flex !important;
+    display: flex;
     flex: 1 1 auto;
-    flex-wrap: nowrap !important;
+    flex-wrap: nowrap;
     gap: 0.35rem;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     min-width: 0;
-    grid-template-columns: none !important;
+    grid-template-columns: none;
   }
 
   body.app-theme .catalog-sort-pill {
@@ -67,11 +67,11 @@
     min-height: 2.2rem;
     padding: 0;
     justify-content: center;
-    border-radius: 999px !important;
+    border-radius: 999px;
   }
 
   body.app-theme .catalog-sort-pill__text {
-    display: none !important;
+    display: none;
   }
 
   body.app-theme .catalog-toolbar--single-row::-webkit-scrollbar,
@@ -82,21 +82,21 @@
 
 /* Mobile bottom nav 2026: active section highlighted with circular marker */
 body.app-theme .mobile-nav-mint {
-  background: #ffffff !important;
+  background: #ffffff;
   backdrop-filter: none;
-  border-top: 1px solid #dce4f8 !important;
-  box-shadow: 0 -6px 18px rgba(31, 111, 232, 0.08) !important;
+  border-top: 1px solid #dce4f8;
+  box-shadow: 0 -6px 18px rgba(31, 111, 232, 0.08);
 }
 
 body.app-theme .mobile-nav-mint ul {
-  background: transparent !important;
+  background: transparent;
 }
 
 body.app-theme .mobile-nav-mint-link {
-  gap: 0.24rem !important;
-  color: #64748b !important;
-  background: transparent !important;
-  border: 0 !important;
+  gap: 0.24rem;
+  color: #64748b;
+  background: transparent;
+  border: 0;
 }
 
 body.app-theme .mobile-nav-mint-link__icon {
@@ -107,8 +107,8 @@ body.app-theme .mobile-nav-mint-link__icon {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  border: 1px solid #dde5fb !important;
-  background: #ffffff !important;
+  border: 1px solid #dde5fb;
+  background: #ffffff;
   transition: all 0.2s ease;
 }
 
@@ -118,24 +118,24 @@ body.app-theme .mobile-nav-mint-link__icon svg {
 }
 
 body.app-theme .mobile-nav-mint-link.is-active {
-  color: var(--pf-brand) !important;
+  color: var(--pf-brand);
   font-weight: 700;
 }
 
 body.app-theme .mobile-nav-mint-link.is-active .mobile-nav-mint-link__icon {
-  background: var(--pf-brand-soft) !important;
-  border-color: color-mix(in srgb, var(--pf-brand) 35%, white) !important;
-  box-shadow: 0 6px 14px rgba(31, 111, 232, 0.18) !important;
+  background: var(--pf-brand-soft);
+  border-color: color-mix(in srgb, var(--pf-brand) 35%, white);
+  box-shadow: 0 6px 14px rgba(31, 111, 232, 0.18);
 }
 
 body.app-theme .mobile-nav-mint-link:hover .mobile-nav-mint-link__icon {
-  background: #f8faff !important;
-  border-color: #ccd7fb !important;
+  background: #f8faff;
+  border-color: #ccd7fb;
 }
 
 body.app-theme .mobile-cart-icon-wrap,
 body.app-theme .mobile-cart-icon-wrap .mobile-nav-mint-link__icon {
-  background-image: none !important;
+  background-image: none;
 }
 
 /* Catalog filter behavior: desktop dropdown, mobile modal */
@@ -191,9 +191,9 @@ body.app-theme .catalog-filter-dropdown__backdrop {
     left: 0;
     width: min(760px, 94vw);
     z-index: 60;
-    background: #fff !important;
-    border: 1px solid #dbe4ff !important;
-    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.12) !important;
+    background: #fff;
+    border: 1px solid #dbe4ff;
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.12);
   }
 }
 
@@ -215,10 +215,10 @@ body.app-theme .catalog-filter-dropdown__backdrop {
     max-height: min(82vh, 720px);
     overflow: auto;
     z-index: 80;
-    border-radius: 1.05rem !important;
-    background: #fff !important;
-    border: 1px solid #dbe4ff !important;
-    box-shadow: 0 18px 36px rgba(2, 6, 23, 0.26) !important;
+    border-radius: 1.05rem;
+    background: #fff;
+    border: 1px solid #dbe4ff;
+    box-shadow: 0 18px 36px rgba(2, 6, 23, 0.26);
     padding-top: 0.85rem;
   }
 
@@ -239,15 +239,15 @@ body.app-theme .product-card__footer .cart-control .add {
   min-width: 2.45rem;
   height: 2.45rem;
   min-height: 2.45rem;
-  padding: 0 !important;
-  border-radius: 999px !important;
+  padding: 0;
+  border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #2a8cff 0%, #1a5dcb 100%) !important;
-  border-color: #1f6fe8 !important;
-  color: #ffffff !important;
-  box-shadow: 0 4px 12px rgba(31, 111, 232, 0.2) !important;
+  background: linear-gradient(135deg, #2a8cff 0%, #1a5dcb 100%);
+  border-color: #1f6fe8;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(31, 111, 232, 0.2);
 }
 
 /* Remove any warm/brown artifacts around navbar search and mobile footer */
@@ -257,19 +257,19 @@ body.app-theme .site-header-v3__row,
 body.app-theme .site-header-v3__search,
 body.app-theme .site-header-v2__search-wrap,
 body.app-theme .site-header-v3__mobile-search-wrap {
-  background: #ffffff !important;
-  background-image: none !important;
-  box-shadow: none !important;
+  background: #ffffff;
+  background-image: none;
+  box-shadow: none;
 }
 
 body.app-theme .site-header-v3 {
-  border-bottom: 1px solid #dce4f8 !important;
+  border-bottom: 1px solid #dce4f8;
 }
 
 body.app-theme .mobile-nav-mint,
 body.app-theme .mobile-nav-mint-link,
 body.app-theme .mobile-nav-mint-link__icon {
-  background-image: none !important;
+  background-image: none;
 }
 
 /* Product card responsive hardening (prevents layout drift on narrow screens incl. Pixel 7) */

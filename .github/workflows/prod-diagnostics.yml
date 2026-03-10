@@ -1,0 +1,80 @@
+name: Production Diagnostics
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostics:
+    name: Collect prod docker diagnostics
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Setup SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          SSH_PORT: ${{ secrets.PROD_SSH_PORT }}
+        run: |
+          set -eu
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$SSH_HOST"
+          : "${SSH_PORT:=22}"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          for attempt in 1 2 3; do
+            if ssh-keyscan -T 10 -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "SSH keyscan did not return a host key, continuing with StrictHostKeyChecking=accept-new"
+            else
+              sleep 3
+            fi
+          done
+
+      - name: Dump docker diagnostics
+        env:
+          SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          SSH_PORT: ${{ secrets.PROD_SSH_PORT }}
+          SSH_USER: ${{ secrets.PROD_SSH_USER }}
+          APP_DIR: ${{ secrets.PROD_APP_DIR }}
+        run: |
+          set -eu
+          : "${SSH_PORT:=22}"
+          : "${SSH_USER:=root}"
+          : "${APP_DIR:=/opt/servio}"
+          timeout --foreground 300 ssh \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
+            -o TCPKeepAlive=yes \
+            -o StrictHostKeyChecking=accept-new \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "APP_DIR='$APP_DIR' bash -s" <<'EOSSH'
+          set -euo pipefail
+          cd "$APP_DIR"
+          echo '=== HOST ==='
+          hostname
+          echo '=== DOCKER PS ==='
+          docker ps --format 'table {{.Names}}	{{.Status}}	{{.Image}}'
+          echo '=== CORE COMPOSE PS ==='
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml ps || true
+          echo '=== FULL COMPOSE PS ==='
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.metrics.yml ps || true
+          echo '=== UNHEALTHY CONTAINERS ==='
+          docker ps -a --format '{{.Names}}' | while read -r name; do
+            status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$name" 2>/dev/null || true)
+            if [ "$status" = 'unhealthy' ] || [ "$status" = 'exited' ] || [ "$status" = 'dead' ]; then
+              echo "--- $name : $status ---"
+              docker inspect --format '{{json .State}}' "$name" || true
+            fi
+          done
+          echo '=== CORE LOGS ==='
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=120 backend nginx db redis es bot bot-notify celery-worker celery-beat || true
+          echo '=== METRICS LOGS ==='
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.metrics.yml logs --tail=120 grafana prometheus loki promtail alertmanager nginx-exporter postgres-exporter redis-exporter es-exporter node-exporter cadvisor blackbox || true
+          EOSSH

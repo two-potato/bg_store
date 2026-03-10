@@ -21,10 +21,44 @@ else
 fi
 export NGINX_HTTP_PORT="${NGINX_HTTP_PORT:-80}"
 
+log_step() {
+  printf '[deploy][%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"
+}
+
+dump_compose_diagnostics() {
+  log_step "Compose service status"
+  $COMPOSE ps || true
+  log_step "Recent backend logs"
+  $COMPOSE logs --tail=120 backend || true
+  log_step "Recent nginx logs"
+  $COMPOSE logs --tail=120 nginx || true
+  log_step "Recent db logs"
+  $COMPOSE logs --tail=80 db || true
+}
+
+on_deploy_error() {
+  local exit_code=$?
+  log_step "Deployment failed with exit code ${exit_code}"
+  dump_compose_diagnostics
+  exit "$exit_code"
+}
+
+trap on_deploy_error ERR
+
 mkdir -p "$ROOT_DIR/deploy/letsencrypt" "$ROOT_DIR/deploy/letsencrypt-lib" "$ROOT_DIR/deploy/certbot-www"
 
 compose_exec_backend() {
   $COMPOSE exec -T backend "$@"
+}
+
+run_with_timeout() {
+  local timeout_seconds="$1"
+  shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout --foreground "$timeout_seconds" "$@"
+  else
+    "$@"
+  fi
 }
 
 wait_for_service_health() {
@@ -41,11 +75,11 @@ wait_for_service_health() {
       status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id" 2>/dev/null || true)"
       case "$status" in
         healthy|running)
-          echo "[deploy] Service '$service' is $status"
+          log_step "Service '$service' is $status"
           return 0
           ;;
         unhealthy|exited|dead)
-          echo "[deploy] Service '$service' is $status"
+          log_step "Service '$service' is $status"
           docker logs --tail 120 "$container_id" || true
           return 1
           ;;
@@ -55,14 +89,14 @@ wait_for_service_health() {
     local now_ts
     now_ts="$(date +%s)"
     if [ $((now_ts - start_ts)) -ge "$timeout" ]; then
-      echo "[deploy] Timed out waiting for '$service' health after ${timeout}s"
+      log_step "Timed out waiting for '$service' health after ${timeout}s"
       if [ -n "${container_id:-}" ]; then
         docker logs --tail 120 "$container_id" || true
       fi
       return 1
     fi
 
-    echo "[deploy] Waiting for '$service' to become healthy..."
+    log_step "Waiting for '$service' to become healthy..."
     sleep 5
   done
 }
@@ -77,7 +111,7 @@ ensure_named_volumes() {
   local volume
   for volume in "${volumes[@]}"; do
     if ! docker volume inspect "$volume" >/dev/null 2>&1; then
-      echo "[deploy] Creating missing Docker volume: $volume"
+      log_step "Creating missing Docker volume: $volume"
       docker volume create "$volume" >/dev/null
     fi
   done
@@ -85,16 +119,16 @@ ensure_named_volumes() {
 
 configure_firewall() {
   if [ "$DEPLOY_CONFIGURE_FIREWALL" != "1" ]; then
-    echo "[deploy] Firewall hardening skipped (set DEPLOY_CONFIGURE_FIREWALL=1 to enable)"
+    log_step "Firewall hardening skipped (set DEPLOY_CONFIGURE_FIREWALL=1 to enable)"
     return
   fi
 
   if ! command -v ufw >/dev/null 2>&1; then
-    echo "[deploy] ufw not found, skipping firewall hardening"
+    log_step "ufw not found, skipping firewall hardening"
     return
   fi
 
-  echo "[deploy] Applying UFW inbound policy (allow only SSH/HTTP/HTTPS)"
+  log_step "Applying UFW inbound policy (allow only SSH/HTTP/HTTPS)"
   ufw --force reset
   ufw default deny incoming
   ufw default allow outgoing
@@ -116,7 +150,7 @@ issue_or_renew_cert_standalone() {
     if getent hosts "$d" >/dev/null 2>&1; then
       domains+=("$d")
     else
-      echo "[deploy] Skipping LE domain '$d' (DNS record not found yet)"
+      log_step "Skipping LE domain '$d' (DNS record not found yet)"
     fi
   done
 
@@ -124,7 +158,7 @@ issue_or_renew_cert_standalone() {
     certbot_domain_args+=("-d" "$d")
   done
 
-  echo "[deploy] Requesting/renewing Let's Encrypt certificate for $LETSENCRYPT_DOMAIN"
+  log_step "Requesting/renewing Let's Encrypt certificate for $LETSENCRYPT_DOMAIN"
   $COMPOSE stop nginx || true
   docker run --rm \
     -p 80:80 -p 443:443 \
@@ -140,8 +174,8 @@ issue_or_renew_cert_standalone() {
 }
 
 if [ ! -f "$LETSENCRYPT_CERT_PATH" ]; then
-  echo "[deploy] TLS certificate not found, performing first-time issuance"
-  $COMPOSE up -d --build --remove-orphans db redis es bot bot-notify backend celery-worker celery-beat
+  log_step "TLS certificate not found, performing first-time issuance"
+  run_with_timeout 900 $COMPOSE up -d --build --remove-orphans db redis es bot bot-notify backend celery-worker celery-beat
   issue_or_renew_cert_standalone
 fi
 
@@ -152,47 +186,47 @@ if [ -f "$LETSENCRYPT_CERT_PATH" ]; then
       issue_or_renew_cert_standalone
     fi
   else
-    echo "[deploy] openssl is not installed, skipping expiration check"
+    log_step "openssl is not installed, skipping expiration check"
   fi
 fi
 
-echo "[deploy] Pulling/building and starting services"
+log_step "Pulling/building and starting services"
 ensure_named_volumes
-$COMPOSE up -d --build --remove-orphans
+run_with_timeout 1200 $COMPOSE up -d --build --remove-orphans
 
-echo "[deploy] Waiting for core services"
+log_step "Waiting for core services"
 wait_for_service_health db 120
 wait_for_service_health redis 120
 wait_for_service_health bot 180
 wait_for_service_health bot-notify 180
 wait_for_service_health backend 240
 
-echo "[deploy] Running migrations"
-compose_exec_backend /app/.venv/bin/python manage.py migrate --noinput
+log_step "Running migrations"
+run_with_timeout 300 compose_exec_backend /app/.venv/bin/python manage.py migrate --noinput
 
-echo "[deploy] Restoring sellers/stores links when missing"
+log_step "Restoring sellers/stores links when missing"
 if compose_exec_backend /app/.venv/bin/python manage.py help seed_sellers >/dev/null 2>&1; then
-  if ! compose_exec_backend /app/.venv/bin/python manage.py seed_sellers; then
-    echo "[deploy] WARNING: seed_sellers failed, continuing deploy"
+  if ! run_with_timeout 300 compose_exec_backend /app/.venv/bin/python manage.py seed_sellers; then
+    log_step "WARNING: seed_sellers failed, continuing deploy"
   fi
 else
-  echo "[deploy] seed_sellers command not available, skipping"
+  log_step "seed_sellers command not available, skipping"
 fi
 
-echo "[deploy] Clearing application cache"
-compose_exec_backend /app/.venv/bin/python manage.py shell -c "from django.core.cache import cache; cache.clear()"
+log_step "Clearing application cache"
+run_with_timeout 120 compose_exec_backend /app/.venv/bin/python manage.py shell -c "from django.core.cache import cache; cache.clear()"
 
-echo "[deploy] Fixing staticfiles volume permissions"
-$COMPOSE exec -T --user root backend sh -lc "mkdir -p /app/staticfiles && chown -R app:app /app/staticfiles"
+log_step "Fixing staticfiles volume permissions"
+run_with_timeout 120 $COMPOSE exec -T --user root backend sh -lc "mkdir -p /app/staticfiles && chown -R app:app /app/staticfiles"
 
-echo "[deploy] Collecting static files"
-compose_exec_backend /app/.venv/bin/python manage.py collectstatic --noinput --verbosity 0
+log_step "Collecting static files"
+run_with_timeout 300 compose_exec_backend /app/.venv/bin/python manage.py collectstatic --noinput --verbosity 0
 
-echo "[deploy] Service status"
+log_step "Service status"
 $COMPOSE ps
 
-echo "[deploy] Health checks"
-curl -fsS http://localhost/health/ >/dev/null
-echo "[deploy] OK"
+log_step "Health checks"
+run_with_timeout 60 curl -fsS http://localhost/health/ >/dev/null
+log_step "OK"
 
 configure_firewall

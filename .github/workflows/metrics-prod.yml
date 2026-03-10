@@ -50,6 +50,10 @@ jobs:
           SSH_USER: ${{ secrets.PROD_SSH_USER }}
           APP_DIR: ${{ secrets.PROD_APP_DIR }}
           DEPLOY_REF: ${{ github.sha }}
+          POSTHOG_API_KEY: phc_vsfSO3JJxnpoMIc0JxqItXivoQxSWT6UWuRiAqtybzm
+          POSTHOG_HOST: https://eu.posthog.com
+          CLARITY_PROJECT_ID: vt1i478bxy
+          ANALYTICS_REQUIRE_CONSENT: "1"
         run: |
           set -eu
           : "${SSH_PORT:=22}"
@@ -62,9 +66,38 @@ jobs:
             -o StrictHostKeyChecking=accept-new \
             -p "$SSH_PORT" \
             "$SSH_USER@$SSH_HOST" \
-            "APP_DIR='$APP_DIR' DEPLOY_REF='$DEPLOY_REF' bash -s" <<'EOSSH'
+            "APP_DIR='$APP_DIR' DEPLOY_REF='$DEPLOY_REF' POSTHOG_API_KEY='$POSTHOG_API_KEY' POSTHOG_HOST='$POSTHOG_HOST' CLARITY_PROJECT_ID='$CLARITY_PROJECT_ID' ANALYTICS_REQUIRE_CONSENT='$ANALYTICS_REQUIRE_CONSENT' bash -s" <<'EOSSH'
           set -euo pipefail
           cd "$APP_DIR"
+          python3 - <<'PY2'
+from pathlib import Path
+import os
+path = Path('backend/.env')
+text = path.read_text()
+updates = {
+    'POSTHOG_API_KEY': os.environ['POSTHOG_API_KEY'],
+    'POSTHOG_HOST': os.environ['POSTHOG_HOST'],
+    'CLARITY_PROJECT_ID': os.environ['CLARITY_PROJECT_ID'],
+    'ANALYTICS_REQUIRE_CONSENT': os.environ['ANALYTICS_REQUIRE_CONSENT'],
+}
+lines = text.splitlines()
+seen = set()
+out = []
+for line in lines:
+    replaced = False
+    for key, value in updates.items():
+        if line.startswith(key + '='):
+            out.append(f'{key}={value}')
+            seen.add(key)
+            replaced = True
+            break
+    if not replaced:
+        out.append(line)
+for key, value in updates.items():
+    if key not in seen:
+        out.append(f'{key}={value}')
+path.write_text('\n'.join(out) + '\n')
+PY2
           git fetch --all --prune
           git reset --hard
           git clean -fd

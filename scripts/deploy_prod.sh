@@ -48,6 +48,18 @@ on_deploy_error() {
 
 trap on_deploy_error ERR
 
+LEGACY_CORE_CONTAINERS="$(docker ps --format '{{.Names}}' | grep -E '^(bg-(nginx|db|redis|es|bot|bot-notify|bot-twa|celery|beat)$|bad-guys-shop-backend-1$)' | tr '
+' ' ' || true)"
+
+stop_legacy_core_stack() {
+  if [ -z "${LEGACY_CORE_CONTAINERS:-}" ]; then
+    log_step "No legacy bg core containers detected"
+    return
+  fi
+  log_step "Stopping legacy bg core stack: ${LEGACY_CORE_CONTAINERS}"
+  docker stop ${LEGACY_CORE_CONTAINERS} >/dev/null || true
+}
+
 mkdir -p "$ROOT_DIR/deploy/letsencrypt" "$ROOT_DIR/deploy/letsencrypt-lib" "$ROOT_DIR/deploy/certbot-www"
 
 compose_exec_backend() {
@@ -195,6 +207,7 @@ fi
 
 log_step "Pulling/building and starting services"
 ensure_named_volumes
+stop_legacy_core_stack
 run_with_timeout 300 $COMPOSE_CORE up -d --build --remove-orphans
 
 log_step "Waiting for core services"

@@ -23,8 +23,8 @@ export NGINX_HTTP_PORT="${NGINX_HTTP_PORT:-80}"
 
 mkdir -p "$ROOT_DIR/deploy/letsencrypt" "$ROOT_DIR/deploy/letsencrypt-lib" "$ROOT_DIR/deploy/certbot-www"
 
-compose_run_backend() {
-  $COMPOSE run --rm --no-deps backend "$@"
+compose_exec_backend() {
+  $COMPOSE exec -T backend "$@"
 }
 
 wait_for_service_health() {
@@ -168,11 +168,11 @@ wait_for_service_health bot-notify 180
 wait_for_service_health backend 240
 
 echo "[deploy] Running migrations"
-compose_run_backend /app/.venv/bin/python manage.py migrate --noinput
+compose_exec_backend /app/.venv/bin/python manage.py migrate --noinput
 
 echo "[deploy] Restoring sellers/stores links when missing"
-if compose_run_backend /app/.venv/bin/python manage.py help seed_sellers >/dev/null 2>&1; then
-  if ! compose_run_backend /app/.venv/bin/python manage.py seed_sellers; then
+if compose_exec_backend /app/.venv/bin/python manage.py help seed_sellers >/dev/null 2>&1; then
+  if ! compose_exec_backend /app/.venv/bin/python manage.py seed_sellers; then
     echo "[deploy] WARNING: seed_sellers failed, continuing deploy"
   fi
 else
@@ -180,13 +180,13 @@ else
 fi
 
 echo "[deploy] Clearing application cache"
-compose_run_backend /app/.venv/bin/python manage.py shell -c "from django.core.cache import cache; cache.clear()"
+compose_exec_backend /app/.venv/bin/python manage.py shell -c "from django.core.cache import cache; cache.clear()"
 
 echo "[deploy] Fixing staticfiles volume permissions"
 $COMPOSE exec -T --user root backend sh -lc "mkdir -p /app/staticfiles && chown -R app:app /app/staticfiles"
 
 echo "[deploy] Collecting static files"
-compose_run_backend /app/.venv/bin/python manage.py collectstatic --noinput --verbosity 0
+compose_exec_backend /app/.venv/bin/python manage.py collectstatic --noinput --verbosity 0
 
 echo "[deploy] Service status"
 $COMPOSE ps

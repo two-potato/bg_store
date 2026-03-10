@@ -195,7 +195,7 @@ fi
 
 log_step "Pulling/building and starting services"
 ensure_named_volumes
-run_with_timeout 300 $COMPOSE_CORE up -d --build --remove-orphans
+run_with_timeout 300 $COMPOSE_FULL up -d --build --remove-orphans db redis es bot bot-notify backend celery-worker celery-beat grafana nginx
 
 log_step "Waiting for core services"
 wait_for_service_health db 120

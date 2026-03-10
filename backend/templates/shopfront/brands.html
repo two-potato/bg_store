@@ -1,0 +1,45 @@
+{% extends "shopfront/base.html" %}
+{% load branding %}
+{% block content %}
+<section class="page-2026 brand-index-2026">
+  <header class="brand-index-2026__hero">
+    <span class="servio-home__section-kicker">Бренды</span>
+    <h1>Бренды</h1>
+    <p>Бренды и производственные линии в каталоге Servio. Выбирайте поставщиков по типу ассортимента, визуальному стилю и задачам кухни, бара или сервировки.</p>
+  </header>
+
+  <div class="brand-index-2026__grid">
+    {% for b in brands %}
+      <article class="brand-index-2026__card">
+        <div class="brand-index-2026__card-head">
+          <img
+            src="{% if b.photo %}{{ b.photo.url }}{% else %}{{ b|brand_logo_data_uri }}{% endif %}"
+            alt="{{ b.name }}"
+            class="brand-index-2026__logo"
+            loading="lazy">
+          <div class="brand-index-2026__copy">
+            <h2>{{ b.name }}</h2>
+            <span>{{ b.products_count }} товаров в каталоге</span>
+          </div>
+        </div>
+        {% if b.description %}
+          <p>{{ b.description|truncatechars:170 }}</p>
+        {% else %}
+          <p>Бренд представлен в профессиональном каталоге Servio и встроен в repeat-purchase сценарии закупки.</p>
+        {% endif %}
+        <div class="brand-index-2026__meta">
+          <span>{{ b.products_count }} SKU</span>
+          {% if b.categories_count %}<span>{{ b.categories_count }} категорий</span>{% endif %}
+          {% if b.collections_count %}<span>{{ b.collections_count }} коллекций</span>{% endif %}
+        </div>
+        <div class="brand-index-2026__actions">
+          <a href="/brands/{{ b.slug }}/" class="btn btn-sm btn-primary" hx-boost="false">Открыть бренд</a>
+          <a href="/catalog/?brand={{ b.id }}" class="btn btn-sm btn-outline" hx-boost="false">Товары бренда</a>
+        </div>
+      </article>
+    {% empty %}
+      <div class="page-2026__empty">Бренды пока не добавлены.</div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

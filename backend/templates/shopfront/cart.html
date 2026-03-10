@@ -4,4 +4,5 @@
   <a class="link" href="/">Главная</a> / <span>Корзина</span>
 </nav>
 {% include "shopfront/partials/cart_content.html" %}
+{% include "shopfront/components/recommendation_section.html" with products=cart_recommendations title="Добавьте к заказу" subtitle="Смежные позиции тех же поставщиков, которые часто докидывают в корзину на последнем шаге." recommendation_source="cart_cross_sell" tracking_payload=cart_recommendations_tracking_payload %}
 {% endblock %}

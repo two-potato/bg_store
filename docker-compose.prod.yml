@@ -9,7 +9,7 @@ services:
       LOG_CALLS_ENABLED: "0"
       REQUEST_LOG_LEVEL: WARNING
       ENABLE_CATALOG_RATING: "0"
-      GUNICORN_WORKERS: "4"
+      GUNICORN_WORKERS: "8"
       GUNICORN_TIMEOUT: "180"
     depends_on:
       - db
@@ -31,7 +31,6 @@ services:
       context: ./deploy/nginx
       dockerfile: Dockerfile
     ports:
-      - "80:80"
       - "443:443"
     volumes:
       - ./deploy/letsencrypt:/etc/letsencrypt:ro
@@ -43,3 +42,8 @@ services:
   mailpit:
     profiles: ["dev-only"]
     ports: []
+
+volumes:
+  pgdata:
+    external: true
+    name: bad-guys-shop_pgdata

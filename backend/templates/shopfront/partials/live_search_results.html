@@ -1,35 +1,90 @@
+{% load static seo_extras %}
 {% if show %}
-  <div class="live-search-panel" role="listbox" aria-label="Результаты поиска">
-    <div class="live-search-head">
-      <span class="live-search-head__label">Быстрый поиск</span>
-      <span class="live-search-head__query">«{{ q }}»</span>
+  <div class="live-search-panel live-search-panel--neo" role="listbox" aria-label="Результаты поиска">
+    <div class="live-search-head live-search-head--v3">
+      <div class="live-search-head__meta">
+        <span class="live-search-head__label">Быстрый поиск</span>
+        <span class="live-search-head__query">«{{ q }}»</span>
+      </div>
+      {% if products %}
+        <span class="live-search-head__count">{{ products|length }} поз.</span>
+      {% endif %}
     </div>
+    {% if suggestions %}
+      <div class="live-search-block">
+        <div class="live-search-block__title">Подсказки</div>
+        <div class="live-search-chip-row">
+          {% for suggestion in suggestions %}
+            <a href="/catalog/?q={{ suggestion|urlencode }}" class="live-search-country-chip" hx-boost="false">{{ suggestion }}</a>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+    {% if countries %}
+      <div class="live-search-block">
+        <div class="live-search-block__title">Популярные страны</div>
+        <div class="live-search-chip-row">
+          {% for country in countries %}
+            <a href="/catalog/?q={{ country|urlencode }}" class="live-search-country-chip" hx-boost="false">{{ country }}</a>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
     {% if products %}
-      <ul class="live-search-list">
+      <ul class="live-search-list live-search-list--neo" aria-label="Найденные товары">
         {% for p in products %}
           <li class="live-search-row">
-            <a href="/product/{{ p.id }}/" hx-boost="false" class="live-search-item">
-              <span class="live-search-thumb">
-                {% with img=p.images.first %}
+            <a href="/product/{{ p.slug }}/"
+               hx-boost="false"
+               class="live-search-item live-search-item--v3"
+               data-search-click
+               data-search-query="{{ q }}"
+               data-search-origin="live_search"
+               data-search-product-id="{{ p.id }}"
+               data-search-product-name="{{ p.name }}"
+               data-search-position="{{ forloop.counter }}">
+              <span class="live-search-thumb live-search-thumb--sm">
+                {% with img=p.prefetched_images.0 %}
                   {% if img %}
-                    <img src="{{ img.url }}" alt="{{ img.alt|default:p.name }}" loading="lazy">
+                    <img src="{{ img.url }}" alt="{{ img|product_image_alt:p.name }}" loading="lazy" data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}">
                   {% else %}
-                    <img src="https://picsum.photos/seed/live-{{ p.id }}/96/96" alt="{{ p.name }}" loading="lazy">
+                    <img src="{% static 'shopfront/product-placeholder.svg' %}" alt="{{ p.name }}" loading="lazy">
                   {% endif %}
                 {% endwith %}
               </span>
-              <span class="live-search-meta">
+              <span class="live-search-main">
+                <span class="live-search-kicker">
+                  {% if p.seller and p.seller.seller_store %}
+                    <span class="live-search-store">{{ p.seller.seller_store.name }}</span>
+                  {% endif %}
+                  {% if p.category %}<span class="live-search-category">{{ p.category.name }}</span>{% endif %}
+                </span>
                 <span class="live-search-title">{{ p.name }}</span>
-                <span class="live-search-subtitle">{{ p.brand|default:"Без бренда" }}{% if p.category %} · {{ p.category.name }}{% endif %}</span>
+                <span class="live-search-subtitle">
+                  {{ p.brand|default:"Без бренда" }}
+                </span>
               </span>
-              <span class="live-search-price">{{ p.price }} ₽</span>
+              <span class="live-search-aside">
+                <span class="live-search-price">{{ p.price }} ₽</span>
+                <span class="live-search-open">Открыть</span>
+              </span>
             </a>
           </li>
         {% endfor %}
       </ul>
-      <a href="/catalog/?q={{ q|urlencode }}" class="live-search-all" hx-boost="false">Смотреть все результаты</a>
+      <div class="live-search-footer">
+        <a href="/catalog/?q={{ q|urlencode }}" class="live-search-all live-search-all--v3" hx-boost="false">Показать все результаты</a>
+      </div>
     {% else %}
-      <div class="live-search-empty">По запросу «{{ q }}» ничего не найдено</div>
+      <div class="live-search-empty">
+        По запросу «{{ q }}» ничего не найдено
+        {% if suggestions %}
+          <div class="mt-2 text-sm text-base-content/70">Попробуйте подсказки выше или откройте расширенный каталог.</div>
+        {% endif %}
+      </div>
+      <div class="live-search-footer">
+        <a href="/catalog/?q={{ q|urlencode }}" class="live-search-all live-search-all--v3" hx-boost="false">Перейти в каталог и посмотреть альтернативы</a>
+      </div>
     {% endif %}
   </div>
 {% endif %}

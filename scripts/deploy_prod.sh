@@ -4,14 +4,142 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
+COMPOSE_CORE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
+COMPOSE_FULL="docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.metrics.yml"
+COMPOSE="$COMPOSE_CORE"
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-admin@potatofarm.ru}"
 LETSENCRYPT_DOMAIN="${LETSENCRYPT_DOMAIN:-potatofarm.ru}"
 LETSENCRYPT_DOMAIN_WWW="${LETSENCRYPT_DOMAIN_WWW:-www.potatofarm.ru}"
 LETSENCRYPT_EXTRA_DOMAINS="${LETSENCRYPT_EXTRA_DOMAINS:-grafana.potatofarm.ru}"
 LETSENCRYPT_CERT_PATH="$ROOT_DIR/deploy/letsencrypt/live/$LETSENCRYPT_DOMAIN/fullchain.pem"
+ALLOWED_SSH_PORT_RAW="${ALLOWED_SSH_PORT:-22}"
+DEPLOY_CONFIGURE_FIREWALL="${DEPLOY_CONFIGURE_FIREWALL:-0}"
+DEPLOY_INCLUDE_METRICS="${DEPLOY_INCLUDE_METRICS:-0}"
+ALLOWED_SSH_PORT="$(printf '%s' "$ALLOWED_SSH_PORT_RAW" | grep -Eo '[0-9]{1,5}' | head -n1 || true)"
+if [[ -n "$ALLOWED_SSH_PORT" ]] && [ "$ALLOWED_SSH_PORT" -ge 1 ] && [ "$ALLOWED_SSH_PORT" -le 65535 ]; then
+  :
+else
+  echo "[deploy] Invalid ALLOWED_SSH_PORT='$ALLOWED_SSH_PORT_RAW', fallback to 22"
+  ALLOWED_SSH_PORT="22"
+fi
+export NGINX_HTTP_PORT="${NGINX_HTTP_PORT:-80}"
+
+log_step() {
+  printf '[deploy][%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"
+}
+
+dump_compose_diagnostics() {
+  log_step "Compose service status"
+  $COMPOSE ps || true
+  log_step "Recent backend logs"
+  $COMPOSE logs --tail=120 backend || true
+  log_step "Recent nginx logs"
+  $COMPOSE logs --tail=120 nginx || true
+  log_step "Recent db logs"
+  $COMPOSE logs --tail=80 db || true
+}
+
+on_deploy_error() {
+  local exit_code=$?
+  log_step "Deployment failed with exit code ${exit_code}"
+  dump_compose_diagnostics
+  exit "$exit_code"
+}
+
+trap on_deploy_error ERR
 
 mkdir -p "$ROOT_DIR/deploy/letsencrypt" "$ROOT_DIR/deploy/letsencrypt-lib" "$ROOT_DIR/deploy/certbot-www"
+
+compose_exec_backend() {
+  $COMPOSE exec -T backend "$@"
+}
+
+run_with_timeout() {
+  local timeout_seconds="$1"
+  shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout --foreground "$timeout_seconds" "$@"
+  else
+    "$@"
+  fi
+}
+
+wait_for_service_health() {
+  local service="$1"
+  local timeout="${2:-180}"
+  local start_ts
+  start_ts="$(date +%s)"
+
+  while true; do
+    local container_id
+    container_id="$($COMPOSE ps -q "$service" | head -n1)"
+    if [ -n "$container_id" ]; then
+      local status
+      status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id" 2>/dev/null || true)"
+      case "$status" in
+        healthy|running)
+          log_step "Service '$service' is $status"
+          return 0
+          ;;
+        unhealthy|exited|dead)
+          log_step "Service '$service' is $status"
+          docker logs --tail 120 "$container_id" || true
+          return 1
+          ;;
+      esac
+    fi
+
+    local now_ts
+    now_ts="$(date +%s)"
+    if [ $((now_ts - start_ts)) -ge "$timeout" ]; then
+      log_step "Timed out waiting for '$service' health after ${timeout}s"
+      if [ -n "${container_id:-}" ]; then
+        docker logs --tail 120 "$container_id" || true
+      fi
+      return 1
+    fi
+
+    log_step "Waiting for '$service' to become healthy..."
+    sleep 5
+  done
+}
+
+ensure_named_volumes() {
+  local volumes=(
+    "servio_pgdata"
+    "servio_esdata"
+    "servio_redisdata"
+    "servio_staticfiles"
+  )
+  local volume
+  for volume in "${volumes[@]}"; do
+    if ! docker volume inspect "$volume" >/dev/null 2>&1; then
+      log_step "Creating missing Docker volume: $volume"
+      docker volume create "$volume" >/dev/null
+    fi
+  done
+}
+
+configure_firewall() {
+  if [ "$DEPLOY_CONFIGURE_FIREWALL" != "1" ]; then
+    log_step "Firewall hardening skipped (set DEPLOY_CONFIGURE_FIREWALL=1 to enable)"
+    return
+  fi
+
+  if ! command -v ufw >/dev/null 2>&1; then
+    log_step "ufw not found, skipping firewall hardening"
+    return
+  fi
+
+  log_step "Applying UFW inbound policy (allow only SSH/HTTP/HTTPS)"
+  ufw --force reset
+  ufw default deny incoming
+  ufw default allow outgoing
+  ufw allow "${ALLOWED_SSH_PORT}/tcp"
+  ufw allow 80/tcp
+  ufw allow 443/tcp
+  ufw --force enable || true
+}
 
 issue_or_renew_cert_standalone() {
   local domains=("$LETSENCRYPT_DOMAIN" "$LETSENCRYPT_DOMAIN_WWW")
@@ -25,7 +153,7 @@ issue_or_renew_cert_standalone() {
     if getent hosts "$d" >/dev/null 2>&1; then
       domains+=("$d")
     else
-      echo "[deploy] Skipping LE domain '$d' (DNS record not found yet)"
+      log_step "Skipping LE domain '$d' (DNS record not found yet)"
     fi
   done
 
@@ -33,8 +161,8 @@ issue_or_renew_cert_standalone() {
     certbot_domain_args+=("-d" "$d")
   done
 
-  echo "[deploy] Requesting/renewing Let's Encrypt certificate for $LETSENCRYPT_DOMAIN"
-  $COMPOSE stop nginx || true
+  log_step "Requesting/renewing Let's Encrypt certificate for $LETSENCRYPT_DOMAIN"
+  $COMPOSE_CORE stop nginx || true
   docker run --rm \
     -p 80:80 -p 443:443 \
     -v "$ROOT_DIR/deploy/letsencrypt:/etc/letsencrypt" \
@@ -49,8 +177,8 @@ issue_or_renew_cert_standalone() {
 }
 
 if [ ! -f "$LETSENCRYPT_CERT_PATH" ]; then
-  echo "[deploy] TLS certificate not found, performing first-time issuance"
-  $COMPOSE up -d --build --remove-orphans db redis es bot bot-notify backend celery-worker celery-beat
+  log_step "TLS certificate not found, performing first-time issuance"
+  run_with_timeout 300 $COMPOSE_CORE up -d --build --remove-orphans db redis es bot bot-notify backend celery-worker celery-beat
   issue_or_renew_cert_standalone
 fi
 
@@ -61,25 +189,54 @@ if [ -f "$LETSENCRYPT_CERT_PATH" ]; then
       issue_or_renew_cert_standalone
     fi
   else
-    echo "[deploy] openssl is not installed, skipping expiration check"
+    log_step "openssl is not installed, skipping expiration check"
   fi
 fi
 
-echo "[deploy] Pulling/building and starting services"
-$COMPOSE up -d --build --remove-orphans
+log_step "Pulling/building and starting services"
+ensure_named_volumes
+run_with_timeout 300 $COMPOSE_FULL up -d --build --remove-orphans db redis es bot bot-notify backend celery-worker celery-beat grafana nginx
 
-echo "[deploy] Running migrations"
-$COMPOSE exec -T backend /app/.venv/bin/python manage.py migrate --noinput
+log_step "Waiting for core services"
+wait_for_service_health db 120
+wait_for_service_health redis 120
+wait_for_service_health bot 180
+wait_for_service_health bot-notify 180
+wait_for_service_health backend 240
 
-echo "[deploy] Fixing staticfiles volume permissions"
-$COMPOSE exec -T --user root backend sh -lc "mkdir -p /app/staticfiles && chown -R app:app /app/staticfiles"
+log_step "Running migrations"
+compose_exec_backend /app/.venv/bin/python manage.py migrate --noinput
 
-echo "[deploy] Collecting static files"
-$COMPOSE exec -T backend /app/.venv/bin/python manage.py collectstatic --noinput
+log_step "Restoring sellers/stores links when missing"
+if compose_exec_backend /app/.venv/bin/python manage.py help seed_sellers >/dev/null 2>&1; then
+  if ! compose_exec_backend /app/.venv/bin/python manage.py seed_sellers; then
+    log_step "WARNING: seed_sellers failed, continuing deploy"
+  fi
+else
+  log_step "seed_sellers command not available, skipping"
+fi
 
-echo "[deploy] Service status"
+log_step "Clearing application cache"
+compose_exec_backend /app/.venv/bin/python manage.py shell -c "from django.core.cache import cache; cache.clear()"
+
+log_step "Fixing staticfiles volume permissions"
+run_with_timeout 120 $COMPOSE exec -T --user root backend sh -lc "mkdir -p /app/staticfiles && chown -R app:app /app/staticfiles"
+
+log_step "Collecting static files"
+compose_exec_backend /app/.venv/bin/python manage.py collectstatic --noinput --verbosity 0
+
+log_step "Service status"
 $COMPOSE ps
 
-echo "[deploy] Health checks"
-curl -fsS http://localhost/health/ >/dev/null
-echo "[deploy] OK"
+log_step "Health checks"
+run_with_timeout 60 curl -fsS http://localhost/health/ >/dev/null
+log_step "OK"
+
+if [ "$DEPLOY_INCLUDE_METRICS" = "1" ]; then
+  log_step "Starting metrics stack"
+  run_with_timeout 900 $COMPOSE_FULL up -d --build --remove-orphans
+else
+  log_step "Skipping metrics stack during core rollout (set DEPLOY_INCLUDE_METRICS=1 to enable)"
+fi
+
+configure_firewall

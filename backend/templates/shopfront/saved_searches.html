@@ -1,0 +1,34 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<section class="page-2026">
+  <header class="page-2026__header">
+    <h1>Сохранённые поиски</h1>
+    <p>Быстрый доступ к часто используемым фильтрам и запросам.</p>
+  </header>
+  <div class="mb-4">
+    <a class="btn btn-sm btn-outline" href="/lists/" hx-boost="false">Перейти к спискам закупок</a>
+  </div>
+
+  <div class="page-2026__list">
+    {% for s in saved_searches %}
+      <article class="page-2026__list-item">
+        <div>
+          <h3>{{ s.name }}</h3>
+          <p>{{ s.querystring }}</p>
+        </div>
+        <div class="page-2026__list-actions">
+          <a class="btn btn-sm btn-primary" href="/catalog/?{{ s.querystring }}" hx-boost="false">Открыть</a>
+          <form method="post" action="/saved-searches/">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="id" value="{{ s.id }}">
+            <button class="btn btn-sm btn-outline" type="submit">Удалить</button>
+          </form>
+        </div>
+      </article>
+    {% empty %}
+      <div class="page-2026__empty">Пока нет сохранённых поисков. На странице каталога нажмите «Сохранить поиск».</div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

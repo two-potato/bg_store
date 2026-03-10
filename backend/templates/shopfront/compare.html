@@ -1,0 +1,60 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<section class="page-2026">
+  <header class="page-2026__header">
+    <h1>Сравнение товаров</h1>
+    <p>Сравнивайте цену, бренд, серию, наличие, сроки поставки и ключевые характеристики в одном экране.</p>
+  </header>
+
+  {% if products %}
+    <div class="overflow-x-auto page-2026__card">
+      <table class="table table-zebra">
+        <thead>
+          <tr>
+            <th>Параметр</th>
+            {% for product in products %}
+              <th class="min-w-[240px]">
+                <div class="space-y-3">
+                  <a href="/product/{{ product.slug }}/" class="font-semibold" hx-boost="false">{{ product.name }}</a>
+                  <div class="text-sm text-base-content/70">
+                    {% if product.brand %}<a href="/brands/{{ product.brand.slug }}/" hx-boost="false">{{ product.brand.name }}</a>{% endif %}
+                    {% if product.series %} · <a href="/catalog/?series={{ product.series_id }}" hx-boost="false">{{ product.series.name }}</a>{% endif %}
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <a class="btn btn-xs btn-outline" href="/product/{{ product.slug }}/" hx-boost="false">Карточка</a>
+	                    <button class="btn btn-xs btn-outline"
+	                            type="button"
+	                            data-compare-toggle
+	                            data-product-id="{{ product.id }}"
+	                            data-in-compare="1"
+	                            data-compare-label-active="Убрать"
+	                            data-compare-label-inactive="Добавить">
+	                      <span data-compare-label>Убрать</span>
+	                    </button>
+                  </div>
+                </div>
+              </th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in compare_rows %}
+            <tr>
+              <th>{{ row.label }}</th>
+              {% for value in row.values %}
+                <td>{{ value }}</td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="page-2026__card">
+      <h2>Список сравнения пуст</h2>
+      <p class="text-sm text-base-content/70 mb-4">Добавьте до 4 товаров из каталога или из карточки товара.</p>
+      <a class="btn btn-primary" href="/catalog/" hx-boost="false">Перейти в каталог</a>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,17 +1,24 @@
-name: bad-guys-shop
+name: servio
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+    compress: "true"
+
 services:
   prometheus:
     image: mirror.gcr.io/prom/prometheus
-    container_name: bg-prom
+    container_name: servio-prometheus
     volumes:
       - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
-    ports: ["9090:9090"]
+    logging: *default-logging
     restart: unless-stopped
 
   loki:
     image: mirror.gcr.io/grafana/loki:2.9.0
-    container_name: bg-loki
+    container_name: servio-loki
     user: "0:0"
     command: -config.file=/etc/loki/config.yml
     volumes:
@@ -19,74 +26,85 @@ services:
       - ./deploy/loki/rules/fake/rules.yml:/etc/loki/rules/fake/rules.yml:ro
       - loki-wal:/wal
       - loki-data:/loki
-    ports:
-      - "3100:3100"
+    logging: *default-logging
     restart: unless-stopped
 
   nginx-exporter:
     image: mirror.gcr.io/nginx/nginx-prometheus-exporter:0.11.0
-    container_name: bg-nginx-exporter
-    command: ["-nginx.scrape-uri", "http://nginx/nginx_status"]
+    container_name: servio-nginx-exporter
+    command: ["-nginx.scrape-uri", "http://servio-nginx/nginx_status"]
     depends_on:
       nginx:
         condition: service_healthy
+    logging: *default-logging
     restart: unless-stopped
 
   alertmanager:
     image: mirror.gcr.io/prom/alertmanager
-    container_name: bg-alertmanager
+    container_name: servio-alertmanager
     volumes:
       - ./deploy/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-    ports: ["9093:9093"]
+    logging: *default-logging
     restart: unless-stopped
 
   grafana:
-    image: mirror.gcr.io/grafana/grafana:11.6.0
-    container_name: bg-grafana
+    image: grafana/grafana:12.4.0
+    container_name: servio-grafana
+    environment:
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_DATE_FORMATS_DEFAULT_TIMEZONE: browser
+      GF_EXPLORE_ENABLED: "true"
+      GF_FEATURE_TOGGLES_ENABLE: logsExploreTableVisualisation
     volumes:
       - grafana:/var/lib/grafana
       - ./deploy/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./deploy/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./deploy/grafana/dashboards:/etc/grafana/dashboards:ro
-    ports: ["3000:3000"]
+    logging: *default-logging
     restart: unless-stopped
 
   promtail:
     image: mirror.gcr.io/grafana/promtail:2.9.0
-    container_name: bg-promtail
+    container_name: servio-promtail
     volumes:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./deploy/promtail/config.yml:/etc/promtail/config.yml:ro
     command: ["--config.file=/etc/promtail/config.yml"]
+    logging: *default-logging
     restart: unless-stopped
 
   postgres-exporter:
     image: mirror.gcr.io/prometheuscommunity/postgres-exporter:v0.15.0
-    container_name: bg-postgres-exporter
+    container_name: servio-postgres-exporter
     command: ["--config.file=/etc/postgres-exporter/postgres_exporter.yml"]
     volumes:
       - ./deploy/postgres-exporter/postgres_exporter.yml:/etc/postgres-exporter/postgres_exporter.yml:ro
     environment:
       DATA_SOURCE_NAME: postgresql://shop:shop@db:5432/shop?sslmode=disable
+    logging: *default-logging
     restart: unless-stopped
 
   redis-exporter:
     image: mirror.gcr.io/oliver006/redis_exporter:v1.61.0
-    container_name: bg-redis-exporter
+    container_name: servio-redis-exporter
     environment:
       - REDIS_ADDR=redis://redis:6379
+    logging: *default-logging
     restart: unless-stopped
 
   es-exporter:
     image: quay.io/prometheuscommunity/elasticsearch-exporter:v1.7.0
-    container_name: bg-es-exporter
+    container_name: servio-es-exporter
     command: ["--es.uri=http://es:9200", "--es.all"]
+    logging: *default-logging
     restart: unless-stopped
 
   node-exporter:
     image: mirror.gcr.io/prom/node-exporter:v1.7.0
-    container_name: bg-node-exporter
+    container_name: servio-node-exporter
     command:
       - --path.rootfs=/rootfs
       - --path.procfs=/host/proc
@@ -97,23 +115,26 @@ services:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /run/udev:/run/udev:ro
+    logging: *default-logging
     restart: unless-stopped
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.47.2
-    container_name: bg-cadvisor
+    container_name: servio-cadvisor
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
+    logging: *default-logging
     restart: unless-stopped
 
   blackbox:
     image: mirror.gcr.io/prom/blackbox-exporter:v0.24.0
-    container_name: bg-blackbox
+    container_name: servio-blackbox
     volumes:
       - ./deploy/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    logging: *default-logging
     restart: unless-stopped
 
 volumes:

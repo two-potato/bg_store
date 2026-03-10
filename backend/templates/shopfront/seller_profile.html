@@ -1,0 +1,64 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<section class="page-2026 seller-page-2026">
+  <header class="seller-page-2026__hero">
+    <div class="seller-page-2026__hero-content">
+      <div class="seller-page-2026__avatar">
+        {% if seller_profile.photo %}
+          <img src="{{ seller_profile.photo.url }}" alt="{{ seller_user.username }}" class="seller-page-2026__avatar-img" loading="lazy">
+        {% else %}
+          <span class="seller-page-2026__avatar-fallback">{{ seller_user.username|slice:":1"|upper }}</span>
+        {% endif %}
+      </div>
+      <div class="seller-page-2026__copy">
+        <h1>{{ seller_profile.full_name|default:seller_user.username }}</h1>
+        <p>@{{ seller_user.username }} · Поставщик Servio</p>
+      </div>
+      <div class="seller-page-2026__meta">
+        <span class="chip">{{ stores|length }} магазинов</span>
+        <span class="chip">{{ memberships|length }} юр. лиц</span>
+        {% if seller_rating.rating_count %}
+          <span class="chip">Рейтинг продавца {{ seller_rating.rating_avg|floatformat:1 }} / 5</span>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+
+  <div class="seller-page-2026__grid">
+    <section class="seller-page-2026__panel">
+      <h2>Юридические лица</h2>
+      {% if memberships %}
+        <ul class="seller-page-2026__list">
+          {% for m in memberships %}
+            <li>
+              <strong>{{ m.legal_entity.name }}</strong>
+              <span>ИНН {{ m.legal_entity.inn }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="seller-page-2026__empty">Юридические лица не указаны.</p>
+      {% endif %}
+    </section>
+
+    <section class="seller-page-2026__panel">
+      <h2>Магазины продавца</h2>
+      {% if stores %}
+        <ul class="seller-page-2026__stores">
+          {% for s in stores %}
+            <li>
+              <div>
+                <strong>{{ s.name }}</strong>
+                <span>{{ s.legal_entity.name }}</span>
+              </div>
+              <a class="btn btn-xs btn-outline" href="/stores/{{ s.slug }}/" hx-boost="false">Открыть</a>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="seller-page-2026__empty">Магазины не найдены.</p>
+      {% endif %}
+    </section>
+  </div>
+</section>
+{% endblock %}

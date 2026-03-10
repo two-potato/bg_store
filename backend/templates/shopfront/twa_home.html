@@ -1,26 +1,67 @@
 {% extends "shopfront/base.html" %}
-{% load static %}
+{% load static seo_extras %}
 {% block content %}
-<div id="page" class="max-w-screen-sm mx-auto px-3">
-  <div class="flex items-center justify-between mb-3">
-    <h1 class="text-lg font-semibold m-0">Каталог</h1>
-    <button class="btn btn-sm btn-outline" data-twa-haptic="light">Хэптик</button>
-  </div>
-  <div class="grid grid-cols-2 gap-3">
-    {% for p in products %}
+<div id="page" class="twa-market max-w-screen-sm mx-auto">
+  <section class="twa-market__hero">
+    <div class="twa-market__hero-top">
       <div>
-        <a class="card bg-base-100" href="/product/{{ p.id }}/">
-          <figure><img src="{{ p.main_image_url }}" alt="{{ p.name }}" onerror="this.style.display='none'"/></figure>
-          <div class="card-body p-2">
-            <div class="text-xs text-base-content/60">{{ p.category.name }}</div>
-            <div class="font-semibold truncate">{{ p.name }}</div>
-            <div class="font-bold">{{ p.price }} ₽</div>
+        <p class="twa-market__overline">Servio</p>
+        <h1 class="twa-market__title">Каталог HoReCa</h1>
+      </div>
+      <button class="twa-market__haptic" data-twa-haptic="light" aria-label="Включить тактильный отклик">
+        {% include 'shopfront/icons/bolt.svg' %}
+      </button>
+    </div>
+    <p class="twa-market__subtitle">Быстрый вход в каталог, корзину и повторные b2b-заказы внутри Telegram</p>
+
+    <form action="/catalog/" class="twa-market__search" role="search">
+      <span class="twa-market__search-icon">{% include 'shopfront/icons/search.svg' %}</span>
+      <input type="search" name="q" placeholder="Найти товар, бренд или категорию" aria-label="Поиск товаров">
+      <button type="submit">Найти</button>
+    </form>
+
+    <div class="twa-market__quick-links">
+      <a href="/catalog/" hx-boost="false">Каталог</a>
+      <a href="/cart/" hx-boost="false">Корзина</a>
+      <a href="/account/" hx-boost="false">Профиль</a>
+    </div>
+  </section>
+
+  <div class="twa-market__grid">
+    {% for p in products %}
+      <article class="twa-product-card">
+        <a class="twa-product-card__link" href="/product/{{ p.slug }}/" hx-boost="false" aria-label="Открыть товар {{ p.name }}">
+          <figure class="twa-product-card__media">
+            {% with first_image=p.prefetched_images.0 %}
+              {% if first_image %}
+                <img src="{{ first_image.url }}" alt="{{ first_image|product_image_alt:p.name }}" loading="lazy" data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}">
+              {% else %}
+                <img src="{% static 'shopfront/product-placeholder.svg' %}" alt="{{ p.name }}" loading="lazy">
+              {% endif %}
+            {% endwith %}
+            <span class="twa-product-card__badge">Хит</span>
+          </figure>
+          <div class="twa-product-card__body">
+            <p class="twa-product-card__category">{{ p.category.name|default:"Категория" }}</p>
+            <h2 class="twa-product-card__name">{{ p.name }}</h2>
+            <div class="twa-product-card__meta">
+              <span class="twa-product-card__rating">{% include 'shopfront/icons/bolt.svg' %}4.8</span>
+              <span class="twa-product-card__stock {% if p.stock_qty > 0 %}is-ok{% else %}is-empty{% endif %}">
+                {% if p.stock_qty > 0 %}{{ p.stock_qty }} шт.{% else %}Нет в наличии{% endif %}
+              </span>
+            </div>
+            <div class="twa-product-card__bottom">
+              <strong class="twa-product-card__price">{{ p.price }} ₽</strong>
+              <span class="twa-product-card__pack">{{ p.pack_qty }} {{ p.unit }}</span>
+            </div>
           </div>
         </a>
-        <div class="mt-2">
-          {% include "shopfront/components/cart_control.html" with pid=p.id in_stock=1 %}
+        <div class="twa-product-card__actions">
+          {% include "shopfront/components/cart_control.html" with pid=p.id in_stock=p.stock_qty %}
         </div>
-      </div>
+      </article>
+    {% empty %}
+      <div class="twa-market__empty">Пока нет товаров для показа</div>
     {% endfor %}
   </div>
 </div>

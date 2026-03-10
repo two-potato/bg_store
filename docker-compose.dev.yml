@@ -6,22 +6,21 @@ services:
         INSTALL_DEV: 1
     environment:
       DEBUG: "1"
+      ES_ENABLED: "0"
     command:
       [
         "sh",
         "-lc",
-        "until /app/.venv/bin/python manage.py migrate --noinput; do echo 'Waiting for DB...'; sleep 2; done; /app/.venv/bin/python manage.py collectstatic --noinput; exec /app/.venv/bin/python -m uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --reload",
+        "until /app/.venv/bin/python manage.py migrate --noinput; do echo 'Waiting for DB...'; sleep 2; done; /app/.venv/bin/python manage.py collectstatic --noinput --ignore admin/js/cancel.js --ignore admin/js/popup_response.js; exec /app/.venv/bin/python -m uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --reload",
       ]
   celery-worker:
-    build:
-      context: ./backend
-      args:
-        INSTALL_DEV: 1
+    environment:
+      DEBUG: "1"
+      ES_ENABLED: "0"
   celery-beat:
-    build:
-      context: ./backend
-      args:
-        INSTALL_DEV: 1
+    environment:
+      DEBUG: "1"
+      ES_ENABLED: "0"
   nginx:
     build:
       context: ./deploy/nginx

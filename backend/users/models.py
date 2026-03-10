@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils.text import slugify
 from core.models import TimeStampedModel
 
 class User(AbstractUser):
@@ -26,12 +27,26 @@ class UserProfile(models.Model):
     telegram_username = models.CharField(max_length=255, blank=True, null=True)
     discount = models.DecimalField(max_digits=6, decimal_places=2, default=0)
     photo = models.ImageField(upload_to='user_photos/', null=True, blank=True)
+    slug = models.SlugField(max_length=255, unique=True, blank=True, db_index=False)
     friends = models.ManyToManyField('self', through=Friendship, symmetrical=False, blank=True, related_name='friend_of')
     class Role(models.TextChoices):
         ADMIN = "admin", "Админ"
         MANAGER = "manager", "Менеджер"
         CLIENT = "client", "Клиент"
+        SELLER = "seller", "Продавец"
     role = models.CharField(max_length=16, choices=Role.choices, default=Role.CLIENT)
 
     def __str__(self):
         return f"{self.user.username} profile"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            source = self.full_name or self.user.username or f"user-{self.user_id}"
+            base = slugify(source) or f"user-{self.user_id or 'x'}"
+            candidate = base
+            suffix = 2
+            while UserProfile.objects.filter(slug=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base}-{suffix}"
+                suffix += 1
+            self.slug = candidate
+        super().save(*args, **kwargs)

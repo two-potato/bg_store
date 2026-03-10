@@ -1,26 +1,35 @@
 {% extends "shopfront/base.html" %}
+{% load static seo_extras %}
 {% block content %}
-<section class="product-detail-v2">
-  <nav aria-label="breadcrumb" class="product-detail-v2__crumbs">
-    <a class="link" href="/">Главная</a>
+{% if product_tracking_payload %}
+  <script type="application/json" data-analytics-payload>{{ product_tracking_payload|safe }}</script>
+{% endif %}
+<section class="product-lite-2026">
+  <nav aria-label="breadcrumb" class="product-lite-2026__crumbs">
+    <a href="/" hx-boost="false">Главная</a>
     <span>/</span>
-    <a class="link" href="/catalog/">Каталог</a>
+    <a href="/catalog/" hx-boost="false">Каталог</a>
+    {% for crumb in breadcrumbs %}
+      <span>/</span>
+      <a href="/catalog/categories/{{ crumb.slug }}/" hx-boost="false">{{ crumb.name }}</a>
+    {% endfor %}
     <span>/</span>
     <span>{{ p.name }}</span>
   </nav>
-  <div class="product-detail-v2__grid">
-    <div class="product-detail-v2__media reveal" data-anim="animate__fadeIn">
+
+  <div class="product-lite-2026__layout">
+    <article class="product-lite-2026__gallery reveal" data-anim="animate__fadeIn">
       {% with images=p.images.all %}
         {% with slide_count=images|length %}
-          <figure class="product-card-carousel product-detail-v2__carousel" data-carousel-id="detail-{{ p.id }}">
+          <figure class="product-card-carousel product-lite-2026__carousel" data-carousel-id="detail-{{ p.id }}">
             <div class="product-card-carousel__track" data-index="0" data-count="{% if slide_count %}{{ slide_count }}{% else %}1{% endif %}">
               {% for img in images %}
                 <div class="product-card-carousel__slide">
-                  <img src="{{ img.url }}" class="product-detail-v2__image" alt="{{ img.alt|default:p.name }}">
+                  <img src="{{ img.url }}" class="product-lite-2026__image" alt="{{ img|product_image_alt:p.name }}" data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}">
                 </div>
               {% empty %}
                 <div class="product-card-carousel__slide">
-                  <img src="https://picsum.photos/seed/p-{{ p.id }}/900/600" class="product-detail-v2__image" alt="{{ p.name }}">
+                  <img src="{% static 'shopfront/product-placeholder.svg' %}" class="product-lite-2026__image" alt="{{ p.name }}">
                 </div>
               {% endfor %}
             </div>
@@ -36,80 +45,329 @@
           </figure>
         {% endwith %}
       {% endwith %}
-    </div>
-    <div class="product-detail-v2__body reveal" data-anim="animate__fadeInUp">
-      <div class="product-detail-v2__head">
-        <h1 class="product-detail-v2__title">{{ p.name }}</h1>
-        <div class="product-detail-v2__sub">{{ p.brand }}{% if p.series %} / {{ p.series.name }}{% endif %}</div>
-        <div class="product-detail-v2__price">{{ p.price }} ₽</div>
+    </article>
+
+    <aside class="product-lite-2026__summary reveal" data-anim="animate__fadeInUp">
+      <div class="product-lite-2026__badges">
+        {% if p.is_new %}<span class="badge badge-success">Новинка</span>{% endif %}
+        {% if p.is_promo %}<span class="badge badge-error">Акция</span>{% endif %}
+        <button type="button"
+                class="btn btn-sm btn-outline product-lite-2026__fav-btn{% if compare_included %} is-active{% endif %}"
+                data-compare-toggle
+                data-product-id="{{ p.id }}"
+                data-in-compare="{% if compare_included %}1{% else %}0{% endif %}"
+                aria-label="Сравнить товар"
+                title="Сравнить">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M12 3v18"></path>
+            <path d="M5 7h14"></path>
+            <path d="m7.5 7-2.5 5h5l-2.5-5Z"></path>
+            <path d="m16.5 7-2.5 5h5l-2.5-5Z"></path>
+            <path d="M7 21h10"></path>
+          </svg>
+        </button>
+        <button type="button"
+                class="btn btn-sm btn-outline product-lite-2026__fav-btn{% if is_favorite %} is-active{% endif %}"
+                data-fav-toggle="true"
+                data-fav-active="{% if is_favorite %}1{% else %}0{% endif %}"
+                hx-post="/favorites/toggle/"
+                hx-vals='{"product_id":"{{ p.id }}"}'
+                hx-swap="none"
+                aria-label="Добавить в избранное"
+                title="Избранное">
+          <span class="product-lite-2026__fav-icon" aria-hidden="true">{% if is_favorite %}★{% else %}☆{% endif %}</span>
+        </button>
       </div>
 
-      <div class="product-detail-v2__facts">
-        <div><span class="font-semibold mr-1">Бренд:</span>{{ p.brand }}</div>
-        {% if p.category %}
-          <div>
-            <span class="font-semibold mr-1">Категория:</span>
-            {% if p.category.parent %}{{ p.category.parent.name }} / {% endif %}{{ p.category.name }}
-          </div>
-        {% endif %}
-        {% if p.flavor %}<div><span class="font-semibold mr-1">Вкус:</span>{{ p.flavor }}</div>{% endif %}
-        {% if p.volume_ml %}<div><span class="font-semibold mr-1">Объём:</span>{{ p.volume_ml }} мл</div>{% endif %}
-        <div class="{% if p.stock_qty > 0 %}text-success{% else %}text-error{% endif %}">
-          {% if p.stock_qty > 0 %}<span class="mr-1 inline-block">{% include 'shopfront/icons/circle-check.svg' %}</span>В наличии: {{ p.stock_qty }}{% else %}<span class="mr-1 inline-block">{% include 'shopfront/icons/circle-x.svg' %}</span>Нет в наличии{% endif %}
+      <h1 class="product-lite-2026__title">{{ p.name }}</h1>
+      <p class="product-lite-2026__subtitle">
+        {% if p.brand %}<a href="/brands/{{ p.brand.slug }}/" hx-boost="false">{{ p.brand.name }}</a>{% endif %}
+        {% if p.series %} · <a href="/catalog/?series={{ p.series_id }}" hx-boost="false">{{ p.series.name }}</a>{% endif %}
+      </p>
+
+      <div class="product-lite-2026__pricebox">
+        <div class="product-lite-2026__price">{{ p.display_price }} ₽</div>
+        <div class="product-lite-2026__stock {% if p.display_stock_qty > 0 %}is-ok{% else %}is-empty{% endif %}">
+          {% if p.display_stock_qty > 0 %}{{ p.display_stock_qty }} шт. в наличии{% else %}Нет в наличии{% endif %}
         </div>
       </div>
 
-      {% if p.tags.all %}
-      <div class="product-detail-v2__tags">
-        {% for t in p.tags.all %}
-          <a class="badge badge-ghost" href="/catalog/?tag={{ t.slug }}"><span class="mr-1">{% include 'shopfront/icons/tag.svg' %}</span>{{ t.name }}</a>
-        {% endfor %}
-      </div>
-      {% endif %}
-
-      <div class="product-detail-v2__buy pb-14 lg:pb-0">
-        <div class="join max-w-xs">
-          <button class="btn btn-outline join-item" type="button" data-qty-action="dec" data-qty-target="qty-{{ p.id }}">−</button>
-          <input type="number" id="qty-{{ p.id }}" name="qty" class="input input-bordered text-center join-item w-20" value="1" min="1" max="{{ p.stock_qty }}" {% if p.stock_qty <= 0 %}disabled{% endif %}>
-          <button class="btn btn-outline join-item" type="button" data-qty-action="inc" data-qty-target="qty-{{ p.id }}">+</button>
+      <div class="product-lite-2026__buy pb-14 lg:pb-0">
+        <div class="product-lite-2026__qty">
+          <button class="btn btn-outline product-lite-2026__qty-btn"
+                  type="button"
+                  data-qty-action="dec"
+                  data-qty-target="qty-{{ p.id }}"
+                  aria-label="Уменьшить количество">−</button>
+          <input type="number"
+                 id="qty-{{ p.id }}"
+                 name="qty"
+                 class="input input-bordered text-center product-lite-2026__qty-input"
+                 value="1"
+                 min="1"
+                 max="{{ p.display_stock_qty }}"
+                 {% if p.display_stock_qty <= 0 %}disabled{% endif %}>
+          <button class="btn btn-outline product-lite-2026__qty-btn"
+                  type="button"
+                  data-qty-action="inc"
+                  data-qty-target="qty-{{ p.id }}"
+                  aria-label="Увеличить количество">+</button>
         </div>
-        <button class="btn btn-primary fixed lg:static bottom-16 left-3 right-3 z-40 lg:w-auto"
+        <button class="btn btn-primary product-lite-2026__cart fixed lg:static bottom-16 left-3 right-3 z-40"
                 hx-post="/cart/add/"
                 hx-vals='{"product_id": "{{ p.id }}"}'
                 hx-include="#qty-{{ p.id }}"
                 hx-swap="none"
-                {% if p.stock_qty <= 0 %}disabled aria-disabled="true"{% endif %}>
+                data-product-id="{{ p.id }}"
+                data-product-sku="{{ p.sku }}"
+                data-product-name="{{ p.name }}"
+                data-product-brand="{{ p.brand.name|default:'' }}"
+                data-product-category="{{ p.category.name|default:'' }}"
+                data-product-price="{{ p.display_price }}"
+                {% if p.display_stock_qty <= 0 %}disabled aria-disabled="true"{% endif %}>
           {% include 'shopfront/icons/shopping-cart-plus.svg' %}
-          <span>В корзину</span>
+          <span>Добавить в корзину</span>
+        </button>
+      </div>
+      <div class="product-lite-2026__trust-strip">
+        <div class="product-lite-2026__trust-item">
+          <strong>Поставка</strong>
+          <span>{% if p.display_stock_qty > 0 %}{% if p.display_lead_time_days %}{{ p.display_lead_time_days }} дн.{% else %}1-2 рабочих дня{% endif %}{% else %}Под заказ{% endif %}</span>
+        </div>
+        <div class="product-lite-2026__trust-item">
+          <strong>MOQ</strong>
+          <span>от {{ p.display_min_order_qty|default:1 }} {{ p.unit }}</span>
+        </div>
+        <div class="product-lite-2026__trust-item">
+          <strong>НДС</strong>
+          <span>Цена с НДС</span>
+        </div>
+      </div>
+      <div class="product-lite-2026__actions">
+        {% if seller_store %}
+          <a class="btn btn-outline btn-sm" href="/stores/{{ seller_store.slug }}/" hx-boost="false">Магазин продавца</a>
+        {% endif %}
+        {% if can_edit_product %}
+          <a class="btn btn-outline btn-sm" href="/account/seller/products/{{ p.id }}/edit/" hx-boost="false">Редактировать карточку</a>
+        {% endif %}
+        <a class="btn btn-outline btn-sm" href="/compare/" hx-boost="false">Открыть сравнение{% if compare_count %} ({{ compare_count }}){% endif %}</a>
+        {% if request.user.is_authenticated %}
+          <a class="btn btn-outline btn-sm" href="/lists/" hx-boost="false">Списки закупок</a>
+        {% endif %}
+        {% if request.user.is_authenticated and p.brand_id %}
+          <button class="btn btn-outline btn-sm{% if is_brand_subscribed %} is-active{% endif %}"
+                  type="button"
+                  data-subscription-toggle
+                  data-entity="brand"
+                  data-entity-id="{{ p.brand_id }}"
+                  data-active="{% if is_brand_subscribed %}1{% else %}0{% endif %}">
+            {% if is_brand_subscribed %}Вы подписаны на бренд{% else %}Подписаться на бренд{% endif %}
+          </button>
+        {% endif %}
+        {% if request.user.is_authenticated and p.category_id %}
+          <button class="btn btn-outline btn-sm{% if is_category_subscribed %} is-active{% endif %}"
+                  type="button"
+                  data-subscription-toggle
+                  data-entity="category"
+                  data-entity-id="{{ p.category_id }}"
+                  data-active="{% if is_category_subscribed %}1{% else %}0{% endif %}">
+            {% if is_category_subscribed %}Вы подписаны на категорию{% else %}Подписаться на категорию{% endif %}
+          </button>
+        {% endif %}
+        <button class="btn btn-ghost btn-sm"
+                type="button"
+                data-copy-link
+                data-copy-success="Ссылка на товар скопирована">
+          Скопировать ссылку
         </button>
       </div>
 
-      {% if p.composition or p.shelf_life %}
-      <div class="product-detail-v2__panel">
-        <details class="collapse collapse-arrow bg-base-200">
-          <summary class="collapse-title text-sm font-medium flex items-center"><span class="mr-2 inline-block">{% include 'shopfront/icons/list-details.svg' %}</span>Состав и срок годности</summary>
+      {% if product_collections %}
+        <div class="product-lite-2026__collections">
+          {% for collection in product_collections %}
+            <a class="btn btn-sm btn-outline" href="/collections/{{ collection.slug }}/" hx-boost="false">{{ collection.name }}</a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </aside>
+  </div>
+
+  <div class="product-lite-2026__details">
+    <section class="product-lite-2026__panel">
+      <h2>Коммерческие параметры</h2>
+      <dl class="product-lite-2026__facts">
+        <div><dt>SKU</dt><dd>{{ p.sku }}</dd></div>
+        {% if p.manufacturer_sku %}<div><dt>Артикул производителя</dt><dd>{{ p.manufacturer_sku }}</dd></div>{% endif %}
+        <div><dt>Упаковка</dt><dd>{{ p.pack_qty }} {{ p.unit }}</dd></div>
+        <div><dt>Минимальный заказ</dt><dd>от {{ p.display_min_order_qty|default:1 }} {{ p.unit }}</dd></div>
+        <div><dt>Срок поставки</dt><dd>{% if p.display_lead_time_days %}{{ p.display_lead_time_days }} дн.{% else %}1-2 рабочих дня{% endif %}</dd></div>
+        {% if p.series %}<div><dt>Серия</dt><dd><a href="/catalog/?series={{ p.series_id }}" hx-boost="false">{{ p.series.name }}</a></dd></div>{% endif %}
+        {% if active_offer %}<div><dt>Офер продавца</dt><dd>{{ active_offer.seller_store.name|default:active_offer.seller.username }}</dd></div>{% endif %}
+      </dl>
+    </section>
+
+    <section class="product-lite-2026__panel">
+      <h2>Поставщик и классификация</h2>
+      <dl class="product-lite-2026__facts">
+        <div><dt>Бренд</dt><dd>{% if p.brand %}<a href="/brands/{{ p.brand.slug }}/" hx-boost="false">{{ p.brand.name }}</a>{% else %}—{% endif %}</dd></div>
+        {% if p.category %}<div><dt>Категория</dt><dd>{% if p.category.parent %}<a href="/catalog/categories/{{ p.category.parent.slug }}/" hx-boost="false">{{ p.category.parent.name }}</a> / {% endif %}<a href="/catalog/categories/{{ p.category.slug }}/" hx-boost="false">{{ p.category.name }}</a></dd></div>{% endif %}
+        {% if seller_store %}<div><dt>Магазин</dt><dd><a href="/stores/{{ seller_store.slug }}/" hx-boost="false">{{ seller_store.name }}</a>{% if store_rating_count %} · {{ store_rating_avg|floatformat:1 }} / 5{% endif %}</dd></div>{% endif %}
+        {% if seller_rating_count %}<div><dt>Рейтинг продавца</dt><dd>{{ seller_rating_avg|floatformat:1 }} / 5 · {{ seller_rating_count }} отзывов</dd></div>{% endif %}
+        <div><dt>НДС</dt><dd>Цена указана с НДС</dd></div>
+        {% if p.flavor %}<div><dt>Вкус</dt><dd>{{ p.flavor }}</dd></div>{% endif %}
+        {% if p.volume_ml %}<div><dt>Объём</dt><dd>{{ p.volume_ml }} мл</dd></div>{% endif %}
+      </dl>
+    </section>
+
+    <section class="product-lite-2026__panel">
+      <h2>Поставка и гарантии</h2>
+      <dl class="product-lite-2026__facts">
+        <div><dt>Поставка</dt><dd>{% if p.display_stock_qty > 0 %}{% if p.display_lead_time_days %}Отгрузка за {{ p.display_lead_time_days }} дн.{% else %}Отгрузка 1-2 рабочих дня{% endif %}{% else %}Под заказ, уточнение у поставщика{% endif %}</dd></div>
+        <div><dt>Доверие</dt><dd>Защищённый checkout, документы по заказу и прозрачная история статусов</dd></div>
+        <div><dt>Повтор закупки</dt><dd>Товар можно быстро вернуть через историю заказов и избранное</dd></div>
+        <div><dt>Гарантия сделки</dt><dd>Продавец проходит проверку, а заказ подтверждается по статусам и уведомлениям</dd></div>
+      </dl>
+    </section>
+
+    <section class="product-lite-2026__panel">
+      <h2>Описание</h2>
+      <details class="collapse collapse-arrow product-lite-2026__collapse" open>
+        <summary class="collapse-title text-sm font-medium">Развернутое описание товара</summary>
+        <div class="collapse-content text-sm">
+          {% if p.description %}
+            <p class="product-lite-2026__description">{{ p.description }}</p>
+          {% else %}
+            <p class="product-lite-2026__description">
+              Этот товар относится к регулярному b2b-ассортименту и рассчитан на ежедневное использование в рабочих процессах.
+              Позиция подбиралась для стабильных повторных закупок, с упором на прогнозируемое качество поставки и понятную спецификацию.
+            </p>
+          {% endif %}
+          <p class="product-lite-2026__description">
+            Рекомендовано для компаний, которые ведут плановые закупки и работают с фиксированными стандартами качества.
+            Перед добавлением в корпоративный каталог сравните фактические требования по объему, упаковке и формату поставки.
+          </p>
+        </div>
+      </details>
+      <details class="collapse collapse-arrow product-lite-2026__collapse">
+        <summary class="collapse-title text-sm font-medium">Применение и условия использования</summary>
+        <div class="collapse-content text-sm">
+          <p class="product-lite-2026__description">
+            Позиция подходит для регулярного использования в операционных задачах. Для повышения эффективности закупок
+            рекомендуется формировать заказ пакетами с учетом сезонной нагрузки и планируемой оборачиваемости.
+          </p>
+          {% if p.shelf_life %}
+            <p class="product-lite-2026__description"><strong>Срок годности:</strong> {{ p.shelf_life }}.</p>
+          {% endif %}
+        </div>
+      </details>
+    </section>
+
+    <section class="product-lite-2026__panel">
+      <h2>Характеристики</h2>
+      <details class="collapse collapse-arrow product-lite-2026__collapse" open>
+        <summary class="collapse-title text-sm font-medium">Ключевые параметры</summary>
+        <div class="collapse-content text-sm">
+          <dl class="product-lite-2026__meta">
+            <dt>Артикул</dt><dd>{{ p.sku }}</dd>
+            {% if p.country_of_origin %}<dt>Страна</dt><dd>{{ p.country_of_origin }}</dd>{% endif %}
+            {% if p.material %}<dt>Материал</dt><dd>{{ p.material }}</dd>{% endif %}
+            {% if p.volume_ml %}<dt>Объём</dt><dd>{{ p.volume_ml }} мл</dd>{% endif %}
+            {% if p.weight_g %}<dt>Вес</dt><dd>{{ p.weight_g }} г</dd>{% endif %}
+            {% if p.pack_qty %}<dt>Упаковка</dt><dd>{{ p.pack_qty }} {{ p.unit }}</dd>{% endif %}
+          </dl>
+        </div>
+      </details>
+      {% if p.attributes %}
+        <details class="collapse collapse-arrow product-lite-2026__collapse">
+          <summary class="collapse-title text-sm font-medium">Дополнительные спецификации</summary>
           <div class="collapse-content text-sm">
-            {% if p.composition %}<div><strong>Состав:</strong> {{ p.composition }}</div>{% endif %}
-            {% if p.shelf_life %}<div><strong>Срок годности:</strong> {{ p.shelf_life }}</div>{% endif %}
+            <dl class="product-lite-2026__meta">
+              {% for key, value in p.attributes.items %}
+                <dt>{{ key }}</dt>
+                <dd>{{ value }}</dd>
+              {% endfor %}
+            </dl>
           </div>
         </details>
-      </div>
       {% endif %}
-
-      {% if p.description %}
-      <div class="product-detail-v2__panel">
-        <h2 class="text-sm font-semibold mb-1">Описание</h2>
-        <div class="text-sm text-base-content/70 whitespace-pre-line">{{ p.description }}</div>
-      </div>
+      {% if product_documents %}
+        <details class="collapse collapse-arrow product-lite-2026__collapse" open>
+          <summary class="collapse-title text-sm font-medium">Документы и сертификаты</summary>
+          <div class="collapse-content text-sm">
+            <ul class="space-y-2">
+              {% for doc in product_documents %}
+                <li class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-base-300 px-4 py-3">
+                  <div>
+                    <div class="font-medium">{{ doc.title }}</div>
+                    <div class="text-xs text-base-content/60">{{ doc.get_kind_display }}</div>
+                  </div>
+                  <a class="btn btn-outline btn-sm"
+                     href="{{ doc.file_url }}"
+                     target="_blank"
+                     rel="noopener noreferrer"
+                     hx-boost="false">
+                    Открыть
+                  </a>
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        </details>
       {% endif %}
-
-      <dl class="product-detail-v2__meta">
-        {% if p.country_of_origin %}<dt class="font-semibold">Страна</dt><dd>{{ p.country_of_origin }}</dd>{% endif %}
-        {% if p.material %}<dt class="font-semibold">Материал</dt><dd>{{ p.material }}</dd>{% endif %}
-        {% if p.volume_ml %}<dt class="font-semibold">Объём</dt><dd>{{ p.volume_ml }} мл</dd>{% endif %}
-      </dl>
-    </div>
+      {% if p.tags.all %}
+        <div class="product-lite-2026__tags">
+          {% for t in p.tags.all %}
+            <a class="tag-chip-2026" href="/catalog/?tag={{ t.slug }}" hx-boost="false">{{ t.name }}</a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </section>
   </div>
 </section>
+{% if similar_products %}
+<section class="page-2026 product-reco-2026">
+  <header class="page-2026__header">
+    <h2>Похожие товары</h2>
+    <p>Подобрали позиции по категории и бренду.</p>
+  </header>
+  {% include "shopfront/components/product_grid.html" with products=similar_products %}
+</section>
+{% endif %}
+{% if accessory_products %}
+<section class="page-2026 product-reco-2026">
+  <header class="page-2026__header">
+    <h2>С этим товаром берут</h2>
+    <p>Собрали позиции того же поставщика и смежных тегов.</p>
+  </header>
+  {% include "shopfront/components/product_grid.html" with products=accessory_products %}
+</section>
+{% endif %}
+<section class="page-2026 product-reco-2026"
+         hx-get="/product/{{ p.slug }}/recommendations/fbt/"
+         hx-trigger="load delay:150ms"
+         hx-swap="outerHTML">
+  <header class="page-2026__header">
+    <h2>Часто покупают вместе</h2>
+    <p>Загружаем рекомендации…</p>
+  </header>
+</section>
+<section class="page-2026 product-reco-2026"
+         hx-get="/product/{{ p.slug }}/recommendations/seller-cross/"
+         hx-trigger="load delay:250ms"
+         hx-swap="outerHTML">
+  <header class="page-2026__header">
+    <h2>Ещё у этого поставщика</h2>
+    <p>Загружаем рекомендации…</p>
+  </header>
+</section>
+{% if recently_viewed_products %}
+<section class="page-2026 product-reco-2026">
+  <header class="page-2026__header">
+    <h2>Вы недавно смотрели</h2>
+    <p>Быстрый возврат к товарам, которые уже были в фокусе.</p>
+  </header>
+  {% include "shopfront/components/product_grid.html" with products=recently_viewed_products %}
+</section>
+{% endif %}
 {% include "shopfront/partials/product_reviews.html" %}
 {% endblock %}

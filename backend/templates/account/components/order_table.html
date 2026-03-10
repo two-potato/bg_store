@@ -1,35 +1,65 @@
-{% load tz %}
-<div class="overflow-x-auto">
-  <table class="table table-zebra table-sm">
-    <thead>
-      <tr><th>ID</th><th>Статус</th><th>Сумма</th><th>Дата</th><th></th></tr>
-    </thead>
-    <tbody>
-      {% for o in orders %}
-        <tr>
-          <td>
-            <a class="link link-hover font-medium"
-               href="/account/orders/{{ o.id }}/"
-               hx-get="/account/orders/{{ o.id }}/"
-               hx-target="#account-main-content"
-               hx-select="#account-main-content"
-               hx-swap="outerHTML"
-               hx-push-url="true">#{{ o.id }}</a>
-          </td>
-          <td>{{ o.get_status_display }}</td>
-          <td>{{ o.total }} ₽</td>
-          <td>{{ o.created_at|timezone:"Europe/Moscow"|date:"d.m.Y H:i" }}</td>
-          <td class="text-right">
-            <a class="btn btn-ghost btn-xs"
-               href="/account/orders/{{ o.id }}/"
-               hx-get="/account/orders/{{ o.id }}/"
-               hx-target="#account-main-content"
-               hx-select="#account-main-content"
-               hx-swap="outerHTML"
-               hx-push-url="true">Открыть</a>
-          </td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+{% load tz static seo_extras %}
+<div class="account-orders-2026">
+  {% for o in orders %}
+    <article class="account-orders-2026__card">
+      <div class="account-orders-2026__head">
+        <div>
+          <div class="account-orders-2026__kicker">Заказ #{{ o.id }}</div>
+          <div class="account-orders-2026__date">{{ o.created_at|timezone:"Europe/Moscow"|date:"d.m.Y H:i" }}</div>
+        </div>
+        <div class="account-orders-2026__amount">{{ o.total }} ₽</div>
+      </div>
+
+      <div class="account-orders-2026__status-row">
+        <span class="account-orders-2026__pill">{{ o.get_status_display }}</span>
+        <span class="account-orders-2026__pill">{{ o.get_approval_status_display }}</span>
+      </div>
+
+      <div class="account-orders-2026__thumbs">
+        {% with items=o.items.all %}
+          {% for it in items|slice:":5" %}
+            {% with img=it.product.prefetched_images.0 %}
+              {% if img %}
+                <img class="order-thumbs-2026__img"
+                     src="{{ img.url }}"
+                     alt="{{ it.name }}"
+                     loading="lazy"
+                     data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}">
+              {% else %}
+                <span class="order-thumbs-2026__img order-thumbs-2026__fallback">•</span>
+              {% endif %}
+            {% endwith %}
+          {% endfor %}
+          {% if items|length > 5 %}
+            <span class="order-thumbs-2026__more">+{{ items|length|add:"-5" }}</span>
+          {% endif %}
+        {% endwith %}
+      </div>
+
+      <div class="account-orders-2026__meta-grid">
+        <div>
+          <span class="account-orders-2026__meta-label">Канал</span>
+          <strong>{{ o.get_source_channel_display }}</strong>
+        </div>
+        <div>
+          <span class="account-orders-2026__meta-label">Тип клиента</span>
+          <strong>{{ o.get_customer_type_display }}</strong>
+        </div>
+        <div>
+          <span class="account-orders-2026__meta-label">Сумма</span>
+          <strong>{{ o.total }} ₽</strong>
+        </div>
+      </div>
+
+      <div class="account-orders-2026__actions">
+        <a class="account-2026__panel-link"
+           href="/account/orders/{{ o.id }}/"
+           hx-get="/account/orders/{{ o.id }}/"
+           hx-target="#account-main-content"
+           hx-select="#account-main-content"
+           hx-swap="outerHTML"
+           hx-push-url="true">Открыть заказ</a>
+      </div>
+    </article>
+  {% endfor %}
 </div>

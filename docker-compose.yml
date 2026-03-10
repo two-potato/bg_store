@@ -1,16 +1,30 @@
-name: bad-guys-shop
+name: servio
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+    compress: "true"
+
 services:
   backend:
+    image: servio-backend:dev
+    container_name: servio-backend
     build: ./backend
     env_file: ./backend/.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       CACHE_BACKEND: redis
       ENABLE_REQUEST_ACCESS_LOG: "0"
       LOG_CALLS_ENABLED: "0"
       REQUEST_LOG_LEVEL: WARNING
       ENABLE_CATALOG_RATING: "0"
-      GUNICORN_WORKERS: "4"
-      GUNICORN_TIMEOUT: "180"
+      GUNICORN_WORKERS: "${GUNICORN_WORKERS:-6}"
+      GUNICORN_TIMEOUT: "${GUNICORN_TIMEOUT:-180}"
+      GUNICORN_KEEPALIVE: "${GUNICORN_KEEPALIVE:-15}"
+      GUNICORN_MAX_REQUESTS: "${GUNICORN_MAX_REQUESTS:-1200}"
+      GUNICORN_MAX_REQUESTS_JITTER: "${GUNICORN_MAX_REQUESTS_JITTER:-120}"
     depends_on:
       - db
       - redis
@@ -27,31 +41,39 @@ services:
       interval: 10s
       timeout: 3s
       retries: 20
+    logging: *default-logging
     restart: unless-stopped
 
   celery-worker:
-    build: ./backend
-    container_name: bg-celery
+    image: servio-backend:dev
+    container_name: servio-worker
     env_file: ./backend/.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: ["python", "-m", "celery", "-A", "config.celery", "worker", "-l", "INFO"]
     depends_on: [backend, redis, db]
     volumes:
       - ./logs:/app/logs
+    logging: *default-logging
     restart: unless-stopped
 
   celery-beat:
-    build: ./backend
-    container_name: bg-beat
+    image: servio-backend:dev
+    container_name: servio-beat
     env_file: ./backend/.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: ["python", "-m", "celery", "-A", "config.celery", "beat", "-l", "INFO", "--schedule", "/tmp/celerybeat-schedule"]
     depends_on: [backend, redis, db]
     volumes:
       - ./logs:/app/logs
+    logging: *default-logging
     restart: unless-stopped
 
   bot:
+    image: servio-bot:dev
     build: ./bot
-    container_name: bg-bot
+    container_name: servio-bot
     env_file: ./bot/.env
     command: ["python", "-m", "uvicorn", "app.main_shop:app", "--host", "0.0.0.0", "--port", "8080"]
     expose: ["8080"]
@@ -60,11 +82,12 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
+    logging: *default-logging
     restart: unless-stopped
 
   bot-twa:
-    build: ./bot
-    container_name: bg-bot-twa
+    image: servio-bot:dev
+    container_name: servio-bot-twa
     profiles: ["bots-extra"]
     env_file: ./bot/.env.twa
     command: ["python", "-m", "uvicorn", "app.main_shop:app", "--host", "0.0.0.0", "--port", "8080"]
@@ -74,11 +97,12 @@ services:
       interval: 10s
       timeout: 10s
       retries: 10
+    logging: *default-logging
     restart: unless-stopped
 
   bot-notify:
-    build: ./bot
-    container_name: bg-bot-notify
+    image: servio-bot:dev
+    container_name: servio-bot-notify
     env_file: ./bot/.env.notify
     command: ["python", "-m", "uvicorn", "app.main_notify:app", "--host", "0.0.0.0", "--port", "8080"]
     expose: ["8080"]
@@ -87,61 +111,81 @@ services:
       interval: 10s
       timeout: 10s
       retries: 10
+    logging: *default-logging
     restart: unless-stopped
 
   db:
     image: public.ecr.aws/docker/library/postgres:16
-    container_name: bg-db
-    command: ["postgres", "-c", "max_connections=1000", "-c", "shared_buffers=256MB"]
+    container_name: servio-db
+    command: ["postgres", "-c", "max_connections=1000", "-c", "shared_buffers=512MB"]
     env_file: ./backend/.env
     volumes:
       - pgdata:/var/lib/postgresql/data
+    logging: *default-logging
     restart: unless-stopped
 
   redis:
     image: public.ecr.aws/docker/library/redis:7
-    container_name: bg-redis
+    container_name: servio-redis
+    volumes:
+      - redisdata:/data
+    logging: *default-logging
     restart: unless-stopped
 
   mailpit:
     image: axllent/mailpit:latest
-    container_name: bg-mailpit
+    container_name: servio-mailpit
     ports:
       - "1025:1025"
       - "8025:8025"
+    logging: *default-logging
     restart: unless-stopped
 
   es:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.14.0
-    container_name: bg-es
+    container_name: servio-es
     environment:
       discovery.type: single-node
       xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "${ES_JAVA_OPTS:--Xms2g -Xmx2g}"
     volumes:
       - esdata:/usr/share/elasticsearch/data
+    logging: *default-logging
     restart: unless-stopped
 
   nginx:
     build:
       context: ./deploy/nginx
       dockerfile: Dockerfile.dev
-    container_name: bg-nginx
+    image: servio-nginx:dev
+    container_name: servio-nginx
     # В dev не блокируем старт Nginx ожиданием health бэкенда,
     # чтобы /health/ открывался даже при проблемах миграций
     depends_on: [backend]
-    ports: ["8080:80"]
+    ports: ["${NGINX_HTTP_PORT:-8080}:80"]
     volumes:
       - staticfiles:/staticfiles:ro
       - ./backend/media:/media:ro
+      - ./deploy/letsencrypt:/etc/letsencrypt:ro
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health/"]
+      test: ["CMD-SHELL", "wget -qO- --header='Host: potatofarm.ru' http://127.0.0.1/health/ >/dev/null 2>&1"]
       interval: 10s
       timeout: 5s
       start_period: 20s
       retries: 12
+    logging: *default-logging
     restart: unless-stopped
 
 volumes:
   pgdata:
+    external: true
+    name: servio_pgdata
   esdata:
+    external: true
+    name: servio_esdata
+  redisdata:
+    external: true
+    name: servio_redisdata
   staticfiles:
+    external: true
+    name: servio_staticfiles

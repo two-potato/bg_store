@@ -1,68 +1,192 @@
 {% extends "shopfront/base.html" %}
+{% load static branding %}
 {% block content %}
-<div class="home-minimal reveal" data-anim="animate__fadeIn">
-  <section class="home-minimal-hero">
-    <div class="home-minimal-hero__content">
-      <span class="home-minimal-kicker">Bad Guys Shop</span>
-      <h1 class="home-minimal-title">Минимум кликов до нужного товара</h1>
-      <p class="home-minimal-subtitle">Сиропы, кофе, напитки и расходники в современной витрине без перегруза.</p>
-      <div class="home-minimal-hero__actions">
-        <a class="btn btn-primary" href="/catalog/">Перейти в каталог</a>
-        <a class="btn btn-outline" href="/delivery/">Условия доставки</a>
+<div class="servio-home">
+  <section class="servio-home__hero">
+    <div class="servio-home__hero-copy">
+      <span class="servio-home__eyebrow">Servio · marketplace for HoReCa sourcing</span>
+      <h1>Профессиональные товары для HoReCa в одном каталоге</h1>
+      <p>Подбирайте посуду, стекло, барный инвентарь, упаковку, текстиль и расходные материалы через единую платформу с рабочими поставщиками и понятной логикой закупки.</p>
+      <div class="servio-home__actions">
+        <a class="btn btn-primary" href="/catalog/">Открыть каталог</a>
+        <a class="btn btn-outline" href="/buyers/">Как работает Servio</a>
       </div>
+      <div class="servio-home__trust">
+        <span>Каталог для ресторанов, кафе, баров и отелей</span>
+        <span>Поставщики в одном окне</span>
+        <span>Повторные закупки без ручной рутины</span>
+      </div>
+    </div>
+    <div class="servio-home__hero-visual">
+      <article class="servio-home__hero-card servio-home__hero-card--primary">
+        <img src="{% static 'shopfront/hero/servio-hero-main.svg' %}" alt="Каталог Servio" loading="lazy">
+        <div>
+          <strong>Операционный каталог</strong>
+          <span>От кухни до сервировки и упаковки</span>
+        </div>
+      </article>
+      <article class="servio-home__hero-card">
+        <img src="{% static 'shopfront/hero/servio-hero-bar.svg' %}" alt="Барное направление" loading="lazy">
+        <div>
+          <strong>Бар и стекло</strong>
+          <span>Форматы для винной карты, коктейлей и сервиса</span>
+        </div>
+      </article>
+      <article class="servio-home__hero-card">
+        <img src="{% static 'shopfront/hero/servio-hero-tableware.svg' %}" alt="Сервировка и подача" loading="lazy">
+        <div>
+          <strong>Сервировка и подача</strong>
+          <span>Коллекции для зала, банкетов и room service</span>
+        </div>
+      </article>
     </div>
   </section>
 
-  <section class="home-minimal-banners">
-    <a class="home-minimal-banner home-minimal-banner--lg" href="/catalog/?sort=rating">
-      <img src="https://picsum.photos/seed/bg-hero-banner/1400/700" alt="Подборка лидеров продаж" loading="lazy">
-      <div class="home-minimal-banner__overlay">
-        <span class="home-minimal-banner__kicker">Подборка недели</span>
-        <h3>Хиты с лучшим рейтингом</h3>
-        <p>Товары, которые чаще всего добавляют в корзину и рекомендуют другим.</p>
-        <span class="home-minimal-banner__cta">Смотреть подборку</span>
+  <section class="servio-home__section">
+    <div class="servio-home__section-head">
+      <div>
+        <span class="servio-home__section-kicker">Популярные категории</span>
+        <h2>Ключевые направления закупки</h2>
       </div>
-    </a>
-    <a class="home-minimal-banner" href="/catalog/?is_new=1">
-      <img src="https://picsum.photos/seed/bg-new-arrivals/900/700" alt="Новые поступления" loading="lazy">
-      <div class="home-minimal-banner__overlay">
-        <span class="home-minimal-banner__kicker">Обновление витрины</span>
-        <h3>Новые позиции</h3>
-        <span class="home-minimal-banner__cta">Открыть новинки</span>
-      </div>
-    </a>
-    <a class="home-minimal-banner" href="/catalog/?sort=price_asc">
-      <img src="https://picsum.photos/seed/bg-best-price/900/700" alt="Товары по выгодной цене" loading="lazy">
-      <div class="home-minimal-banner__overlay">
-        <span class="home-minimal-banner__kicker">Экономия</span>
-        <h3>Лучшие цены</h3>
-        <span class="home-minimal-banner__cta">Перейти в раздел</span>
-      </div>
-    </a>
-  </section>
-
-  <section class="home-minimal-categories">
-    <div class="home-minimal-headline">
-      <h2>Категории</h2>
-      <a href="/catalog/" class="home-minimal-link">Все категории</a>
+      <a href="/catalog/" class="servio-home__link">Все категории</a>
     </div>
-    <div class="home-minimal-chip-row">
+    <div class="servio-home__categories">
       {% for c in cats %}
-        <a class="home-minimal-chip" href="/catalog/?category={{ c.id }}">
-          <span class="home-minimal-chip-icon">{% include 'shopfront/icons/tag.svg' %}</span>
-          <span>{{ c.name }}</span>
-        </a>
+        {% if forloop.counter <= 8 %}
+          <a class="servio-home__category" href="/catalog/?category={{ c.slug }}">
+            <span class="servio-home__category-icon">{% include 'shopfront/icons/category.svg' %}</span>
+            <strong>{{ c.name }}</strong>
+            <span>Рабочий ассортимент для HoReCa</span>
+          </a>
+        {% endif %}
       {% endfor %}
     </div>
   </section>
 
-  <section class="home-minimal-products">
-    <div class="home-minimal-headline">
-      <h2>Новинки</h2>
-      <a href="/catalog/?sort=new" class="home-minimal-link">Смотреть все</a>
+  {% if featured_collections %}
+    <section class="servio-home__section">
+      <div class="servio-home__section-head">
+        <div>
+          <span class="servio-home__section-kicker">Коллекции</span>
+          <h2>Кураторские подборки под конкретный сценарий закупки</h2>
+        </div>
+        <a href="/collections/" class="servio-home__link">Все коллекции</a>
+      </div>
+      <div class="grid gap-3 md:grid-cols-3">
+        {% for collection in featured_collections %}
+          <a href="/collections/{{ collection.slug }}/" class="rounded-3xl border border-base-300 bg-base-100 p-5" hx-boost="false">
+            <div class="text-xs uppercase tracking-wide text-base-content/50 mb-2">Collection</div>
+            <div class="text-lg font-semibold mb-2">{{ collection.hero_title|default:collection.name }}</div>
+            <p class="text-sm text-base-content/70">{{ collection.hero_text|default:collection.description|truncatechars:140 }}</p>
+          </a>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="servio-home__section">
+    <div class="servio-home__section-head">
+      <div>
+        <span class="servio-home__section-kicker">Почему Servio</span>
+        <h2>Платформа под закупку, а не под витринный шум</h2>
+      </div>
+    </div>
+    <div class="servio-home__benefits">
+      <article class="servio-home__benefit">
+        <h3>Один каталог вместо десятков прайсов</h3>
+        <p>Команда закупки быстрее находит нужные позиции и не тратит время на ручную сверку ассортимента между поставщиками.</p>
+      </article>
+      <article class="servio-home__benefit">
+        <h3>Повтор заказа без пересборки корзины</h3>
+        <p>Сохранённые сценарии помогают быстро возвращаться к регулярным закупкам по кухне, бару, залу и упаковке.</p>
+      </article>
+      <article class="servio-home__benefit">
+        <h3>Поставщики в едином формате</h3>
+        <p>Карточки, характеристики, условия поставки и витрины брендов выглядят цельно и не распадаются на случайные шаблоны.</p>
+      </article>
+      <article class="servio-home__benefit">
+        <h3>Сервис, рассчитанный на b2b-операции</h3>
+        <p>Адреса доставки, юридические лица, история заказов и кабинет поставщика встроены в базовую логику платформы.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="servio-home__section servio-home__steps">
+    <div class="servio-home__section-head">
+      <div>
+        <span class="servio-home__section-kicker">Как это работает</span>
+        <h2>Три шага до готового заказа</h2>
+      </div>
+    </div>
+    <div class="servio-home__step-grid">
+      <article class="servio-home__step"><strong>1</strong><h3>Найдите нужные позиции</h3><p>Фильтруйте каталог по категориям, брендам и товарным группам под конкретную задачу кухни, бара или зала.</p></article>
+      <article class="servio-home__step"><strong>2</strong><h3>Соберите закупку</h3><p>Добавляйте товары в корзину, сохраняйте поиски и возвращайтесь к регулярным заказам без пересборки.</p></article>
+      <article class="servio-home__step"><strong>3</strong><h3>Оформите поставку</h3><p>Выберите юридическое лицо, адрес и формат оплаты. Дальше заказ попадает в рабочий процесс обработки.</p></article>
+    </div>
+  </section>
+
+  <section class="servio-home__section">
+    <div class="servio-home__section-head">
+      <div>
+        <span class="servio-home__section-kicker">Новые и популярные товары</span>
+        <h2>Актуальные позиции каталога</h2>
+      </div>
+      <a href="/catalog/?sort=rating_desc" class="servio-home__link">Смотреть каталог</a>
     </div>
     {% include "shopfront/components/product_grid.html" with products=products %}
   </section>
 
+  {% if featured_brands %}
+    <section class="servio-home__section servio-home__brands-showcase">
+      <div class="servio-home__section-head">
+        <div>
+          <span class="servio-home__section-kicker">Бренды</span>
+          <h2>Брендовые витрины для repeat purchase и уверенной навигации</h2>
+        </div>
+        <a href="/brands/" class="servio-home__link">Все бренды</a>
+      </div>
+      <div class="servio-home__brands-grid">
+        {% for brand in featured_brands %}
+          <a href="/brands/{{ brand.slug }}/" class="servio-home__brand-card" hx-boost="false">
+            <div class="servio-home__brand-head">
+              <img
+                src="{% if brand.photo %}{{ brand.photo.url }}{% else %}{{ brand|brand_logo_data_uri }}{% endif %}"
+                alt="{{ brand.name }}"
+                class="servio-home__brand-logo"
+                loading="lazy">
+              <div>
+                <strong>{{ brand.name }}</strong>
+                <span>{% if brand.categories_count %}{{ brand.categories_count }} категорий{% else %}Профессиональная линейка HoReCa{% endif %}</span>
+              </div>
+            </div>
+            <p>{{ brand.description|default:"Поставщик и бренд в едином стиле каталога Servio для repeat purchase."|truncatechars:120 }}</p>
+            <div class="servio-home__brand-meta">
+              <span>{{ brand.products_count|default:0 }} SKU</span>
+              {% if brand.categories_count %}<span>{{ brand.categories_count }} сегментов</span>{% endif %}
+            </div>
+            <span class="servio-home__brand-link">Открыть бренд</span>
+          </a>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  {% include "shopfront/components/recommendation_section.html" with products=recommended_for_you title="Подобрано для вас" subtitle="Собрали предложения по избранному, подпискам и недавним просмотрам." recommendation_source="home_for_you" tracking_payload=recommended_for_you_tracking_payload %}
+  {% include "shopfront/components/recommendation_section.html" with products=home_recently_viewed title="Продолжить просмотр" subtitle="Вернитесь к товарам, которые уже были в фокусе закупки." recommendation_source="home_recently_viewed" tracking_payload=home_recently_viewed_tracking_payload %}
+  {% include "shopfront/components/recommendation_section.html" with products=watchlist_products title="По вашим подпискам" subtitle="Новые и промо-позиции из брендов и категорий, за которыми вы следите." recommendation_source="home_watchlist" tracking_payload=watchlist_products_tracking_payload %}
+
+  <section class="servio-home__section servio-home__supplier-block">
+    <div class="servio-home__supplier-copy">
+      <span class="servio-home__section-kicker">Для поставщиков</span>
+      <h2>Подключайте ассортимент к Servio</h2>
+      <p>Если вы работаете с HoReCa и хотите показывать каталог в современном b2b-контуре, подключайтесь к платформе и запускайте витрину поставщика без хаоса в структуре товаров.</p>
+      <a class="btn btn-primary" href="/suppliers/">Узнать о подключении</a>
+    </div>
+    <div class="servio-home__facts">
+      <article><strong>HoReCa-first</strong><span>Каталог выстроен под реальные операционные сценарии закупки.</span></article>
+      <article><strong>Единый стиль карточек</strong><span>Товары и бренды выглядят как части одного профессионального продукта.</span></article>
+      <article><strong>B2B-ready flow</strong><span>Корзина, адреса, юрлица и повторные заказы встроены в сервисную логику.</span></article>
+    </div>
+  </section>
 </div>
 {% endblock %}

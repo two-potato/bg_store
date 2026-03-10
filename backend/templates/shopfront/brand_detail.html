@@ -1,0 +1,103 @@
+{% extends "shopfront/base.html" %}
+{% load branding %}
+{% block content %}
+<section class="page-2026 brand-page-2026">
+  <header class="brand-hero-2026">
+    <img
+      src="{% if brand.photo %}{{ brand.photo.url }}{% else %}{{ brand|brand_logo_data_uri }}{% endif %}"
+      alt="{{ brand.name }}"
+      class="brand-hero-2026__logo"
+      loading="lazy">
+    <div class="brand-hero-2026__copy">
+      <span class="brand-hero-2026__brand-line">Brand showcase · Servio</span>
+      <h1>{{ brand.name }}</h1>
+      <p>{{ brand.description|default:"Товары бренда в каталоге Servio для профессиональных закупок HoReCa." }}</p>
+      <div class="brand-hero-2026__metrics">
+        <span>{% if brand.products_count %}{{ brand.products_count }}{% else %}{{ products|length }}{% endif %} SKU</span>
+        {% if brand.categories_count %}<span>{{ brand.categories_count }} категорий</span>{% endif %}
+        {% if brand.collections_count %}<span>{{ brand.collections_count }} коллекций</span>{% endif %}
+      </div>
+      <div class="brand-hero-2026__actions">
+        <a class="btn btn-sm btn-primary" href="/catalog/?brand={{ brand.id }}" hx-boost="false">Открыть в каталоге</a>
+        {% if request.user.is_authenticated %}
+          <button class="btn btn-sm btn-outline{% if is_brand_subscribed %} is-active{% endif %}"
+                  type="button"
+                  data-subscription-toggle
+                  data-entity="brand"
+                  data-entity-id="{{ brand.id }}"
+                  data-active="{% if is_brand_subscribed %}1{% else %}0{% endif %}">
+            {% if is_brand_subscribed %}Подписка активна{% else %}Подписаться на бренд{% endif %}
+          </button>
+        {% endif %}
+        <a class="btn btn-sm btn-outline" href="/brands/" hx-boost="false">Все бренды</a>
+        <a class="btn btn-sm btn-outline" href="/collections/" hx-boost="false">Коллекции</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="brand-hero-2026__layout">
+    <section class="brand-hero-2026__info-grid">
+      <article class="brand-hero-2026__panel">
+        <h2>Позиционирование бренда</h2>
+        <p>{{ brand.landing_body|default:brand.description|default:"Профессиональная линейка товаров для кухни, зала, бара и repeat-purchase сценариев HoReCa."|truncatechars:320 }}</p>
+      </article>
+      <article class="brand-hero-2026__panel">
+        <h2>Что есть в витрине</h2>
+        <dl class="brand-hero-2026__facts">
+          <div class="brand-hero-2026__fact"><dt>SKU</dt><dd>{% if brand.products_count %}{{ brand.products_count }}{% else %}{{ products|length }}{% endif %}</dd></div>
+          <div class="brand-hero-2026__fact"><dt>Категории</dt><dd>{% if brand.categories_count %}{{ brand.categories_count }}{% else %}1{% endif %}</dd></div>
+          <div class="brand-hero-2026__fact"><dt>Коллекции</dt><dd>{% if brand.collections_count %}{{ brand.collections_count }}{% else %}—{% endif %}</dd></div>
+        </dl>
+      </article>
+    </section>
+
+  {% if featured_collections %}
+    <section class="page-2026__section mb-4">
+      <div class="page-2026__header">
+        <h2>Коллекции с брендом {{ brand.name }}</h2>
+        <p>Готовые сценарии закупки, где бренд уже встроен в подборку.</p>
+      </div>
+      <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {% for collection in featured_collections %}
+          <a href="/collections/{{ collection.slug }}/" class="rounded-3xl border border-base-300 bg-base-100 p-5" hx-boost="false">
+            <div class="font-semibold mb-2">{{ collection.name }}</div>
+            <p class="text-sm text-base-content/70">{{ collection.hero_text|default:collection.description|truncatechars:120 }}</p>
+          </a>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  {% if child_categories %}
+    <section class="page-2026__card">
+      <h2>Категории бренда</h2>
+      <div class="flex flex-wrap gap-2">
+        {% for category in child_categories %}
+          <a class="btn btn-sm btn-outline" href="/catalog/categories/{{ category.slug }}/" hx-boost="false">{{ category.name }}</a>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  {% if brand.landing_body %}
+    <section class="page-2026__card">
+      <h2>О бренде</h2>
+      <div class="prose max-w-none">{{ brand.landing_body|linebreaks }}</div>
+    </section>
+  {% endif %}
+
+  <div class="page-2026__header">
+    <h2>Коллекция бренда</h2>
+    <p>Всего позиций: {{ products|length }}</p>
+  </div>
+
+  {% include "shopfront/components/product_grid.html" with products=products %}
+
+  {% if brand.faq_body %}
+    <section class="page-2026__card">
+      <h2>{{ brand.faq_title|default:"FAQ по бренду" }}</h2>
+      <div class="prose max-w-none">{{ brand.faq_body|linebreaks }}</div>
+    </section>
+  {% endif %}
+</section>
+{% endblock %}

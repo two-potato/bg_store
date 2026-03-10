@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.utils.text import slugify
 from core.models import TimeStampedModel
 from .validators import validate_inn, validate_bik, validate_rs_with_bik
 
@@ -17,6 +18,20 @@ class LegalEntity(TimeStampedModel):
         if self.inn:
             return f"{self.name} (ИНН {self.inn})"
         return self.name or f"Юрлицо #{self.pk}"
+
+
+class Company(TimeStampedModel):
+    legal_entity = models.OneToOneField(LegalEntity, on_delete=models.CASCADE, related_name="company")
+    display_name = models.CharField(max_length=255, blank=True, default="")
+    procurement_email = models.EmailField(blank=True, default="")
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Компания"
+        verbose_name_plural = "Компании"
+
+    def __str__(self):
+        return self.display_name or self.legal_entity.name
 
 class MembershipRole(TimeStampedModel):
     code = models.CharField(max_length=32, unique=True)
@@ -37,6 +52,45 @@ class LegalEntityMembership(TimeStampedModel):
     def __str__(self):
         role = getattr(self.role, "name", "-")
         return f"{self.user} → {self.legal_entity} [{role}]"
+
+
+class CompanyMembership(TimeStampedModel):
+    class Role(models.TextChoices):
+        OWNER = "owner", "Owner"
+        ADMIN = "admin", "Admin"
+        BUYER = "buyer", "Buyer"
+        APPROVER = "approver", "Approver"
+        FINANCE = "finance", "Finance"
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="company_memberships")
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="memberships")
+    role = models.CharField(max_length=16, choices=Role.choices, default=Role.BUYER)
+    approval_limit = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    is_default_approver = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "company"], name="unique_user_company_membership"),
+        ]
+
+    def __str__(self):
+        return f"{self.user} -> {self.company} [{self.role}]"
+
+
+class ApprovalPolicy(TimeStampedModel):
+    company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name="approval_policy")
+    is_enabled = models.BooleanField(default=False)
+    auto_approve_below = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    require_approver_role = models.BooleanField(default=True)
+    require_comment = models.BooleanField(default=False)
+    max_pending_hours = models.PositiveIntegerField(default=24)
+
+    class Meta:
+        verbose_name = "Политика согласования"
+        verbose_name_plural = "Политики согласования"
+
+    def __str__(self):
+        return f"ApprovalPolicy({self.company})"
 
 class DeliveryAddress(TimeStampedModel):
     legal_entity = models.ForeignKey(LegalEntity, on_delete=models.CASCADE, related_name="delivery_addresses")
@@ -92,11 +146,20 @@ class LegalEntityCreationRequest(TimeStampedModel):
 
 
 class SellerStore(TimeStampedModel):
+    class ModerationStatus(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        SUSPENDED = "suspended", "Suspended"
+
     owner = models.OneToOneField(User, on_delete=models.CASCADE, related_name="seller_store")
     legal_entity = models.ForeignKey(LegalEntity, on_delete=models.PROTECT, related_name="seller_stores")
     name = models.CharField(max_length=255)
+    slug = models.SlugField(max_length=255, unique=True, blank=True, db_index=False)
     description = models.TextField(blank=True, default="")
     photo = models.ImageField(upload_to="seller_store_photos/", null=True, blank=True)
+    moderation_status = models.CharField(max_length=16, choices=ModerationStatus.choices, default=ModerationStatus.PENDING)
+    sla_target_hours = models.PositiveIntegerField(default=24)
+    is_featured = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = "Магазин продавца"
@@ -104,3 +167,31 @@ class SellerStore(TimeStampedModel):
 
     def __str__(self):
         return f"{self.name} — {self.owner}"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(self.name) or f"store-{self.owner_id or 'x'}"
+            candidate = base
+            suffix = 2
+            while SellerStore.objects.filter(slug=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base}-{suffix}"
+                suffix += 1
+            self.slug = candidate
+        super().save(*args, **kwargs)
+
+
+class StoreReview(TimeStampedModel):
+    store = models.ForeignKey(SellerStore, on_delete=models.CASCADE, related_name="reviews")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="store_reviews")
+    rating = models.PositiveSmallIntegerField()
+    text = models.TextField(blank=True, default="")
+    is_verified_buyer = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["store", "user"], name="unique_store_review_per_user"),
+        ]
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"StoreReview(store={self.store_id}, user={self.user_id}, rating={self.rating})"

@@ -1,0 +1,25 @@
+:root {
+  --servio-bg: #f4f7fb;
+  --servio-surface: #ffffff;
+  --servio-surface-2: #eef4ff;
+  --servio-border: rgba(42, 107, 255, 0.14);
+  --servio-border-strong: rgba(42, 107, 255, 0.22);
+  --servio-text: #10203c;
+  --servio-text-soft: #61708c;
+  --servio-primary: #2366ff;
+  --servio-primary-2: #5c36ff;
+  --servio-accent: #1ec8ff;
+  --servio-gradient: linear-gradient(135deg, #1694ff 0%, #2a65ff 48%, #6936ff 100%);
+  --servio-shadow: 0 18px 40px rgba(32, 76, 176, 0.08);
+  --servio-radius-lg: 24px;
+  --servio-radius-md: 18px;
+  --servio-radius-sm: 14px;
+  --fx-brand: #1569ff;
+  --fx-brand-2: #20c6ff;
+  --fx-brand-3: #7a2cf6;
+  --fx-text: #152238;
+  --fx-muted: #4b5f85;
+  --fx-border: #c8dcff;
+  --fx-surface: #ffffff;
+  --fx-danger: #ff4b46;
+}

@@ -74,7 +74,7 @@ groups:
           description: "Only {{ printf \"%.1f\" $value }}% disk space left on {{ $labels.instance }}"
 
       - alert: ContainerHighCPU
-        expr: (sum by (name) (rate(container_cpu_usage_seconds_total{name=~".*(bg-|bad-guys-shop-backend).*", image!=""}[5m])) / scalar(count(node_cpu_seconds_total{mode="idle"}))) * 100 > 80
+        expr: (sum by (name) (rate(container_cpu_usage_seconds_total{name=~".*(servio-|servio-backend).*", image!=""}[5m])) / scalar(count(node_cpu_seconds_total{mode="idle"}))) * 100 > 80
         for: 5m
         labels:
           severity: warning

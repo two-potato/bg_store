@@ -1,0 +1,12 @@
+{% if products %}
+  <section class="page-2026 product-reco-2026">
+    {% if tracking_payload %}
+      <script type="application/json" data-analytics-payload>{{ tracking_payload|safe }}</script>
+    {% endif %}
+    <header class="page-2026__header">
+      <h2>{{ title }}</h2>
+      {% if subtitle %}<p>{{ subtitle }}</p>{% endif %}
+    </header>
+    {% include "shopfront/components/product_grid.html" with products=products recommendation_source=recommendation_source %}
+  </section>
+{% endif %}

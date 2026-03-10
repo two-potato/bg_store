@@ -1,29 +1,93 @@
+{% load static %}
 <header class="site-header-v3">
-  <div class="container mx-auto px-3">
+  <div class="container mx-auto px-4 lg:px-5">
     <div class="site-header-v3__row">
-      <div class="site-header-v3__left">
-        <a class="site-header-v3__logo" href="/" hx-boost="false">BG</a>
-        <nav class="site-header-v3__nav hidden lg:flex" aria-label="Основная навигация">
+      <div class="site-header-v3__left hidden md:flex desktop-only">
+        <a class="site-header-v3__logo hidden md:inline-flex" href="/" hx-boost="false" aria-label="Servio — на главную">
+          <img src="{% static 'shopfront/big_logo.png' %}?v=20260307-5" alt="Servio" class="site-header-v3__logo-img" />
+        </a>
+        {# Header contract: desktop catalog trigger and more-menu must stay visible from md and must not be removed. #}
+        <nav class="site-header-v3__nav hidden md:flex" aria-label="Основная навигация">
           <details class="site-catalog-menu">
             <summary class="btn btn-sm site-header-v3__nav-btn">{% include 'shopfront/icons/category.svg' %}<span>Каталог</span></summary>
             <div class="site-catalog-menu__panel">
               <div class="site-catalog-menu__inner">
                 <div class="site-catalog-menu__head">
+                  <div>
+                    <div class="site-catalog-menu__eyebrow">Навигация по каталогу</div>
+                    <div class="site-catalog-menu__title">Подберите товары быстрее</div>
+                  </div>
                   <a href="/catalog/" hx-boost="false" class="site-catalog-menu__all">Открыть весь каталог</a>
                 </div>
-                <div class="site-catalog-menu__grid">
-                  {% for c in header_categories %}
-                    <a href="/catalog/?category={{ c.id }}" hx-boost="false" class="site-catalog-menu__item">{{ c.name }}</a>
-                  {% empty %}
-                    <span class="site-catalog-menu__empty">Категории пока не добавлены</span>
-                  {% endfor %}
+                <div class="site-catalog-menu__layout">
+                  <div class="site-catalog-menu__featured">
+                    <div class="site-catalog-menu__section-title">Быстрые разделы</div>
+                    <a href="/catalog/?sort=rating_desc" hx-boost="false" class="site-catalog-menu__feature-card">
+                      <span class="site-catalog-menu__feature-icon">{% include 'shopfront/icons/circle-check.svg' %}</span>
+                      <span>
+                        <strong>Лидеры продаж</strong>
+                        <small>Товары с высоким рейтингом и устойчивым спросом</small>
+                      </span>
+                    </a>
+                    <a href="/catalog/?sort=new" hx-boost="false" class="site-catalog-menu__feature-card">
+                      <span class="site-catalog-menu__feature-icon">{% include 'shopfront/icons/bolt.svg' %}</span>
+                      <span>
+                        <strong>Новые поступления</strong>
+                        <small>Свежие позиции и обновления ассортимента</small>
+                      </span>
+                    </a>
+                    <a href="/brands/" hx-boost="false" class="site-catalog-menu__feature-card">
+                      <span class="site-catalog-menu__feature-icon">{% include 'shopfront/icons/tag.svg' %}</span>
+                      <span>
+                        <strong>Бренды</strong>
+                        <small>Открыть поставщиков, линейки и ассортимент</small>
+                      </span>
+                    </a>
+                  </div>
+                  <div class="site-catalog-menu__categories">
+                    <div class="site-catalog-menu__section-title">Категории</div>
+                    <div class="site-catalog-menu__grid">
+                      {% for c in header_categories %}
+                        <a href="/catalog/?category={{ c.slug }}" hx-boost="false" class="site-catalog-menu__item">
+                          <span class="site-catalog-menu__item-icon">{% include 'shopfront/icons/category.svg' %}</span>
+                          <span>{{ c.name }}</span>
+                        </a>
+                      {% empty %}
+                        <span class="site-catalog-menu__empty">Категории пока не добавлены</span>
+                      {% endfor %}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </details>
-          <a href="/about/" hx-boost="false" class="btn btn-sm site-header-v3__nav-btn">О нас</a>
-          <a href="/delivery/" hx-boost="false" class="btn btn-sm site-header-v3__nav-btn">Доставка</a>
-          <a href="/contacts/" hx-boost="false" class="btn btn-sm site-header-v3__nav-btn">Контакты</a>
+          <details class="site-header-v3__more-menu">
+            <summary class="btn btn-sm site-header-v3__nav-btn site-header-v3__more-btn" aria-label="Ещё">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                <circle cx="6" cy="12" r="1.8"></circle>
+                <circle cx="12" cy="12" r="1.8"></circle>
+                <circle cx="18" cy="12" r="1.8"></circle>
+              </svg>
+            </summary>
+            <div class="site-header-v3__more-panel ui-dropdown-2026">
+              <div class="site-header-v3__dropdown-head">
+                <div class="site-header-v3__dropdown-title">Быстрые разделы</div>
+                <div class="site-header-v3__dropdown-sub">Маршруты по витрине и сервисным страницам</div>
+              </div>
+              <div class="site-header-v3__dropdown-grid">
+                <a href="/brands/" hx-boost="false"><span>{% include 'shopfront/icons/tag.svg' %}</span><span>Бренды</span></a>
+                <a href="/collections/" hx-boost="false"><span>{% include 'shopfront/icons/layout-grid.svg' %}</span><span>Коллекции</span></a>
+                <a href="/compare/" hx-boost="false"><span>{% include 'shopfront/icons/list-details.svg' %}</span><span>Сравнение{% if compare_count %} ({{ compare_count }}){% endif %}</span></a>
+                <a href="/promotions/" hx-boost="false"><span>{% include 'shopfront/icons/bolt.svg' %}</span><span>Спецпредложения</span></a>
+                <a href="/buyers/" hx-boost="false"><span>{% include 'shopfront/icons/user.svg' %}</span><span>Для покупателей</span></a>
+                <a href="/suppliers/" hx-boost="false"><span>{% include 'shopfront/icons/gauge.svg' %}</span><span>Для поставщиков</span></a>
+                <a href="/delivery/" hx-boost="false"><span>{% include 'shopfront/icons/current-location.svg' %}</span><span>Доставка</span></a>
+                <a href="/payment/" hx-boost="false"><span>{% include 'shopfront/icons/shopping-bag.svg' %}</span><span>Оплата</span></a>
+                <a href="/faq/" hx-boost="false"><span>{% include 'shopfront/icons/circle-check.svg' %}</span><span>FAQ</span></a>
+                <a href="/contacts/" hx-boost="false"><span>{% include 'shopfront/icons/user.svg' %}</span><span>Контакты</span></a>
+              </div>
+            </div>
+          </details>
         </nav>
       </div>
 
@@ -31,7 +95,7 @@
         <input class="input input-bordered input-sm site-header-v2__search"
                name="q"
                type="search"
-               placeholder="Поиск по товарам"
+               placeholder="Поиск по каталогу HoReCa"
                aria-label="Поиск"
                autocomplete="off"
                hx-get="/search/live/"
@@ -44,44 +108,168 @@
         <div id="live-search-results" class="live-search-results" aria-live="polite"></div>
       </form>
 
-      <div class="site-header-v3__right">
-        <div class="dropdown dropdown-end">
-          <div tabindex="0" role="button" class="btn btn-sm site-header-v3__icon-btn" aria-label="Меню аккаунта">{% include 'shopfront/icons/user.svg' %}</div>
-          <ul tabindex="0" class="dropdown-content menu rounded-box z-[1] w-56 p-2 shadow site-header-v2__menu">
-            {% if request.user.is_authenticated %}
-              {% if request.user.is_staff %}
-                <li><a hx-boost="false" href="/admin/">{% include 'shopfront/icons/gauge.svg' %}<span>Админка</span></a></li>
-                <li><hr></li>
+      <div class="site-header-v3__right hidden md:flex">
+        <details class="site-header-v3__account-menu">
+          <summary class="btn btn-sm site-header-v3__icon-btn" aria-label="Меню аккаунта">{% include 'shopfront/icons/user.svg' %}</summary>
+          <div class="site-header-v3__account-panel ui-dropdown-2026">
+            <div class="site-header-v3__account-panel-head">
+              {% if request.user.is_authenticated %}
+                <strong>{{ request.user.get_full_name|default:request.user.username }}</strong>
+                <span>{% if request.user.profile.role == "seller" %}Продавец{% else %}Покупатель{% endif %}</span>
+              {% else %}
+                <strong>Аккаунт</strong>
+                <span>Войдите, чтобы управлять заказами и списками</span>
               {% endif %}
-              <li><a href="/account/" hx-boost="false">{% include 'shopfront/icons/user.svg' %}<span>Личный кабинет</span></a></li>
-              <li><a href="/account/comments/" hx-boost="false">{% include 'shopfront/icons/tag.svg' %}<span>Мои комментарии</span></a></li>
-              <li><a hx-boost="false" href="/account/logout/">{% include 'shopfront/icons/logout.svg' %}<span>Выйти</span></a></li>
-            {% else %}
-              <li><a href="/account/login/" hx-boost="false">{% include 'shopfront/icons/login.svg' %}<span>Войти</span></a></li>
-              <li><a href="/account/register/" hx-boost="false">{% include 'shopfront/icons/user-plus.svg' %}<span>Регистрация</span></a></li>
-            {% endif %}
-          </ul>
-        </div>
-        <div class="indicator">
-          <a id="toggle-cart" class="btn btn-sm site-header-v3__icon-btn" href="/cart/" hx-boost="false" aria-label="Открыть корзину">
+            </div>
+            <div class="site-header-v3__account-links">
+              {% if request.user.is_authenticated %}
+                {% if request.user.is_staff %}
+                  <a hx-boost="false" href="/admin/">{% include 'shopfront/icons/gauge.svg' %}<span>Админка</span></a>
+                {% endif %}
+                {% if request.user.profile.role == "seller" %}
+                  <a href="/account/seller/" hx-boost="false">{% include 'shopfront/icons/user.svg' %}<span>Кабинет продавца</span></a>
+                  <a href="/account/seller/products/add/" hx-boost="false">{% include 'shopfront/icons/tag.svg' %}<span>Добавить товар</span></a>
+                {% else %}
+                  <a href="/account/" hx-boost="false">{% include 'shopfront/icons/user.svg' %}<span>Личный кабинет</span></a>
+                {% endif %}
+                <a href="/favorites/" hx-boost="false">{% include 'shopfront/icons/circle-check.svg' %}<span>Избранное</span></a>
+                <a href="/compare/" hx-boost="false">{% include 'shopfront/icons/list-details.svg' %}<span>Сравнение{% if compare_count %} ({{ compare_count }}){% endif %}</span></a>
+                <a href="/lists/" hx-boost="false">{% include 'shopfront/icons/layout-grid.svg' %}<span>Списки закупок</span></a>
+                <a href="/saved-searches/" hx-boost="false">{% include 'shopfront/icons/search.svg' %}<span>Сохранённые поиски</span></a>
+                <a href="/account/comments/" hx-boost="false">{% include 'shopfront/icons/tag.svg' %}<span>Мои комментарии</span></a>
+                <a hx-boost="false" href="/account/logout/">{% include 'shopfront/icons/logout.svg' %}<span>Выйти</span></a>
+              {% else %}
+                <a href="/account/login/" hx-boost="false">{% include 'shopfront/icons/login.svg' %}<span>Войти</span></a>
+                <a href="/account/register/" hx-boost="false">{% include 'shopfront/icons/user-plus.svg' %}<span>Регистрация</span></a>
+              {% endif %}
+            </div>
+          </div>
+        </details>
+        <div class="site-header-v3__cart-wrap">
+          <a class="btn btn-sm site-header-v3__icon-btn site-header-v3__compare-launcher{% if not compare_count %} is-hidden{% endif %}"
+             href="/compare/"
+             hx-boost="false"
+             data-compare-launcher
+             {% if not compare_count %}hidden aria-hidden="true"{% endif %}
+             aria-label="Открыть сравнение товаров"
+             title="Сравнение">
+            <span class="site-header-v3__compare-icon-wrap" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 3v18"></path>
+                <path d="M5 7h14"></path>
+                <path d="m7.5 7-2.5 5h5l-2.5-5Z"></path>
+                <path d="m16.5 7-2.5 5h5l-2.5-5Z"></path>
+                <path d="M7 21h10"></path>
+              </svg>
+              <span class="site-header-v3__compare-badge{% if not compare_count %} is-hidden{% endif %}" data-compare-badge>
+                <span data-compare-count>{{ compare_count|default:0 }}</span>
+              </span>
+            </span>
+          </a>
+          <a id="toggle-cart"
+             class="btn btn-sm site-header-v3__cart-pill{% if cart_badge_count|default:0 > 0 %} is-active{% endif %}"
+             href="/cart/"
+             hx-boost="false"
+             aria-label="Открыть корзину">
             <span class="cart-icon-wrap inline-flex items-center">
               <span id="cart-icon-outline">{% include 'shopfront/icons/shopping-cart.svg' %}</span>
               <span id="cart-icon-filled" class="hidden">{% include 'shopfront/icons/shopping-cart-filled.svg' %}</span>
             </span>
+            <span class="site-header-v3__cart-pill-text">Корзина</span>
+            <span class="site-header-v3__cart-pill-sep">•</span>
+            <span id="cart-badge-inline"
+                  class="site-header-v3__cart-pill-inline"
+                  hx-get="/cart/badge/"
+                  hx-push-url="false"
+                  hx-trigger="load, cartChanged from:body"
+                  hx-target="#cart-badge-inline"
+                  hx-select="*"
+                  hx-swap="innerHTML">
+              {% include "shopfront/partials/cart_badge.html" with count=cart_badge_count|default:0 subtotal=cart_badge_subtotal|default:0 %}
+            </span>
           </a>
           <span id="cart-badge"
-                class="indicator-item badge badge-error hidden cart-badge-pill"
+                class="hidden"
                 hx-get="/cart/badge/"
                 hx-push-url="false"
                 hx-trigger="load, cartChanged from:body"
-                hx-target="#cart-badge"
+                hx-target="#cart-badge-inline"
                 hx-select="*"
                 hx-swap="innerHTML">
-            {% include "shopfront/partials/cart_badge.html" with count=cart_badge_count|default:0 subtotal=cart_badge_subtotal|default:0 %}
+          </span>
+          <span id="cart-badge-mobile-sync"
+                class="hidden"
+                hx-get="/cart/badge/"
+                hx-push-url="false"
+                hx-trigger="load, cartChanged from:body"
+                hx-target="#cart-badge-mobile"
+                hx-select="*"
+                hx-swap="innerHTML">
           </span>
         </div>
       </div>
-    </div>
 
+      <div class="site-header-mobile-row md:hidden">
+        <a class="site-header-v3__logo site-header-v3__logo--mobile" href="/" hx-boost="false" aria-label="Servio — на главную">
+          <img src="{% static 'shopfront/big_logo_mobile.png' %}?v=20260307-1" alt="Servio" class="site-header-v3__logo-img" />
+        </a>
+        <form action="/catalog/" role="search" class="site-header-v2__search-wrap site-header-v3__mobile-search-wrap">
+          <input class="input input-bordered input-sm site-header-v2__search"
+                 name="q"
+                 type="search"
+                 placeholder="Поиск по каталогу"
+                 aria-label="Поиск"
+                 autocomplete="off"
+                 hx-get="/search/live/"
+                 hx-trigger="input changed delay:220ms, search"
+                 hx-target="#live-search-results-mobile"
+                 hx-select="*"
+                 hx-swap="innerHTML"
+                 hx-indicator="#htmx-indicator">
+          <button class="btn btn-sm btn-primary site-header-v2__search-btn" type="submit">{% include 'shopfront/icons/search.svg' %}</button>
+          <div id="live-search-results-mobile" class="live-search-results" aria-live="polite"></div>
+        </form>
+        <div class="site-header-v3__mobile-actions">
+          <details class="site-mobile-user-menu">
+            <summary class="btn btn-sm site-header-v3__mobile-toggle" aria-label="Меню">
+              {% include 'shopfront/icons/list-details.svg' %}
+            </summary>
+            <div class="site-mobile-dropdown-panel ui-dropdown-2026">
+              <div class="site-mobile-dropdown-list">
+                {% include "shopfront/components/mobile_menu_item.html" with href="/" label="Главная" icon_template="shopfront/icons/layout-grid.svg" %}
+                {% include "shopfront/components/mobile_menu_item.html" with href="/catalog/" label="Каталог" icon_template="shopfront/icons/category.svg" %}
+                {% include "shopfront/components/mobile_menu_item.html" with href="/catalog/?sort=new" label="Новинки" icon_template="shopfront/icons/bolt.svg" %}
+                {% include "shopfront/components/mobile_menu_item.html" with href="/catalog/?sort=rating_desc" label="Высокий рейтинг" icon_template="shopfront/icons/circle-check.svg" %}
+                {% include "shopfront/components/mobile_menu_item.html" with href="/brands/" label="Бренды" icon_template="shopfront/icons/tag.svg" %}
+                {% include "shopfront/components/mobile_menu_item.html" with href="/collections/" label="Коллекции" icon_template="shopfront/icons/layout-grid.svg" %}
+                {% include "shopfront/components/mobile_menu_item.html" with href="/compare/" label="Сравнение" icon_template="shopfront/icons/list-details.svg" %}
+                {% include "shopfront/components/mobile_menu_item.html" with href="/promotions/" label="Спецпредложения" icon_template="shopfront/icons/plus.svg" %}
+                {% include "shopfront/components/mobile_menu_item.html" with href="/buyers/" label="Для покупателей" icon_template="shopfront/icons/circle-check.svg" %}
+                {% include "shopfront/components/mobile_menu_item.html" with href="/suppliers/" label="Для поставщиков" icon_template="shopfront/icons/gauge.svg" %}
+                {% include "shopfront/components/mobile_menu_item.html" with href="/cart/" label="Корзина" icon_template="shopfront/icons/shopping-cart.svg" %}
+                {% include "shopfront/components/mobile_menu_item.html" with href="/delivery/" label="Доставка" icon_template="shopfront/icons/current-location.svg" %}
+                {% include "shopfront/components/mobile_menu_item.html" with href="/payment/" label="Оплата" icon_template="shopfront/icons/layout-grid.svg" %}
+                {% include "shopfront/components/mobile_menu_item.html" with href="/returns/" label="Возврат и обмен" icon_template="shopfront/icons/trash.svg" %}
+                {% include "shopfront/components/mobile_menu_item.html" with href="/faq/" label="FAQ" icon_template="shopfront/icons/list-details.svg" %}
+                {% include "shopfront/components/mobile_menu_item.html" with href="/contacts/" label="Контакты" icon_template="shopfront/icons/user.svg" %}
+                {% if request.user.is_authenticated %}
+                  {% include "shopfront/components/mobile_menu_item.html" with href="/account/" label="Личный кабинет" icon_template="shopfront/icons/user.svg" %}
+                  {% include "shopfront/components/mobile_menu_item.html" with href="/account/orders/" label="Мои заказы" icon_template="shopfront/icons/layout-grid.svg" %}
+                  {% include "shopfront/components/mobile_menu_item.html" with href="/account/addresses/" label="Адреса доставки" icon_template="shopfront/icons/current-location.svg" %}
+                  {% include "shopfront/components/mobile_menu_item.html" with href="/favorites/" label="Избранное" icon_template="shopfront/icons/circle-check.svg" %}
+                  {% include "shopfront/components/mobile_menu_item.html" with href="/lists/" label="Списки закупок" icon_template="shopfront/icons/list-details.svg" %}
+                  {% include "shopfront/components/mobile_menu_item.html" with href="/saved-searches/" label="Сохранённые поиски" icon_template="shopfront/icons/search.svg" %}
+                  {% include "shopfront/components/mobile_menu_item.html" with href="/account/comments/" label="Мои комментарии" icon_template="shopfront/icons/tag.svg" %}
+                  {% include "shopfront/components/mobile_menu_item.html" with href="/account/logout/" label="Выйти" icon_template="shopfront/icons/logout.svg" %}
+                {% else %}
+                  {% include "shopfront/components/mobile_menu_item.html" with href="/account/login/" label="Войти" icon_template="shopfront/icons/login.svg" %}
+                  {% include "shopfront/components/mobile_menu_item.html" with href="/account/register/" label="Регистрация" icon_template="shopfront/icons/user-plus.svg" %}
+                {% endif %}
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
   </div>
 </header>

@@ -1,15 +1,31 @@
 from django import forms
 from django.contrib.auth import get_user_model
+import logging
 from .models import UserProfile
 from commerce.validators import validate_inn
-from commerce.models import DeliveryAddress, LegalEntityMembership
+from commerce.models import DeliveryAddress, LegalEntityMembership, SellerStore
+import json
+from catalog.models import Product, Series
 
 User = get_user_model()
+log = logging.getLogger("users")
+
+
+class MultiFileInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
 
 
 class LoginForm(forms.Form):
-    identifier = forms.CharField(label="Email или телефон", max_length=255)
-    password = forms.CharField(widget=forms.PasswordInput)
+    identifier = forms.CharField(
+        label="Email или телефон",
+        max_length=255,
+        error_messages={"required": "Обязательное поле"},
+    )
+    password = forms.CharField(
+        label="Пароль",
+        widget=forms.PasswordInput,
+        error_messages={"required": "Обязательное поле"},
+    )
 
     def clean(self):
         cleaned = super().clean()
@@ -29,6 +45,21 @@ class RegisterForm(forms.ModelForm):
         fields = ["username", "email"]
         labels = {"username": "Имя пользователя", "email": "Email"}
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["email"].required = True
+
+    def clean_email(self):
+        email = (self.cleaned_data.get("email") or "").strip().lower()
+        if not email:
+            raise forms.ValidationError("Email обязателен")
+        qs = User.objects.filter(email__iexact=email)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError("Пользователь с таким email уже существует")
+        return email
+
     def clean(self):
         cleaned = super().clean()
         if cleaned.get("password1") != cleaned.get("password2"):
@@ -37,6 +68,7 @@ class RegisterForm(forms.ModelForm):
 
     def save(self, commit=True):
         user = super().save(commit=False)
+        user.is_active = False
         user.set_password(self.cleaned_data["password1"])
         if commit:
             user.save()
@@ -47,6 +79,7 @@ class RegisterForm(forms.ModelForm):
             if phone:
                 setattr(prof, "phone", phone)
             prof.save()
+            log.info("user_registered", extra={"user_id": user.id})
         return user
 
 
@@ -176,3 +209,126 @@ class AddressForm(forms.ModelForm):
         if commit:
             obj.save()
         return obj
+
+
+class SellerStoreForm(forms.ModelForm):
+    class Meta:
+        model = SellerStore
+        fields = ["name", "description", "legal_entity", "photo"]
+        labels = {
+            "name": "Название магазина",
+            "description": "Описание магазина",
+            "legal_entity": "Юрлицо",
+            "photo": "Аватар магазина",
+        }
+
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop("user", None)
+        super().__init__(*args, **kwargs)
+        if user is not None:
+            entity_ids = LegalEntityMembership.objects.filter(user=user).values_list("legal_entity_id", flat=True)
+            self.fields["legal_entity"].queryset = self.fields["legal_entity"].queryset.filter(id__in=entity_ids)
+
+
+class SellerProductCreateForm(forms.ModelForm):
+    attributes_json = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 4}),
+        label="JSON-характеристики",
+        help_text='Например: {"Материал":"Сталь","Диаметр":"26 см"}',
+    )
+    image_urls = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+        label="Ссылки на фото",
+        help_text="По одной ссылке на строку",
+    )
+    image_files = forms.FileField(
+        required=False,
+        widget=MultiFileInput(attrs={"accept": "image/*"}),
+        label="Загрузить фото",
+    )
+
+    class Meta:
+        model = Product
+        fields = [
+            "sku",
+            "manufacturer_sku",
+            "name",
+            "brand",
+            "series",
+            "category",
+            "material",
+            "purpose",
+            "pack_qty",
+            "unit",
+            "barcode",
+            "price",
+            "stock_qty",
+            "min_order_qty",
+            "lead_time_days",
+            "is_new",
+            "is_promo",
+            "description",
+        ]
+        labels = {
+            "sku": "SKU (8 цифр)",
+            "manufacturer_sku": "Артикул производителя",
+            "name": "Название товара",
+            "brand": "Бренд",
+            "series": "Серия",
+            "category": "Категория",
+            "material": "Материал",
+            "purpose": "Назначение",
+            "pack_qty": "Количество в упаковке",
+            "unit": "Единица",
+            "barcode": "Штрихкод",
+            "price": "Цена",
+            "stock_qty": "Остаток",
+            "min_order_qty": "Минимальный заказ",
+            "lead_time_days": "Срок поставки, дней",
+            "is_new": "Новинка",
+            "is_promo": "Акция",
+            "description": "Описание",
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop("user", None)
+        super().__init__(*args, **kwargs)
+        self.fields["series"].queryset = Series.objects.select_related("brand").order_by("brand__name", "name")
+        for name, initial in {
+            "pack_qty": 1,
+            "unit": "шт",
+            "min_order_qty": 1,
+            "lead_time_days": 0,
+        }.items():
+            self.fields[name].required = False
+            self.fields[name].initial = initial
+        if self.instance.pk and self.instance.attributes:
+            self.fields["attributes_json"].initial = json.dumps(self.instance.attributes, ensure_ascii=False, indent=2)
+
+    def clean_attributes_json(self):
+        raw = (self.cleaned_data.get("attributes_json") or "").strip()
+        if not raw:
+            return {}
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise forms.ValidationError(f"Некорректный JSON: {exc.msg}") from exc
+        if not isinstance(payload, dict):
+            raise forms.ValidationError("Характеристики должны быть объектом JSON")
+        return payload
+
+    def clean_image_urls(self):
+        raw = self.cleaned_data.get("image_urls") or ""
+        return [line.strip() for line in raw.splitlines() if line.strip()]
+
+    def save(self, commit=True):
+        product: Product = super().save(commit=False)
+        if self.user is not None:
+            product.seller = self.user
+        product.attributes = self.cleaned_data.get("attributes_json") or {}
+        if commit:
+            product.save()
+            self.save_m2m()
+        return product

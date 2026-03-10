@@ -1,0 +1,10 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<section class="page-2026">
+  <header class="page-2026__header">
+    <h1>Спецпредложения</h1>
+    <p>Позиции с акционными условиями, сезонными подборками и предложениями для оперативных закупок HoReCa.</p>
+  </header>
+  {% include "shopfront/components/product_grid.html" with products=products %}
+</section>
+{% endblock %}

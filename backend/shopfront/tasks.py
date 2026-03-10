@@ -1,10 +1,9 @@
 from celery import shared_task
 import asyncio
 import logging
-import httpx
 from django.conf import settings
-from django.core.mail import send_mail
 from users.models import UserProfile
+from core.notifications import apost_notify_json, is_telegram_recipient_quarantined, send_mail_message
 
 log = logging.getLogger("shopfront")
 
@@ -18,14 +17,34 @@ def _admin_emails() -> list[str]:
 
 
 def _admin_telegram_ids() -> list[int]:
-    recipients: set[int] = set(getattr(settings, "ADMIN_NOTIFY_TELEGRAM_IDS", []) or [])
+    recipients: list[int] = []
+    seen: set[int] = set()
     qs = UserProfile.objects.filter(
         role=UserProfile.Role.ADMIN,
         telegram_id__isnull=False,
     ).values_list("telegram_id", flat=True)
-    recipients.update(int(v) for v in qs if v)
-    return sorted(recipients)
-
+    for value in qs:
+        if not value:
+            continue
+        tg_id = int(value)
+        if is_telegram_recipient_quarantined(tg_id):
+            continue
+        if tg_id in seen:
+            continue
+        seen.add(tg_id)
+        recipients.append(tg_id)
+    explicit = list(getattr(settings, "ADMIN_NOTIFY_TELEGRAM_IDS", []) or [])
+    for value in explicit:
+        if not str(value).strip().lstrip("-").isdigit():
+            continue
+        tg_id = int(value)
+        if is_telegram_recipient_quarantined(tg_id):
+            continue
+        if tg_id in seen:
+            continue
+        seen.add(tg_id)
+        recipients.append(tg_id)
+    return recipients
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def notify_contact_feedback(self, *, name: str, phone: str, message: str, source: str):
@@ -39,21 +58,15 @@ def notify_contact_feedback(self, *, name: str, phone: str, message: str, source
 
     recipients = _admin_emails()
     if recipients:
-        send_mail(
+        send_mail_message(
             subject="[BG Shop] Новая заявка с формы контактов",
             message=text,
-            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
             recipient_list=recipients,
-            fail_silently=False,
+            logger=log,
+            extra={"source": source},
         )
-        log.info("contact_feedback_email_sent", extra={"recipients": recipients})
     else:
         log.warning("contact_feedback_email_no_recipients")
-
-    telegram_ids = _admin_telegram_ids()
-    if not telegram_ids:
-        log.warning("contact_feedback_tg_no_recipients")
-        return
 
     tg_text = (
         "📩 Новая заявка с формы контактов\n"
@@ -62,16 +75,33 @@ def notify_contact_feedback(self, *, name: str, phone: str, message: str, source
         f"Источник: {source}\n\n"
         f"{message}"
     )
+    telegram_ids = _admin_telegram_ids()
 
     async def _send():
-        async with httpx.AsyncClient(timeout=10) as client:
+        from httpx import AsyncClient
+
+        async with AsyncClient(timeout=10) as client:
             for tg in telegram_ids:
-                resp = await client.post(
-                    f"{settings.BOT_NOTIFY_URL}/notify/send_text",
-                    json={"telegram_id": tg, "text": tg_text},
+                await apost_notify_json(
+                    client,
+                    "/notify/send_text",
+                    {"telegram_id": tg, "text": tg_text},
+                    logger=log,
+                    failure_event="contact_feedback_send_text_failed",
+                    extra={"telegram_id": tg},
                 )
-                resp.raise_for_status()
+            # Group delivery is a fallback channel. Keep task successful even if this path is not configured.
+            await apost_notify_json(
+                client,
+                "/notify/send_group",
+                {"text": tg_text},
+                logger=log,
+                failure_event="contact_feedback_group_send_failed",
+            )
 
-    asyncio.run(_send())
+    try:
+        asyncio.run(_send())
+    except Exception:
+        log.exception("contact_feedback_tg_send_failed", extra={"recipients": telegram_ids})
+        raise
     log.info("contact_feedback_tg_sent", extra={"recipients": telegram_ids})
-

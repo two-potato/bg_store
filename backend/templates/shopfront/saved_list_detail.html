@@ -1,0 +1,51 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<section class="page-2026">
+  <header class="page-2026__header">
+    <h1>{{ saved_list.name }}</h1>
+    <p>{{ saved_list.description|default:"Список закупок для repeat purchase и командного шаринга." }}</p>
+  </header>
+
+  <div class="flex flex-wrap gap-2 mb-4">
+    <form method="post" action="/lists/{{ saved_list.id }}/">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="move_to_cart">
+      <button class="btn btn-primary btn-sm" type="submit">Перенести в корзину</button>
+    </form>
+    <form method="post" action="/lists/{{ saved_list.id }}/">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="toggle_public">
+      <button class="btn btn-outline btn-sm" type="submit">{% if saved_list.is_public %}Сделать приватным{% else %}Открыть общий доступ{% endif %}</button>
+    </form>
+    {% if saved_list.is_public %}
+      <input class="input input-bordered input-sm max-w-xl" value="{{ share_url }}" readonly data-copy-select>
+    {% endif %}
+  </div>
+
+  <div class="space-y-3">
+    {% for item in saved_list.items.all %}
+      <article class="page-2026__card">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div class="font-semibold">{{ item.product.name }}</div>
+            <div class="text-sm text-base-content/70">{{ item.product.brand.name|default:"Без бренда" }} · {{ item.quantity }} шт.</div>
+          </div>
+          <div class="flex gap-2">
+            <a class="btn btn-outline btn-sm" href="/product/{{ item.product.slug }}/" hx-boost="false">Открыть товар</a>
+            <form method="post" action="/lists/{{ saved_list.id }}/">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="remove_item">
+              <input type="hidden" name="item_id" value="{{ item.id }}">
+              <button class="btn btn-outline btn-sm" type="submit">Удалить</button>
+            </form>
+          </div>
+        </div>
+      </article>
+    {% empty %}
+      <div class="page-2026__card border-dashed p-6 text-base-content/60">
+        Список пуст. Добавьте товары из избранного, корзины или прошлых заказов.
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

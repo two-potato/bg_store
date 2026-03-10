@@ -1,21 +1,128 @@
-<div class="flex flex-col md:flex-row md:items-end md:justify-between gap-2 mb-2">
-  <div>
-    <h1 class="text-xl font-semibold m-0">Каталог</h1>
-    <div class="text-sm text-base-content/60">Найдено: {{ total_count }}</div>
-    <div class="mt-1 flex flex-wrap gap-1 catalog-active-filters">
-      {% if q %}<span class="badge badge-ghost">Поиск: “{{ q }}”</span>{% endif %}
-      {% if sel_category %}
-        <span class="badge badge-ghost">Категория: {{ sel_category.name }}</span>
-        <a class="badge badge-outline" href="{{ category_reset_url }}">Сбросить категорию</a>
-      {% endif %}
-      {% if sel_brand %}<span class="badge badge-ghost">Бренд: {{ sel_brand.name }}</span>{% endif %}
-      {% if request.GET.tag %}<span class="badge badge-ghost">Тег: {{ request.GET.tag }}</span>{% endif %}
-      {% if q or sel_category or sel_brand or request.GET.tag %}
-        <a class="badge badge-outline" href="/catalog/">Сбросить</a>
-      {% endif %}
+<div class="catalog-head-neo catalog-head-neo--compact mb-3">
+  {% if category_breadcrumbs %}
+    <nav aria-label="breadcrumb" class="catalog-head-neo__breadcrumbs">
+      <a class="catalog-head-neo__crumb" href="/">Главная</a>
+      <span>/</span>
+      <a class="catalog-head-neo__crumb" href="/catalog/">Каталог</a>
+      {% for crumb in category_breadcrumbs %}
+        <span>/</span>
+        <a class="catalog-head-neo__crumb" href="/catalog/?category={{ crumb.slug }}">{{ crumb.name }}</a>
+      {% endfor %}
+    </nav>
+  {% endif %}
+  <div class="catalog-head-neo__hero catalog-head-neo__top--compact">
+    <div class="catalog-head-neo__main">
+      <div class="catalog-head-neo__eyebrow">Каталог HoReCa</div>
+      <div class="catalog-head-neo__headline-row">
+        <div class="catalog-head-neo__headline-copy">
+          <h1 class="catalog-head-neo__title m-0">
+            {% if sel_category %}{{ sel_category.name }}{% elif q %}Результаты поиска{% else %}Каталог{% endif %}
+          </h1>
+          <p class="catalog-head-neo__subtitle">
+            {% if q %}
+              Подборка товаров по запросу “{{ q }}” с быстрыми фильтрами, сортировкой и поставщиками.
+            {% elif sel_category %}
+              Сортируйте, фильтруйте и сравнивайте предложения по этой категории без лишнего шума.
+            {% else %}
+              Современный каталог для быстрого отбора, сравнения и закупки товаров.
+            {% endif %}
+          </p>
+        </div>
+        <div class="catalog-head-neo__count-stack">
+          <span class="catalog-head-neo__count">Найдено: {{ total_count }}</span>
+          <span class="catalog-head-neo__count-caption">Актуальная выдача каталога</span>
+        </div>
+      </div>
+      <div class="catalog-head-neo__stats">
+        <div class="catalog-head-neo__stat">
+          <span class="catalog-head-neo__stat-label">Бренды</span>
+          <strong class="catalog-head-neo__stat-value">{{ brands|length }}</strong>
+        </div>
+        <div class="catalog-head-neo__stat">
+          <span class="catalog-head-neo__stat-label">Поставщики</span>
+          <strong class="catalog-head-neo__stat-value">{{ facet_seller_options|length }}</strong>
+        </div>
+        <div class="catalog-head-neo__stat">
+          <span class="catalog-head-neo__stat-label">Теги</span>
+          <strong class="catalog-head-neo__stat-value">{{ tags|length }}</strong>
+        </div>
+        {% if sel_category %}
+          <div class="catalog-head-neo__stat">
+            <span class="catalog-head-neo__stat-label">Категория</span>
+            <strong class="catalog-head-neo__stat-value">{{ sel_category.name }}</strong>
+          </div>
+        {% endif %}
+      </div>
     </div>
+    <aside class="catalog-head-neo__aside">
+      <div class="catalog-head-neo__aside-card">
+        <div class="catalog-head-neo__aside-title">Быстрые действия</div>
+        <div class="catalog-head-neo__top-actions">
+          {% if request.user.is_authenticated and querystring_base %}
+            <form method="post" action="/saved-searches/" class="catalog-save-search">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="save">
+              <input type="hidden" name="querystring" value="{{ querystring_base }}">
+              <input type="hidden" name="name" value="Поиск: {% if q %}{{ q }}{% else %}каталог{% endif %}">
+              <button class="btn btn-sm btn-outline catalog-head-neo__utility-btn" type="submit">Сохранить поиск</button>
+            </form>
+          {% endif %}
+          {% if request.user.is_authenticated and sel_category %}
+            <button class="btn btn-sm btn-outline catalog-head-neo__utility-btn{% if is_category_subscribed %} is-active{% endif %}"
+                    type="button"
+                    data-subscription-toggle
+                    data-entity="category"
+                    data-entity-id="{{ sel_category.id }}"
+                    data-active="{% if is_category_subscribed %}1{% else %}0{% endif %}">
+              {% if is_category_subscribed %}Подписка включена{% else %}Подписаться{% endif %}
+            </button>
+          {% endif %}
+          <a class="btn btn-sm btn-outline catalog-head-neo__utility-btn" href="/brands/">Бренды</a>
+          <a class="btn btn-sm btn-outline catalog-head-neo__utility-btn" href="/collections/">Коллекции</a>
+        </div>
+      </div>
+    </aside>
   </div>
-  <div class="md:w-1/2">
+  <div class="catalog-head-neo__controls">
     {% include 'shopfront/components/catalog_toolbar.html' %}
+    {% if q or sel_category or sel_brand or request.GET.tag or availability or delivery_eta or min_price or max_price %}
+      <div class="catalog-head-neo__filters catalog-active-filters">
+        {% if q %}<span class="catalog-active-chip">Поиск: “{{ q }}”</span>{% endif %}
+        {% if sel_category %}
+          <span class="catalog-active-chip">Категория: {{ sel_category.name }}</span>
+          <a class="catalog-active-chip catalog-active-chip--clear" href="{{ category_reset_url }}">Сбросить категорию</a>
+        {% endif %}
+        {% if sel_brand %}<span class="catalog-active-chip">Бренд: {{ sel_brand.name }}</span>{% endif %}
+        {% if sel_seller_store %}<span class="catalog-active-chip">Поставщик: {{ sel_seller_store.name }}</span>{% endif %}
+        {% if request.GET.tag %}<span class="catalog-active-chip">Тег: {{ request.GET.tag }}</span>{% endif %}
+        {% if availability == "in_stock" %}<span class="catalog-active-chip">Только в наличии</span>{% endif %}
+        {% if delivery_eta == "fast" %}<span class="catalog-active-chip">Поставка: до 2 дней</span>{% endif %}
+        {% if delivery_eta == "week" %}<span class="catalog-active-chip">Поставка: до недели</span>{% endif %}
+        {% if delivery_eta == "planned" %}<span class="catalog-active-chip">Поставка: больше недели</span>{% endif %}
+        {% if min_price %}<span class="catalog-active-chip">Цена от: {{ min_price }} ₽</span>{% endif %}
+        {% if max_price %}<span class="catalog-active-chip">Цена до: {{ max_price }} ₽</span>{% endif %}
+        <a class="catalog-active-chip catalog-active-chip--clear" href="/catalog/">Сбросить</a>
+      </div>
+    {% endif %}
   </div>
+  {% if selected_category_children %}
+    <section class="catalog-chip-rail">
+      <div class="catalog-chip-rail__label">Подкатегории</div>
+      <div class="catalog-chip-rail__track" aria-label="Подкатегории">
+        {% for child in selected_category_children %}
+          <a class="catalog-active-chip" href="/catalog/?category={{ child.slug }}">{{ child.name }}</a>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+  {% if facet_seller_options %}
+    <section class="catalog-chip-rail">
+      <div class="catalog-chip-rail__label">Топ поставщики</div>
+      <div class="catalog-chip-rail__track" aria-label="Топ поставщики">
+        {% for option in facet_seller_options %}
+          <a class="catalog-active-chip" href="/catalog/?seller={{ option.slug|default:option.id }}">{{ option.label }} · {{ option.count }}</a>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
 </div>

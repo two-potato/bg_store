@@ -17,5 +17,5 @@ route:
 receivers:
   - name: "telegram-notify"
     webhook_configs:
-      - url: "http://bg-bot-notify:8080/notify/alertmanager"
+      - url: "http://bot-notify:8080/notify/alertmanager"
         send_resolved: true

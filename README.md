@@ -1,4 +1,4 @@
-# Bad Guys Shop — Full Monorepo
+# Servio — Full Monorepo
 
 **Everything merged**: base + patches (auth via Telegram WebApp, legal entities workflow, orders w/ FSM, Celery tasks, bot notifier,
 PDF invoices, catalog, admin panel, and mobile-first frontend on HTMX + Bootstrap 5). Uses **uv** for Python.
@@ -37,6 +37,19 @@ Open:
 - Metrics: http://localhost/metrics
 - Prometheus: http://localhost:9090
 - Grafana: http://localhost:3000  (admin / admin)
+
+## Workflow: Dev -> Prod
+
+1. Вся разработка идет в ветке `dev`.
+2. В `dev` запускается GitHub CI (tests/lint).
+3. В `main` попадаем только через PR из `dev`.
+4. `main` автоматически деплоится в production через `.github/workflows/deploy.yml`.
+
+Рекомендуется включить branch protection:
+- для `main`: required checks = `CI`, запрет прямого push;
+- для `dev`: required checks = `CI` (по желанию команды).
+- PR template: `.github/PULL_REQUEST_TEMPLATE.md`
+- Release checklist: `.github/RELEASE_CHECKLIST.md`
 
 ## Google OAuth (real login)
 

@@ -4,8 +4,10 @@ from aiogram.filters import Command
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
 from fastapi import FastAPI
 
-from .common import build_runtime, env_int, register_common_http
+from .common import build_runtime, register_common_http, register_polling_lifecycle
+from .sentry_runtime import init_sentry
 
+init_sentry("bot-shop")
 app = FastAPI()
 bot, dp, log = build_runtime()
 
@@ -26,29 +28,4 @@ async def start(message):
 
 
 register_common_http(app)
-
-
-@app.on_event("startup")
-async def startup_event():
-    import asyncio
-
-    if os.getenv("BOT_DISABLE_POLLING", "0") == "1":
-        try:
-            log.info("bot_polling_disabled")
-        except Exception:
-            pass
-        return
-
-    try:
-        await bot.delete_webhook(drop_pending_updates=False)
-    except Exception:
-        pass
-    polling_timeout = env_int("BOT_POLLING_TIMEOUT", 30)
-    asyncio.create_task(
-        dp.start_polling(
-            bot,
-            polling_timeout=polling_timeout,
-            allowed_updates=dp.resolve_used_update_types(),
-            handle_signals=False,
-        )
-    )
+register_polling_lifecycle(app, bot=bot, dp=dp, log=log, disable_by_default="0")

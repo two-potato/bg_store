@@ -5,6 +5,7 @@ from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 
 from .models import Order
+from .services import plan_seller_splits
 from .tasks import notify_admin_order_status_email, notify_order_status_telegram
 
 log = logging.getLogger("orders")
@@ -41,6 +42,8 @@ def order_track_previous_status(sender, instance: Order, **kwargs):
 
 @receiver(post_save, sender=Order)
 def order_notify_admin_on_create_or_status_change(sender, instance: Order, created: bool, **kwargs):
+    transaction.on_commit(lambda: plan_seller_splits(instance))
+
     if created:
         log.info("order_created_signal", extra={"order_id": instance.id, "status": instance.status})
         transaction.on_commit(lambda: _schedule_email(order_id=instance.id, event="created"))

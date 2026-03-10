@@ -1,5 +1,5 @@
 
-.PHONY: dev prod migrate superuser collectstatic loaddata clean rebuild test lint stop stop-metrics status logs logs-metrics setup restart restart-metrics metrics tailwind tailwind-watch
+.PHONY: dev prod prod-setup predeploy-check migrate superuser collectstatic loaddata clean rebuild test lint stop stop-metrics status logs logs-metrics setup restart restart-metrics metrics tailwind tailwind-watch
 clean:
 	docker compose down -v
 
@@ -17,6 +17,14 @@ dev:
 
 prod:
 	docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+prod-setup:
+	docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend /app/.venv/bin/python manage.py migrate --noinput
+	docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend /app/.venv/bin/python manage.py collectstatic --noinput
+
+predeploy-check:
+	docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend /app/.venv/bin/python manage.py check --deploy
+	docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend /app/.venv/bin/python manage.py migrate --check
 
 stop:
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml down || true

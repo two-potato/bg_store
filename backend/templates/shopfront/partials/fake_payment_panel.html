@@ -16,7 +16,7 @@
         Тестовый webhook запланирован: через 2 секунды платеж автоматически перейдет в успешный.
       </div>
       <div
-        hx-post="/payments/fake/{{ order.id }}/event/"
+        hx-post="{{ payment_event_url }}"
         hx-vals='{"event":"success"}'
         hx-trigger="load delay:2s"
         hx-target="#checkout-form-block"
@@ -27,32 +27,32 @@
 
       <div class="mt-3 flex flex-wrap gap-2">
         <button class="btn btn-sm btn-primary" type="button"
-                hx-post="/payments/fake/{{ order.id }}/event/"
+                hx-post="{{ payment_event_url }}"
                 hx-vals='{"event":"success"}'
                 hx-target="#checkout-form-block"
                 hx-swap="outerHTML">Успех</button>
         <button class="btn btn-sm btn-warning" type="button"
-                hx-post="/payments/fake/{{ order.id }}/event/"
+                hx-post="{{ payment_event_url }}"
                 hx-vals='{"event":"require_3ds"}'
                 hx-target="#checkout-form-block"
                 hx-swap="outerHTML">Запрос 3DS</button>
         <button class="btn btn-sm btn-secondary" type="button"
-                hx-post="/payments/fake/{{ order.id }}/event/"
+                hx-post="{{ payment_event_url }}"
                 hx-vals='{"event":"pass_3ds"}'
                 hx-target="#checkout-form-block"
                 hx-swap="outerHTML">3DS пройден</button>
         <button class="btn btn-sm btn-error" type="button"
-                hx-post="/payments/fake/{{ order.id }}/event/"
+                hx-post="{{ payment_event_url }}"
                 hx-vals='{"event":"fail"}'
                 hx-target="#checkout-form-block"
                 hx-swap="outerHTML">Ошибка</button>
         <button class="btn btn-sm btn-outline" type="button"
-                hx-post="/payments/fake/{{ order.id }}/event/"
+                hx-post="{{ payment_event_url }}"
                 hx-vals='{"event":"cancel"}'
                 hx-target="#checkout-form-block"
                 hx-swap="outerHTML">Отмена</button>
         <button class="btn btn-sm btn-outline" type="button"
-                hx-post="/payments/fake/{{ order.id }}/event/"
+                hx-post="{{ payment_event_url }}"
                 hx-vals='{"event":"refund"}'
                 hx-target="#checkout-form-block"
                 hx-swap="outerHTML">Возврат</button>
@@ -75,8 +75,12 @@
       </div>
 
       <div class="grid gap-2 mt-3">
-        <a class="btn btn-neutral" href="/account/orders/{{ order.id }}/" hx-boost="false">Открыть заказ</a>
-        <a class="btn btn-outline" href="/account/orders/" hx-boost="false">К моим заказам</a>
+        <a class="btn btn-neutral" href="{{ order_detail_url }}" hx-boost="false">Открыть заказ</a>
+        {% if order.is_guest %}
+          <a class="btn btn-outline" href="/catalog/" hx-boost="false">Вернуться в каталог</a>
+        {% else %}
+          <a class="btn btn-outline" href="/account/orders/" hx-boost="false">К моим заказам</a>
+        {% endif %}
       </div>
     </div>
   </div>

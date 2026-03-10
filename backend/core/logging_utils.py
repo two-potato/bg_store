@@ -2,6 +2,7 @@ import logging
 import time
 import uuid
 import contextvars
+import os
 from typing import Optional
 import json
 
@@ -10,6 +11,7 @@ request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("request_id
 user_var: contextvars.ContextVar[str] = contextvars.ContextVar("user", default="anon")
 path_var: contextvars.ContextVar[str] = contextvars.ContextVar("path", default="-")
 method_var: contextvars.ContextVar[str] = contextvars.ContextVar("method", default="-")
+LOG_CALLS_ENABLED = os.getenv("LOG_CALLS_ENABLED", "1") == "1"
 
 
 class RequestContextFilter(logging.Filter):
@@ -53,6 +55,8 @@ def log_timing(logger: logging.Logger, label: str, start_ns: int, **fields):
 def log_calls(logger: Optional[logging.Logger] = None, label: Optional[str] = None):
     """Decorator to log start/end/exception with duration for sync functions."""
     def _wrap(fn):
+        if not LOG_CALLS_ENABLED:
+            return fn
         log = logger or logging.getLogger(fn.__module__)
         name = label or fn.__name__
 

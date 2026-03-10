@@ -15,9 +15,16 @@ backend/staticfiles/
 deploy/letsencrypt/
 deploy/letsencrypt-lib/
 deploy/certbot-www/
+deploy/nginx/certs/
 uv.lock
 .idea/
 .vscode/
 .devcontainer/.venv/
-.github_bg_store_key
-.github_bg_store_key.pub
+.github_servio_key
+.github_servio_key.pub
+
+# Runtime logs / local artifacts
+logs/
+backend/logs/
+backend/.coverage
+backend/coverage.xml

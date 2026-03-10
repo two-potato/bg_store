@@ -1,45 +1,74 @@
 {% extends "shopfront/base.html" %}
 {% block content %}
+{% if catalog_tracking_payload %}
+  <script type="application/json" data-analytics-payload>{{ catalog_tracking_payload|safe }}</script>
+{% endif %}
 {% include "shopfront/components/catalog_header.html" %}
 {% include "shopfront/components/tag_chips.html" %}
 
-<div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-  <aside class="md:col-span-1 md:sticky md:top-3 self-start">
-    {% include "shopfront/components/catalog_filters.html" %}
-  </aside>
-  <section class="md:col-span-3">
-    {% include "shopfront/components/product_grid.html" with products=products %}
-      {% if has_next %}
-        <div id="load-more"
-           class="mt-3"
-           hx-get="/catalog/?{% if querystring_base %}{{ querystring_base }}&{% endif %}page={{ next_page }}&fragment=grid_append"
-           hx-trigger="revealed"
-           hx-target="#product-grid"
-           hx-swap="beforeend">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 py-2" aria-hidden="true">
-          <div class="card bg-base-100 p-3 animate-pulse">
-            <div class="h-40 rounded bg-base-200"></div>
-            <div class="h-3 mt-3 rounded bg-base-200"></div>
-            <div class="h-3 mt-2 rounded bg-base-200"></div>
+<section class="catalog-layout-neo catalog-layout-neo--listing">
+  {% include "shopfront/components/product_grid.html" with products=products %}
+    {% if not products %}
+      <div class="mt-4 rounded-2xl border border-base-200/80 bg-base-100 p-4">
+        <h2 class="text-base font-semibold mb-2">Ничего не нашли</h2>
+        <p class="text-sm text-base-content/70 mb-3">Попробуйте упростить запрос, снять часть фильтров или перейти в соседнюю категорию.</p>
+        {% if search_corrections %}
+          <div class="mb-3">
+            <div class="text-xs uppercase tracking-wide text-base-content/50 mb-2">Возможно, вы искали</div>
+            <div class="flex flex-wrap gap-2">
+              {% for suggestion in search_corrections %}
+                <a class="btn btn-sm btn-outline" href="/catalog/?q={{ suggestion|urlencode }}">{{ suggestion }}</a>
+              {% endfor %}
+            </div>
           </div>
-          <div class="card bg-base-100 p-3 animate-pulse hidden md:block">
-            <div class="h-40 rounded bg-base-200"></div>
-            <div class="h-3 mt-3 rounded bg-base-200"></div>
-            <div class="h-3 mt-2 rounded bg-base-200"></div>
-          </div>
-          <div class="card bg-base-100 p-3 animate-pulse hidden md:block">
-            <div class="h-40 rounded bg-base-200"></div>
-            <div class="h-3 mt-3 rounded bg-base-200"></div>
-            <div class="h-3 mt-2 rounded bg-base-200"></div>
-          </div>
-          <div class="card bg-base-100 p-3 animate-pulse hidden md:block">
-            <div class="h-40 rounded bg-base-200"></div>
-            <div class="h-3 mt-3 rounded bg-base-200"></div>
-            <div class="h-3 mt-2 rounded bg-base-200"></div>
-          </div>
+        {% endif %}
+        <div class="flex flex-wrap gap-2">
+          <a class="btn btn-sm btn-outline" href="/catalog/">Сбросить фильтры</a>
+          {% if sel_category and sel_category.parent %}
+            <a class="btn btn-sm btn-outline" href="/catalog/?category={{ sel_category.parent.slug }}">Вернуться в {{ sel_category.parent.name }}</a>
+          {% endif %}
+          {% for suggestion in search_suggestions %}
+            <a class="btn btn-sm btn-ghost" href="/catalog/?q={{ suggestion|urlencode }}">{{ suggestion }}</a>
+          {% endfor %}
         </div>
+        {% if zero_results_products %}
+          <div class="mt-4 border-t border-base-200 pt-4">
+            <div class="text-sm font-semibold mb-2">Популярные позиции вместо пустой выдачи</div>
+            {% include "shopfront/components/product_grid.html" with products=zero_results_products %}
+          </div>
+        {% endif %}
       </div>
     {% endif %}
-  </section>
-</div>
+    {% if has_next %}
+      <div id="load-more"
+         class="mt-3"
+         hx-get="/catalog/?{% if querystring_base %}{{ querystring_base }}&{% endif %}page={{ next_page }}&fragment=grid_append"
+         hx-trigger="revealed"
+         hx-target="#product-grid"
+         hx-swap="beforeend">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 py-2 catalog-skeleton" aria-hidden="true">
+        <div class="card bg-base-100 p-3 animate-pulse">
+          <div class="h-40 rounded bg-base-200"></div>
+          <div class="h-3 mt-3 rounded bg-base-200"></div>
+          <div class="h-3 mt-2 rounded bg-base-200"></div>
+        </div>
+        <div class="card bg-base-100 p-3 animate-pulse">
+          <div class="h-40 rounded bg-base-200"></div>
+          <div class="h-3 mt-3 rounded bg-base-200"></div>
+          <div class="h-3 mt-2 rounded bg-base-200"></div>
+        </div>
+        <div class="card bg-base-100 p-3 animate-pulse">
+          <div class="h-40 rounded bg-base-200"></div>
+          <div class="h-3 mt-3 rounded bg-base-200"></div>
+          <div class="h-3 mt-2 rounded bg-base-200"></div>
+        </div>
+        <div class="card bg-base-100 p-3 animate-pulse">
+          <div class="h-40 rounded bg-base-200"></div>
+          <div class="h-3 mt-3 rounded bg-base-200"></div>
+          <div class="h-3 mt-2 rounded bg-base-200"></div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+</section>
 {% endblock %}

@@ -2,9 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ dev, main ]
   pull_request:
-    branches: [ main ]
+    branches: [ dev, main ]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend:
@@ -38,6 +42,7 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
       DJANGO_SECRET_KEY: test-secret
       ALLOWED_HOSTS: localhost,127.0.0.1
+      CSRF_TRUSTED_ORIGINS: http://localhost,http://127.0.0.1
       DEBUG: 1
       TELEGRAM_BOT_TOKEN: test-token
 
@@ -65,6 +70,21 @@ jobs:
         run: |
           ./.venv/bin/python -m pytest
 
+      - name: Production settings preflight
+        working-directory: backend
+        env:
+          DEBUG: 0
+          DJANGO_SETTINGS_MODULE: config.settings.prod
+          DJANGO_SECRET_KEY: ci_prod_secret_key_2026_x7V4mK9pQ2nR8sT5uW1yZ6AaBbCcDdEe
+          INTERNAL_TOKEN: ci-internal-token
+          ORDER_APPROVE_SECRET: ci-order-approve-secret
+          METRICS_TOKEN: ci-metrics-token
+          TELEGRAM_BOT_TOKEN: ci-telegram-token
+          ALLOWED_HOSTS: servio.test,www.servio.test
+          CSRF_TRUSTED_ORIGINS: https://servio.test,https://www.servio.test
+        run: |
+          ./.venv/bin/python manage.py check --deploy --fail-level WARNING
+
       - name: Enforce 100% coverage for views
         working-directory: backend
         run: |
@@ -80,4 +100,3 @@ jobs:
       - name: Ruff (lint)
         run: |
           backend/.venv/bin/python -m ruff check .
-

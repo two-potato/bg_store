@@ -285,7 +285,7 @@ log_step "Service status"
 $COMPOSE ps
 
 log_step "Health checks"
-run_with_timeout 60 curl -fsS --retry 5 --retry-delay 2 --retry-connrefused http://localhost/health/ >/dev/null
+run_with_timeout 60 curl -fsS --retry 5 --retry-delay 2 --retry-connrefused -H 'Host: potatofarm.ru' http://127.0.0.1/health/ >/dev/null
 log_step "OK"
 
 if [ "$DEPLOY_INCLUDE_METRICS" = "1" ]; then

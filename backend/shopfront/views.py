@@ -466,6 +466,39 @@ def _recommendation_impression_payload(source: str, products) -> str:
     )
 
 
+def _product_recommendation_section(product: Product, section: str) -> dict:
+    cache_ttl = getattr(settings, "CACHE_TTL_PDP_RECOMMENDATIONS", 180)
+    if section == "fbt":
+        product_ids = _cached_id_list(
+            f"shopfront:pdp:fbt:v1:{product.id}",
+            cache_ttl,
+            lambda: frequently_bought_together_ids(product, limit=8),
+        )
+        products = _ordered_products_with_related(product_ids, include_rating=True)
+        return {
+            "products": products,
+            "title": "Часто покупают вместе",
+            "subtitle": "Основано на заказах и co-purchase паттернах внутри маркетплейса.",
+            "recommendation_source": "product_frequently_bought_together",
+            "tracking_payload": _recommendation_impression_payload("product_frequently_bought_together", products),
+        }
+    if section == "seller-cross":
+        product_ids = _cached_id_list(
+            f"shopfront:pdp:seller_cross:v1:{product.id}",
+            cache_ttl,
+            lambda: seller_cross_sell_ids(product, limit=8),
+        )
+        products = _ordered_products_with_related(product_ids, include_rating=True)
+        return {
+            "products": products,
+            "title": "Ещё у этого поставщика",
+            "subtitle": "Смежные позиции того же продавца для upsell и cross-sell без лишнего трения.",
+            "recommendation_source": "product_seller_cross_sell",
+            "tracking_payload": _recommendation_impression_payload("product_seller_cross_sell", products),
+        }
+    raise Http404("Unknown recommendation section")
+
+
 def _checkout_step_tracking_payload(step_name: str, *, items, total: Decimal, seller_count: int) -> dict:
     return {
         "event": "checkout_step_view",
@@ -2086,32 +2119,6 @@ class ProductDetailView(TemplateView):
         )
         ctx["accessory_products"] = _ordered_products_with_related(accessory_ids[:8], include_rating=True)
         ctx["recently_viewed_products"] = _recently_viewed_products(self.request, exclude_product_id=p.id, limit=8)
-        fbt_ids = _cached_id_list(
-            f"shopfront:pdp:fbt:v1:{p.id}",
-            getattr(settings, "CACHE_TTL_PDP_RECOMMENDATIONS", 180),
-            lambda: frequently_bought_together_ids(p, limit=8),
-        )
-        ctx["frequently_bought_together_products"] = _ordered_products_with_related(
-            fbt_ids,
-            include_rating=True,
-        )
-        seller_cross_ids = _cached_id_list(
-            f"shopfront:pdp:seller_cross:v1:{p.id}",
-            getattr(settings, "CACHE_TTL_PDP_RECOMMENDATIONS", 180),
-            lambda: seller_cross_sell_ids(p, limit=8),
-        )
-        ctx["seller_cross_sell_products"] = _ordered_products_with_related(
-            seller_cross_ids,
-            include_rating=True,
-        )
-        ctx["frequently_bought_together_tracking_payload"] = _recommendation_impression_payload(
-            "product_frequently_bought_together",
-            ctx["frequently_bought_together_products"],
-        )
-        ctx["seller_cross_sell_tracking_payload"] = _recommendation_impression_payload(
-            "product_seller_cross_sell",
-            ctx["seller_cross_sell_products"],
-        )
         ctx["product_tracking_payload"] = json.dumps(
             {
                 "event": "product_view",
@@ -2148,6 +2155,16 @@ class ProductDetailView(TemplateView):
             )
         )
         return ctx
+
+
+class ProductRecommendationSectionView(View):
+    def get(self, request, *args, **kwargs):
+        product = get_object_or_404(
+            Product.objects.only("id", "seller_id", "category_id", "brand_id", "name", "slug"),
+            slug=kwargs["slug"],
+        )
+        context = _product_recommendation_section(product, kwargs["section"])
+        return render(request, "shopfront/components/recommendation_section.html", context)
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")

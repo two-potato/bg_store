@@ -70,7 +70,43 @@ def test_base_layout_uses_modular_frontend_assets(client, db):
     assert 'site-catalog-menu' in response.text
     assert 'site-header-v3__more-menu' in response.text
     assert ">Каталог</span></summary>" in response.text
-    assert "маркетплейс товаров для HoReCa" in response.text
+    assert 'href="#main-content"' in response.text
+    assert 'id="main-content"' in response.text
+
+
+def test_robots_and_sitemap_exclude_private_routes(client, db):
+    p, *_ = _prod()
+    collection = Collection.objects.create(name="SEO Collection", is_active=True)
+    store_owner = get_user_model().objects.create_user(username="seo_store_owner", password="pass")
+    le = LegalEntity.objects.create(name="SEO LE", inn="7707083899", bik="044525225", checking_account="40702810900000001009")
+    SellerStore.objects.create(owner=store_owner, legal_entity=le, name="SEO Store")
+    collection.products.add(p)
+
+    robots = client.get("/robots.txt")
+    assert robots.status_code == 200
+    assert "Disallow: /metrics" in robots.text
+    assert "Disallow: /api/docs/" in robots.text
+    assert "Disallow: /checkout/" in robots.text
+
+    sitemap = client.get("/sitemap.xml")
+    assert sitemap.status_code == 200
+    assert "/product/" in sitemap.text
+    assert "/brands/" in sitemap.text
+    assert "/collections/" in sitemap.text
+    assert "/stores/" in sitemap.text
+    assert "<lastmod>" in sitemap.text
+    assert "/cart/" not in sitemap.text
+    assert "/checkout/" not in sitemap.text
+
+
+def test_product_cards_use_static_placeholder_and_clean_alt_text(client, db):
+    p, *_ = _prod()
+    ProductImage.objects.create(product=p, url="https://example.com/demo.jpg", alt="Load Product 123456")
+
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "shopfront/product-placeholder.svg" in response.text
+    assert 'alt="PX"' in response.text
 
 
 def test_home_with_malformed_cart_entries(client, db):
@@ -1078,6 +1114,24 @@ def test_product_page_renders_review_photos_and_public_questions(client_logged, 
     assert "https://example.com/review-photo.jpg" in r.text
     assert "Photo proof" in r.text
     assert "Есть ли сертификат?" in r.text
+
+
+def test_product_page_defers_heavy_recommendation_sections(client_logged, user, db):
+    p, *_ = _prod()
+    r = client_logged.get(f"/product/{p.slug}/")
+
+    assert r.status_code == 200
+    assert f'/product/{p.slug}/recommendations/fbt/' in r.text
+    assert f'/product/{p.slug}/recommendations/seller-cross/' in r.text
+    assert "Загружаем рекомендации" in r.text
+
+
+def test_product_recommendation_section_endpoint_renders_partial(client_logged, user, db):
+    p, *_ = _prod()
+    r = client_logged.get(f"/product/{p.slug}/recommendations/fbt/", HTTP_HX_REQUEST="true")
+
+    assert r.status_code == 200
+    assert "product-reco-2026" in r.text
 
 
 def test_product_review_upsert_htmx_returns_updated_reviews_panel(client_logged, user, db):

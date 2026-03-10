@@ -1,4 +1,5 @@
 {% extends "shopfront/base.html" %}
+{% load static seo_extras %}
 {% block content %}
 {% if product_tracking_payload %}
   <script type="application/json" data-analytics-payload>{{ product_tracking_payload|safe }}</script>
@@ -24,11 +25,11 @@
             <div class="product-card-carousel__track" data-index="0" data-count="{% if slide_count %}{{ slide_count }}{% else %}1{% endif %}">
               {% for img in images %}
                 <div class="product-card-carousel__slide">
-                  <img src="{{ img.url }}" class="product-lite-2026__image" alt="{{ img.alt|default:p.name }}" data-fallback-src="/media/user_photos/image017.jpg">
+                  <img src="{{ img.url }}" class="product-lite-2026__image" alt="{{ img|product_image_alt:p.name }}" data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}">
                 </div>
               {% empty %}
                 <div class="product-card-carousel__slide">
-                  <img src="/media/user_photos/image017.jpg" class="product-lite-2026__image" alt="{{ p.name }}">
+                  <img src="{% static 'shopfront/product-placeholder.svg' %}" class="product-lite-2026__image" alt="{{ p.name }}">
                 </div>
               {% endfor %}
             </div>
@@ -341,8 +342,24 @@
   {% include "shopfront/components/product_grid.html" with products=accessory_products %}
 </section>
 {% endif %}
-{% include "shopfront/components/recommendation_section.html" with products=frequently_bought_together_products title="Часто покупают вместе" subtitle="Основано на заказах и co-purchase паттернах внутри маркетплейса." recommendation_source="product_frequently_bought_together" tracking_payload=frequently_bought_together_tracking_payload %}
-{% include "shopfront/components/recommendation_section.html" with products=seller_cross_sell_products title="Ещё у этого поставщика" subtitle="Смежные позиции того же продавца для upsell и cross-sell без лишнего трения." recommendation_source="product_seller_cross_sell" tracking_payload=seller_cross_sell_tracking_payload %}
+<section class="page-2026 product-reco-2026"
+         hx-get="/product/{{ p.slug }}/recommendations/fbt/"
+         hx-trigger="load delay:150ms"
+         hx-swap="outerHTML">
+  <header class="page-2026__header">
+    <h2>Часто покупают вместе</h2>
+    <p>Загружаем рекомендации…</p>
+  </header>
+</section>
+<section class="page-2026 product-reco-2026"
+         hx-get="/product/{{ p.slug }}/recommendations/seller-cross/"
+         hx-trigger="load delay:250ms"
+         hx-swap="outerHTML">
+  <header class="page-2026__header">
+    <h2>Ещё у этого поставщика</h2>
+    <p>Загружаем рекомендации…</p>
+  </header>
+</section>
 {% if recently_viewed_products %}
 <section class="page-2026 product-reco-2026">
   <header class="page-2026__header">

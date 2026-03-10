@@ -166,6 +166,7 @@ services:
     volumes:
       - staticfiles:/staticfiles:ro
       - ./backend/media:/media:ro
+      - ./deploy/letsencrypt:/etc/letsencrypt:ro
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health/"]
       interval: 10s

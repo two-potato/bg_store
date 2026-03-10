@@ -1,4 +1,4 @@
-{% load tz %}
+{% load tz static seo_extras %}
 <div class="account-orders-2026">
   {% for o in orders %}
     <article class="account-orders-2026__card">
@@ -24,7 +24,7 @@
                      src="{{ img.url }}"
                      alt="{{ it.name }}"
                      loading="lazy"
-                     data-fallback-src="/media/user_photos/image017.jpg">
+                     data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}">
               {% else %}
                 <span class="order-thumbs-2026__img order-thumbs-2026__fallback">•</span>
               {% endif %}

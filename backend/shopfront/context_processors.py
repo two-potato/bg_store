@@ -3,6 +3,7 @@ import logging
 from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Prefetch
+from django.templatetags.static import static
 from django.urls import resolve, Resolver404
 
 from catalog.models import Product, Category
@@ -80,7 +81,7 @@ def header_categories(request):
 def site_settings(request):
     canonical = request.build_absolute_uri(getattr(request, "path", "/"))
     default_description = "Servio — маркетплейс товаров для HoReCa: единый каталог поставщиков, оптовые закупки и понятный b2b-сервис."
-    default_image = request.build_absolute_uri("/media/user_photos/image017.jpg")
+    default_image = request.build_absolute_uri(static("shopfront/big_logo.png"))
     page_type = "page"
     try:
         match = resolve(getattr(request, "path_info", "/"))
@@ -124,6 +125,7 @@ def site_settings(request):
     return {
         "page_type": page_type,
         "ga_measurement_id": getattr(settings, "GA_MEASUREMENT_ID", ""),
+        "gtm_container_id": getattr(settings, "GTM_CONTAINER_ID", ""),
         "posthog_api_key": analytics_runtime_config["posthog_api_key"],
         "posthog_host": analytics_runtime_config["posthog_host"],
         "clarity_project_id": analytics_runtime_config["clarity_project_id"],

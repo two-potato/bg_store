@@ -1,5 +1,5 @@
 {
-  "name": "bad-guys-shop-ui",
+  "name": "servio-ui",
   "private": true,
   "devDependencies": {
     "tailwindcss": "^3.4.12",
@@ -10,4 +10,3 @@
     "tw:watch": "tailwindcss -i ./assets/tw.css -o ./backend/static/css/app.css --watch"
   }
 }
-

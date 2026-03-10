@@ -1,5 +1,5 @@
 {% extends "account/layout.html" %}
-{% load tz %}
+{% load tz static seo_extras %}
 {% block account_main %}
 <section id="account-main-content" class="account-2026__main">
   <div class="account-2026__hero compact">
@@ -53,7 +53,7 @@
                   <div class="flex items-center gap-2">
                     {% with img=item.product.prefetched_images.0 %}
                       {% if img %}
-                        <img src="{{ img.url }}" alt="{{ img.alt|default:item.name }}" class="w-12 h-12 object-cover rounded-lg border border-[var(--b2b-border)]" data-fallback-src="/media/user_photos/image017.jpg">
+                        <img src="{{ img.url }}" alt="{{ img|product_image_alt:item.name }}" class="w-12 h-12 object-cover rounded-lg border border-[var(--b2b-border)]" data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}">
                       {% else %}
                         <div class="w-12 h-12 rounded-lg border border-[var(--b2b-border)] bg-[#EEF2FF] grid place-items-center text-base-content/50">
                           {% include "shopfront/icons/photo.svg" %}

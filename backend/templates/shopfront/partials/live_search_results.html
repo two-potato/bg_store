@@ -1,3 +1,4 @@
+{% load static seo_extras %}
 {% if show %}
   <div class="live-search-panel live-search-panel--neo" role="listbox" aria-label="Результаты поиска">
     <div class="live-search-head live-search-head--v3">
@@ -45,9 +46,9 @@
               <span class="live-search-thumb live-search-thumb--sm">
                 {% with img=p.prefetched_images.0 %}
                   {% if img %}
-                    <img src="{{ img.url }}" alt="{{ img.alt|default:p.name }}" loading="lazy" data-fallback-src="/media/user_photos/image017.jpg">
+                    <img src="{{ img.url }}" alt="{{ img|product_image_alt:p.name }}" loading="lazy" data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}">
                   {% else %}
-                    <img src="/media/user_photos/image017.jpg" alt="{{ p.name }}" loading="lazy">
+                    <img src="{% static 'shopfront/product-placeholder.svg' %}" alt="{{ p.name }}" loading="lazy">
                   {% endif %}
                 {% endwith %}
               </span>

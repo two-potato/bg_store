@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from random import Random
+import re
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -31,6 +32,41 @@ ROOT_CATEGORIES = [
     "Кофе и чай",
     "Кондитерское направление",
 ]
+
+EXTRA_ROOT_CATEGORIES = [
+    "Барные сиропы и топпинги",
+    "Пюре и фруктовые основы",
+    "Альтернативное молоко и сливки",
+    "Одноразовая посуда",
+    "Стаканы, крышки и трубочки",
+    "Контейнеры для доставки",
+    "Профессиональные ножи",
+    "Разделочные доски",
+    "Поварской инвентарь",
+    "Кофейное зерно",
+    "Чай и травяные сборы",
+    "Барный лёд и аксессуары",
+    "Десертная подача",
+    "Банкетная подача",
+    "Шведская линия и buffet",
+    "Текстиль для зала",
+    "Униформа персонала",
+    "Гигиена и расходники",
+    "Уборка и клининг",
+    "Организация хранения",
+    "Room service и amenity",
+    "Лобби и гостевой сервис",
+    "Кондитерский инвентарь",
+    "Выпечка и формы",
+    "Кофейная подача",
+    "Чайная подача",
+    "GN-ёмкости и крышки",
+    "Барный инвентарь",
+    "Сервировка стола",
+    "Takeaway и упаковка",
+]
+
+ALL_ROOT_CATEGORIES = ROOT_CATEGORIES + EXTRA_ROOT_CATEGORIES
 
 SUBCATEGORY_POOLS = {
     "Сервировочная посуда": ["Тарелки", "Блюда", "Салатники", "Чаши", "Соусники", "Подстановки"],
@@ -206,6 +242,39 @@ PROFILE_MAP = {
     },
 }
 
+CATEGORY_ALIASES = {
+    "Барные сиропы и топпинги": "Кофе и чай",
+    "Пюре и фруктовые основы": "Кофе и чай",
+    "Альтернативное молоко и сливки": "Кофе и чай",
+    "Одноразовая посуда": "Упаковка и takeaway",
+    "Стаканы, крышки и трубочки": "Упаковка и takeaway",
+    "Контейнеры для доставки": "Упаковка и takeaway",
+    "Профессиональные ножи": "Инвентарь кухни",
+    "Разделочные доски": "Инвентарь кухни",
+    "Поварской инвентарь": "Инвентарь кухни",
+    "Кофейное зерно": "Кофе и чай",
+    "Чай и травяные сборы": "Кофе и чай",
+    "Барный лёд и аксессуары": "Стекло и бар",
+    "Десертная подача": "Подача и буфет",
+    "Банкетная подача": "Подача и буфет",
+    "Шведская линия и buffet": "Подача и буфет",
+    "Текстиль для зала": "Текстиль и униформа",
+    "Униформа персонала": "Текстиль и униформа",
+    "Гигиена и расходники": "Расходные материалы",
+    "Уборка и клининг": "Расходные материалы",
+    "Организация хранения": "Гастроёмкости и хранение",
+    "Room service и amenity": "Товары для отелей",
+    "Лобби и гостевой сервис": "Товары для отелей",
+    "Кондитерский инвентарь": "Кондитерское направление",
+    "Выпечка и формы": "Кондитерское направление",
+    "Кофейная подача": "Кофе и чай",
+    "Чайная подача": "Кофе и чай",
+    "GN-ёмкости и крышки": "Гастроёмкости и хранение",
+    "Барный инвентарь": "Стекло и бар",
+    "Сервировка стола": "Сервировочная посуда",
+    "Takeaway и упаковка": "Упаковка и takeaway",
+}
+
 USAGE_TAGS = {
     "Сервировочная посуда": "Для сервировки",
     "Профессиональная кухня": "Для кухни",
@@ -269,7 +338,7 @@ class Command(BaseCommand):
     def _refresh_categories(self):
         top_categories = list(Category.objects.filter(parent__isnull=True).order_by("id"))
         for idx, category in enumerate(top_categories):
-            name = ROOT_CATEGORIES[idx] if idx < len(ROOT_CATEGORIES) else f"HoReCa направление {idx + 1}"
+            name = self._root_category_name(idx)
             category.name = name
             category.description = f"{name} для ресторанов, кафе, баров, гостиниц и профессиональных кухонь."
             category.meta_title = f"{name} — каталог Servio"
@@ -279,7 +348,7 @@ class Command(BaseCommand):
             category.save()
 
             subcategories = list(Category.objects.filter(parent=category).order_by("id"))
-            pool = SUBCATEGORY_POOLS.get(name, [f"{name} — решения"])
+            pool = SUBCATEGORY_POOLS.get(self._canonical_root(name), [f"{name} — решения"])
             for child_idx, child in enumerate(subcategories):
                 base = pool[child_idx % len(pool)]
                 suffix = child_idx // len(pool) + 1
@@ -348,8 +417,9 @@ class Command(BaseCommand):
         )
         used_names = set()
         for idx, product in enumerate(products):
-            root_name = product.category.parent.name if product.category and product.category.parent else (product.category.name if product.category else ROOT_CATEGORIES[idx % len(ROOT_CATEGORIES)])
-            profile = self._profile_for(root_name, idx)
+            root_name = product.category.parent.name if product.category and product.category.parent else (product.category.name if product.category else self._root_category_name(idx))
+            canonical_root = self._canonical_root(root_name)
+            profile = self._profile_for(canonical_root, idx)
             base_name = f"{profile.type_name} {profile.series_name} {profile.size_label}".strip()
             if base_name in used_names:
                 base_name = f"{profile.type_name} {profile.series_name} {profile.material.title()}"
@@ -357,7 +427,7 @@ class Command(BaseCommand):
 
             product.name = base_name
             product.material = profile.material
-            product.purpose = f"Для направления «{root_name.lower()}»"
+            product.purpose = f"Для направления «{canonical_root.lower()}»"
             product.description = (
                 f"{base_name} — позиция для профессионального каталога Servio. "
                 f"Подходит для заведений HoReCa, которым важны понятная спецификация, аккуратная подача и стабильный формат поставки.\n\n"
@@ -368,17 +438,17 @@ class Command(BaseCommand):
             product.meta_description = f"{base_name} в каталоге Servio: товары для HoReCa с понятной подачей, характеристиками и b2b-логикой закупки."
             product.meta_keywords = f"servio,{slugify(profile.type_name).replace('-', ',')},{slugify(profile.series_name).replace('-', ',')}"
             product.attributes = {
-                "Назначение": root_name,
+                "Назначение": canonical_root,
                 "Линия": profile.series_name,
                 "Материал": profile.material.title(),
                 "Формат поставки": f"{max(product.pack_qty, 1)} {product.unit}",
             }
             product.composition = ""
-            if root_name not in {"Кофе и чай"}:
+            if canonical_root not in {"Кофе и чай"}:
                 product.flavor = ""
             product.slug = ""
             product.save()
-            self._sync_product_tags(product, root_name, profile)
+            self._sync_product_tags(product, root_name, canonical_root, profile)
             self._sync_product_image(product, profile.visual, idx)
             if idx and idx % 250 == 0:
                 self.stdout.write(f"servio_refresh_catalog: processed {idx}/{len(products)} products")
@@ -387,18 +457,25 @@ class Command(BaseCommand):
         Tag.objects.all().delete()
         self._tag_cache.clear()
 
-    def _sync_product_tags(self, product: Product, root_name: str, profile: ProductProfile):
-        tag_names: list[str] = [root_name]
+    def _sync_product_tags(self, product: Product, root_name: str, canonical_root: str, profile: ProductProfile):
+        tag_names: list[str] = []
+
+        if self._tag_allowed(root_name):
+            tag_names.append(root_name)
+        if canonical_root != root_name and self._tag_allowed(canonical_root):
+            tag_names.append(canonical_root)
 
         if product.category_id:
             if product.category.parent_id:
-                tag_names.append(product.category.name)
-            elif product.category.name != root_name:
+                if self._tag_allowed(product.category.name):
+                    tag_names.append(product.category.name)
+            elif product.category.name != root_name and self._tag_allowed(product.category.name):
                 tag_names.append(product.category.name)
 
         tag_names.append(profile.type_name)
         tag_names.append(profile.material.title())
-        tag_names.append(USAGE_TAGS.get(root_name, "Для HoReCa"))
+        tag_names.append(profile.series_name)
+        tag_names.append(USAGE_TAGS.get(canonical_root, "Для HoReCa"))
 
         if product.volume_ml:
             tag_names.append(f"{int(product.volume_ml)} мл")
@@ -445,6 +522,24 @@ class Command(BaseCommand):
             tag.save(update_fields=["slug"])
         self._tag_cache[name] = tag
         return tag
+
+    def _root_category_name(self, idx: int) -> str:
+        base = ALL_ROOT_CATEGORIES[idx % len(ALL_ROOT_CATEGORIES)]
+        cycle = idx // len(ALL_ROOT_CATEGORIES)
+        return base if cycle == 0 else f"{base} {cycle + 1}"
+
+    def _canonical_root(self, name: str) -> str:
+        return CATEGORY_ALIASES.get(name, name)
+
+    def _tag_allowed(self, name: str) -> bool:
+        normalized = (name or "").strip()
+        if not normalized:
+            return False
+        if re.match(r"^HoReCa направление \d+$", normalized):
+            return False
+        if re.match(r"^category-\d+$", normalized, flags=re.IGNORECASE):
+            return False
+        return True
 
     def _profile_for(self, root_name: str, idx: int) -> ProductProfile:
         source = PROFILE_MAP.get(root_name) or PROFILE_MAP["Сервировочная посуда"]

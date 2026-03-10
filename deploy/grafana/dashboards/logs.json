@@ -43,7 +43,7 @@
   },
   "timezone": "browser",
   "title": "Logs Drilldown",
-  "uid": "bg-logs",
+  "uid": "servio-logs",
   "version": 3,
   "panels": [
     {

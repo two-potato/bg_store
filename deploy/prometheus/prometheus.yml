@@ -58,7 +58,8 @@ scrape_configs:
       module: [http_2xx]
     static_configs:
       - targets:
-          - http://nginx/health/
+          - https://potatofarm.ru/health/
+          - https://grafana.potatofarm.ru/api/health
           - http://backend:8000/health/
           - http://bot:8080/health
     relabel_configs:

@@ -32,7 +32,7 @@ services:
   nginx-exporter:
     image: mirror.gcr.io/nginx/nginx-prometheus-exporter:0.11.0
     container_name: servio-nginx-exporter
-    command: ["-nginx.scrape-uri", "http://nginx/nginx_status"]
+    command: ["-nginx.scrape-uri", "http://servio-nginx/nginx_status"]
     depends_on:
       nginx:
         condition: service_healthy

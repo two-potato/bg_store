@@ -1,5 +1,5 @@
 {% extends "shopfront/base.html" %}
-{% load static %}
+{% load static seo_extras %}
 {% block content %}
 <div id="page" class="twa-market max-w-screen-sm mx-auto">
   <section class="twa-market__hero">
@@ -34,9 +34,9 @@
           <figure class="twa-product-card__media">
             {% with first_image=p.prefetched_images.0 %}
               {% if first_image %}
-                <img src="{{ first_image.url }}" alt="{{ first_image.alt|default:p.name }}" loading="lazy" data-fallback-src="/media/user_photos/image017.jpg">
+                <img src="{{ first_image.url }}" alt="{{ first_image|product_image_alt:p.name }}" loading="lazy" data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}">
               {% else %}
-                <img src="/media/user_photos/image017.jpg" alt="{{ p.name }}" loading="lazy">
+                <img src="{% static 'shopfront/product-placeholder.svg' %}" alt="{{ p.name }}" loading="lazy">
               {% endif %}
             {% endwith %}
             <span class="twa-product-card__badge">Хит</span>

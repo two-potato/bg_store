@@ -1,4 +1,4 @@
-# Bad Guys Shop — Full Monorepo
+# Servio — Full Monorepo
 
 **Everything merged**: base + patches (auth via Telegram WebApp, legal entities workflow, orders w/ FSM, Celery tasks, bot notifier,
 PDF invoices, catalog, admin panel, and mobile-first frontend on HTMX + Bootstrap 5). Uses **uv** for Python.

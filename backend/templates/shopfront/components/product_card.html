@@ -1,3 +1,4 @@
+{% load static seo_extras %}
 {% comment %}
 Reusable product card component
 Usage:
@@ -23,11 +24,11 @@ Usage:
           <div class="product-card-carousel__track" id="pc-track-{{ p.id }}" data-index="0" data-count="{{ slide_count }}">
             {% for img in images %}
               <div class="product-card-carousel__slide">
-                <img src="{{ img.url }}" alt="{{ img.alt|default:p.name }}" loading="lazy" data-fallback-src="/media/user_photos/image017.jpg"/>
+                <img src="{{ img.url }}" alt="{{ img|product_image_alt:p.name }}" loading="lazy" data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}"/>
               </div>
             {% empty %}
               <div class="product-card-carousel__slide">
-                <img src="/media/user_photos/image017.jpg" alt="{{ p.name }}" loading="lazy"/>
+                <img src="{% static 'shopfront/product-placeholder.svg' %}" alt="{{ p.name }}" loading="lazy"/>
               </div>
             {% endfor %}
           </div>
@@ -92,7 +93,7 @@ Usage:
     {% endwith %}
   {% endwith %}
 
-  <div class="card-body p-3 product-card__body-grid">
+  <div class="card-body product-card__body-grid">
     <div class="product-card__meta-top">
       {% if p.brand %}
         <a class="product-card__brand truncate" href="/brands/{{ p.brand.slug }}/" hx-boost="false" title="{{ p.brand.name }}">{{ p.brand.name }}</a>
@@ -116,7 +117,7 @@ Usage:
        {% endif %}>
       <div class="font-semibold product-card__title" title="{{ p.name }}">{{ p.name }}</div>
     </a>
-    <div class="flex flex-wrap gap-2 text-xs">
+    <div class="product-card__traits flex flex-wrap gap-2 text-xs">
       {% if p.series_id %}
         <a class="btn btn-xs btn-outline" href="/catalog/?series={{ p.series_id }}" hx-boost="false">{{ p.series.name }}</a>
       {% endif %}
@@ -152,7 +153,7 @@ Usage:
     </div>
   </div>
 
-  <div class="card-footer product-card__footer px-3 pb-3 mt-auto">
+  <div class="card-footer product-card__footer mt-auto">
     <div class="product-card__price">{{ p.display_price }} <span class="product-card__currency">₽</span></div>
     <div class="product-card__footer-actions">
       <form method="post" action="/buy-now/" class="product-card__buy-now-form">

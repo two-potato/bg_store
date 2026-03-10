@@ -7,6 +7,6 @@ debug = os.getenv("DEBUG", "0") == "1"
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.dev" if debug else "config.settings.prod")
 init_sentry(service_name="django-celery", enable_django=True, enable_celery=True)
 
-app = Celery("bad_guys")
+app = Celery("servio")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()

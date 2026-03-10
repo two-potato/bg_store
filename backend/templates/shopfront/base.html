@@ -4,6 +4,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#2f6efc">
     <title>{{ seo_title }}</title>
     <meta name="description" content="{{ seo_description }}">
     <meta name="robots" content="{{ seo_robots }}">
@@ -21,13 +22,15 @@
     <meta name="twitter:title" content="{{ seo_title }}">
     <meta name="twitter:description" content="{{ seo_description }}">
     <meta name="twitter:image" content="{{ seo_og_image }}">
+    {% if gtm_container_id %}
     <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
     j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-    })(window,document,'script','dataLayer','GTM-N36D6TRQ');</script>
+    })(window,document,'script','dataLayer','{{ gtm_container_id }}');</script>
     <!-- End Google Tag Manager -->
+    {% endif %}
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'shopfront/favicon-32x32.png' %}">
     <link rel="icon" type="image/png" sizes="16x16" href="{% static 'shopfront/favicon-16x16.png' %}">
     <link rel="shortcut icon" href="{% static 'shopfront/favicon.ico' %}">
@@ -97,13 +100,16 @@
     {% block extra_scripts_head %}{% endblock %}
   </head>
   <body id="twa-root" class="bg-base-100 text-base-content app-theme" data-page-type="{{ page_type }}" hx-boost="true" hx-target="main" hx-select="main" hx-swap="outerHTML" hx-indicator="#htmx-indicator">
+    {% if gtm_container_id %}
     <!-- Google Tag Manager (noscript) -->
-    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-N36D6TRQ"
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id={{ gtm_container_id }}"
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <!-- End Google Tag Manager (noscript) -->
+    {% endif %}
+    <a class="skip-to-content" href="#main-content">Перейти к содержимому</a>
     {% include 'shopfront/components/navbar.html' %}
 
-    <main class="container mx-auto px-3 my-3 app-main">
+    <main id="main-content" class="container mx-auto px-3 my-3 app-main" tabindex="-1">
       {% if messages %}
         <section class="mb-4 grid gap-2" aria-label="Системные сообщения">
           {% for message in messages %}

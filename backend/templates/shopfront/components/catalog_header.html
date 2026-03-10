@@ -10,46 +10,78 @@
       {% endfor %}
     </nav>
   {% endif %}
-  <div class="catalog-head-neo__top catalog-head-neo__top--compact">
+  <div class="catalog-head-neo__hero catalog-head-neo__top--compact">
     <div class="catalog-head-neo__main">
-      <div class="catalog-head-neo__eyebrow">Каталог</div>
+      <div class="catalog-head-neo__eyebrow">Каталог HoReCa</div>
       <div class="catalog-head-neo__headline-row">
-        <h1 class="catalog-head-neo__title m-0">
-          {% if sel_category %}{{ sel_category.name }}{% elif q %}Результаты поиска{% else %}Каталог{% endif %}
-        </h1>
-        <span class="catalog-head-neo__count">Найдено: {{ total_count }}</span>
+        <div class="catalog-head-neo__headline-copy">
+          <h1 class="catalog-head-neo__title m-0">
+            {% if sel_category %}{{ sel_category.name }}{% elif q %}Результаты поиска{% else %}Каталог{% endif %}
+          </h1>
+          <p class="catalog-head-neo__subtitle">
+            {% if q %}
+              Подборка товаров по запросу “{{ q }}” с быстрыми фильтрами, сортировкой и поставщиками.
+            {% elif sel_category %}
+              Сортируйте, фильтруйте и сравнивайте предложения по этой категории без лишнего шума.
+            {% else %}
+              Современный каталог для быстрого отбора, сравнения и закупки товаров.
+            {% endif %}
+          </p>
+        </div>
+        <div class="catalog-head-neo__count-stack">
+          <span class="catalog-head-neo__count">Найдено: {{ total_count }}</span>
+          <span class="catalog-head-neo__count-caption">Актуальная выдача каталога</span>
+        </div>
       </div>
-      <p class="catalog-head-neo__subtitle">
-        {% if q %}
-          Подборка товаров по запросу “{{ q }}” с быстрыми фильтрами, сортировкой и поставщиками.
-        {% elif sel_category %}
-          Сортируйте, фильтруйте и сравнивайте предложения по этой категории без лишнего шума.
-        {% else %}
-          Современный каталог для быстрого отбора, сравнения и закупки товаров.
+      <div class="catalog-head-neo__stats">
+        <div class="catalog-head-neo__stat">
+          <span class="catalog-head-neo__stat-label">Бренды</span>
+          <strong class="catalog-head-neo__stat-value">{{ brands|length }}</strong>
+        </div>
+        <div class="catalog-head-neo__stat">
+          <span class="catalog-head-neo__stat-label">Поставщики</span>
+          <strong class="catalog-head-neo__stat-value">{{ facet_seller_options|length }}</strong>
+        </div>
+        <div class="catalog-head-neo__stat">
+          <span class="catalog-head-neo__stat-label">Теги</span>
+          <strong class="catalog-head-neo__stat-value">{{ tags|length }}</strong>
+        </div>
+        {% if sel_category %}
+          <div class="catalog-head-neo__stat">
+            <span class="catalog-head-neo__stat-label">Категория</span>
+            <strong class="catalog-head-neo__stat-value">{{ sel_category.name }}</strong>
+          </div>
         {% endif %}
-      </p>
+      </div>
     </div>
-    <div class="catalog-head-neo__top-actions">
-      {% if request.user.is_authenticated and querystring_base %}
-        <form method="post" action="/saved-searches/" class="catalog-save-search">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="save">
-          <input type="hidden" name="querystring" value="{{ querystring_base }}">
-          <input type="hidden" name="name" value="Поиск: {% if q %}{{ q }}{% else %}каталог{% endif %}">
-          <button class="btn btn-sm btn-outline catalog-head-neo__utility-btn" type="submit">Сохранить поиск</button>
-        </form>
-      {% endif %}
-      {% if request.user.is_authenticated and sel_category %}
-        <button class="btn btn-sm btn-outline catalog-head-neo__utility-btn{% if is_category_subscribed %} is-active{% endif %}"
-                type="button"
-                data-subscription-toggle
-                data-entity="category"
-                data-entity-id="{{ sel_category.id }}"
-                data-active="{% if is_category_subscribed %}1{% else %}0{% endif %}">
-          {% if is_category_subscribed %}Подписка включена{% else %}Подписаться{% endif %}
-        </button>
-      {% endif %}
-    </div>
+    <aside class="catalog-head-neo__aside">
+      <div class="catalog-head-neo__aside-card">
+        <div class="catalog-head-neo__aside-title">Быстрые действия</div>
+        <div class="catalog-head-neo__top-actions">
+          {% if request.user.is_authenticated and querystring_base %}
+            <form method="post" action="/saved-searches/" class="catalog-save-search">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="save">
+              <input type="hidden" name="querystring" value="{{ querystring_base }}">
+              <input type="hidden" name="name" value="Поиск: {% if q %}{{ q }}{% else %}каталог{% endif %}">
+              <button class="btn btn-sm btn-outline catalog-head-neo__utility-btn" type="submit">Сохранить поиск</button>
+            </form>
+          {% endif %}
+          {% if request.user.is_authenticated and sel_category %}
+            <button class="btn btn-sm btn-outline catalog-head-neo__utility-btn{% if is_category_subscribed %} is-active{% endif %}"
+                    type="button"
+                    data-subscription-toggle
+                    data-entity="category"
+                    data-entity-id="{{ sel_category.id }}"
+                    data-active="{% if is_category_subscribed %}1{% else %}0{% endif %}">
+              {% if is_category_subscribed %}Подписка включена{% else %}Подписаться{% endif %}
+            </button>
+          {% endif %}
+          <a class="btn btn-sm btn-outline catalog-head-neo__utility-btn" href="/brands/">Бренды</a>
+          <a class="btn btn-sm btn-outline catalog-head-neo__utility-btn" href="/collections/">Коллекции</a>
+        </div>
+      </div>
+    </aside>
   </div>
   <div class="catalog-head-neo__controls">
     {% include 'shopfront/components/catalog_toolbar.html' %}

@@ -163,7 +163,7 @@ services:
       - staticfiles:/staticfiles:ro
       - ./backend/media:/media:ro
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health/"]
+      test: ["CMD", "wget", "--header=Host: potatofarm.ru", "-qO-", "http://127.0.0.1/health/"]
       interval: 10s
       timeout: 5s
       start_period: 20s

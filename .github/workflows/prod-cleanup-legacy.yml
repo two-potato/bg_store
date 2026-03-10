@@ -1,0 +1,66 @@
+name: Cleanup Legacy Production Containers
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    name: Cleanup legacy bg containers
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Setup SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          SSH_PORT: ${{ secrets.PROD_SSH_PORT }}
+        run: |
+          set -eu
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$SSH_HOST"
+          : "${SSH_PORT:=22}"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          for attempt in 1 2 3; do
+            if ssh-keyscan -T 10 -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "SSH keyscan did not return a host key, continuing with StrictHostKeyChecking=accept-new"
+            else
+              sleep 3
+            fi
+          done
+
+      - name: Remove legacy containers and networks
+        env:
+          SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          SSH_PORT: ${{ secrets.PROD_SSH_PORT }}
+          SSH_USER: ${{ secrets.PROD_SSH_USER }}
+        run: |
+          set -eu
+          : "${SSH_PORT:=22}"
+          : "${SSH_USER:=root}"
+          timeout --foreground 300 ssh \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
+            -o TCPKeepAlive=yes \
+            -o StrictHostKeyChecking=accept-new \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            'bash -s' <<'EOSSH'
+          set -euo pipefail
+          echo '=== BEFORE ==='
+          docker ps -a --format 'table {{.Names}}	{{.Status}}' | (grep -E '^(NAMES|bg-|bad-guys-shop-)' || true)
+          legacy_ids=$(docker ps -aq --filter name='^bg-' --filter name='^bad-guys-shop-' || true)
+          if [ -n "$legacy_ids" ]; then
+            docker rm -f $legacy_ids || true
+          fi
+          docker network rm bad-guys-shop_default 2>/dev/null || true
+          echo '=== AFTER ==='
+          docker ps -a --format 'table {{.Names}}	{{.Status}}' | (grep -E '^(NAMES|bg-|bad-guys-shop-)' || true)
+          EOSSH

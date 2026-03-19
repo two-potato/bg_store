@@ -16,5 +16,12 @@
       <div class="alert">У вас пока нет заказов.</div>
     {% endif %}
   </section>
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Повторить прошлую закупку</h2>
+      <span class="account-2026__panel-note">Самые устойчивые reorder-кандидаты по истории заказов</span>
+    </div>
+    {% include "shopfront/components/recommendation_section.html" with products=order_reorder_products title="Повторить прошлую закупку" subtitle="Блок для быстрого возврата к ходовым позициям без ручного поиска." recommendation_source="orders_reorder" %}
+  </section>
 </section>
 {% endblock %}

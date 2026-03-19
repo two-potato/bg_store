@@ -11,7 +11,7 @@ from commerce.models import (
     MembershipRole,
     RequestStatus,
 )
-from commerce.signals import ensure_entity_and_membership_on_approval
+from commerce.tasks import ensure_entity_and_membership_on_approval_task
 from core.middleware import RequestContextMiddleware
 from orders.models import Order, OrderItem
 from users.models import UserProfile
@@ -113,12 +113,7 @@ def test_signal_creates_entity_and_membership_when_approved(user):
         status=approved,
     )
 
-    # Explicit call is idempotent and covers the creation branch in receiver.
-    ensure_entity_and_membership_on_approval(
-        sender=LegalEntityCreationRequest,
-        instance=req,
-        created=False,
-    )
+    ensure_entity_and_membership_on_approval_task.run(req.id)
 
     le = LegalEntity.objects.get(inn="7736207543")
     membership = LegalEntityMembership.objects.get(user=user, legal_entity=le)

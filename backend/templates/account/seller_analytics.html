@@ -1,0 +1,34 @@
+{% extends "account/layout.html" %}
+{% block account_main %}
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero compact">
+    <div class="account-2026__hero-title">Seller analytics</div>
+    <div class="account-2026__hero-sub">GMV, средний чек и SKU performance.</div>
+  </div>
+  <section class="account-2026__panel">
+    <form method="get" class="grid md:grid-cols-[1fr_1fr_auto] gap-3 items-end mb-4">
+      <input type="date" class="input input-bordered w-full" name="date_from" value="{{ date_from }}">
+      <input type="date" class="input input-bordered w-full" name="date_to" value="{{ date_to }}">
+      <button class="btn btn-outline" type="submit">Фильтр</button>
+    </form>
+    <div class="account-2026__metrics">
+      <article class="account-2026__metric"><div class="account-2026__metric-label">Orders</div><div class="account-2026__metric-value">{{ summary.orders_count }}</div></article>
+      <article class="account-2026__metric"><div class="account-2026__metric-label">GMV</div><div class="account-2026__metric-value">{{ summary.gmv }} ₽</div></article>
+      <article class="account-2026__metric"><div class="account-2026__metric-label">Delivered</div><div class="account-2026__metric-value">{{ summary.delivered_count }}</div></article>
+      <article class="account-2026__metric"><div class="account-2026__metric-label">Средний чек</div><div class="account-2026__metric-value">{{ summary.avg_ticket|floatformat:2 }} ₽</div></article>
+    </div>
+    <div class="overflow-x-auto mt-4">
+      <table class="table table-sm account-2026__table">
+        <thead><tr><th>SKU</th><th>Товар</th><th>Qty</th><th>Revenue</th></tr></thead>
+        <tbody>
+          {% for row in top_skus %}
+            <tr><td>{{ row.items__product__sku }}</td><td>{{ row.items__name }}</td><td>{{ row.qty }}</td><td>{{ row.revenue }}</td></tr>
+          {% empty %}
+            <tr><td colspan="4">Нет данных за выбранный период.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</section>
+{% endblock %}

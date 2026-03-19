@@ -1,0 +1,89 @@
+{% extends "account/layout.html" %}
+{% block account_main %}
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero compact">
+    <div class="account-2026__hero-title">Seller orders</div>
+    <div class="account-2026__hero-sub">Операционная очередь заказов продавца с быстрым переходом в shipment и tracking.</div>
+  </div>
+
+  <section class="account-2026__panel">
+    <form method="get" class="grid md:grid-cols-4 gap-3">
+      <div>
+        <label class="label" for="seller-order-q"><span class="label-text">Поиск</span></label>
+        <input id="seller-order-q" type="text" name="q" class="input input-bordered w-full" value="{{ search_query }}" placeholder="ID, магазин, комментарий">
+      </div>
+      <div>
+        <label class="label" for="seller-order-sku"><span class="label-text">SKU</span></label>
+        <input id="seller-order-sku" type="text" name="sku" class="input input-bordered w-full" value="{{ sku_filter }}" placeholder="SKU товара">
+      </div>
+      <div>
+        <label class="label" for="seller-order-customer"><span class="label-text">Клиент</span></label>
+        <input id="seller-order-customer" type="text" name="customer" class="input input-bordered w-full" value="{{ customer_filter }}" placeholder="username, email, имя">
+      </div>
+      <div>
+        <label class="label" for="seller-order-status"><span class="label-text">Статус</span></label>
+        <select id="seller-order-status" name="status" class="select select-bordered w-full">
+          <option value="">Все статусы</option>
+          <option value="new" {% if selected_status == "new" %}selected{% endif %}>New</option>
+          <option value="accepted" {% if selected_status == "accepted" %}selected{% endif %}>Accepted</option>
+          <option value="picking" {% if selected_status == "picking" %}selected{% endif %}>Picking</option>
+          <option value="shipped" {% if selected_status == "shipped" %}selected{% endif %}>Shipped</option>
+          <option value="delivered" {% if selected_status == "delivered" %}selected{% endif %}>Delivered</option>
+          <option value="canceled" {% if selected_status == "canceled" %}selected{% endif %}>Canceled</option>
+        </select>
+      </div>
+      <div>
+        <label class="label" for="seller-order-date-from"><span class="label-text">Дата от</span></label>
+        <input id="seller-order-date-from" type="date" name="date_from" class="input input-bordered w-full" value="{{ date_from }}">
+      </div>
+      <div>
+        <label class="label" for="seller-order-date-to"><span class="label-text">Дата до</span></label>
+        <input id="seller-order-date-to" type="date" name="date_to" class="input input-bordered w-full" value="{{ date_to }}">
+      </div>
+      <div>
+        <label class="label" for="seller-order-dispute"><span class="label-text">Disputes</span></label>
+        <select id="seller-order-dispute" name="dispute" class="select select-bordered w-full">
+          <option value="">Все</option>
+          <option value="open" {% if dispute_status == "open" %}selected{% endif %}>Только открытые споры</option>
+        </select>
+      </div>
+      <div class="flex items-end gap-2">
+        <button class="btn btn-primary" type="submit">Применить</button>
+        <a class="btn btn-outline" href="/account/seller/orders/" hx-boost="false">Сбросить</a>
+      </div>
+    </form>
+  </section>
+
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Список seller orders</h2>
+      <a class="account-2026__panel-link" href="/account/seller/" hx-boost="false">К seller dashboard</a>
+    </div>
+    {% if seller_orders %}
+      <div class="account-grid-cards">
+        {% for seller_order in seller_orders %}
+          <article class="account-entity-card">
+            <div class="account-entity-card__head">
+              <div>
+                <div class="account-entity-card__title">Seller order #{{ seller_order.id }}</div>
+                <div class="account-entity-card__meta">Buyer order #{{ seller_order.order_id }} · {{ seller_order.updated_at|date:"d.m.Y H:i" }}</div>
+              </div>
+              <div class="account-entity-card__tag">{{ seller_order.get_status_display }}</div>
+            </div>
+            <div class="account-entity-card__body">
+              <div>Магазин: {{ seller_order.seller_store_name|default:request.user.username }}</div>
+              <div>Итого: {{ seller_order.total }} ₽</div>
+              <div>Отгрузок: {{ seller_order.shipments.all|length }}</div>
+            </div>
+            <div class="account-entity-card__actions">
+              <a class="account-2026__panel-link" href="/account/seller/orders/{{ seller_order.id }}/" hx-boost="false">Открыть</a>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="alert">Seller orders по текущим фильтрам не найдены.</div>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

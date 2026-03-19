@@ -1,10 +1,10 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import permissions
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from django.contrib.auth import get_user_model
-from .models import UserProfile
-from .serializers import (
+from ..models import UserProfile
+from ..serializers import (
     MeSerializer,
     TelegramWebAppAuthRequestSerializer,
     TelegramWebAppAuthResponseSerializer,
@@ -15,6 +15,8 @@ import urllib.parse
 import hmac
 import hashlib
 import time
+from json import JSONDecodeError
+from importlib import import_module
 from django.conf import settings
 from rest_framework_simplejwt.tokens import AccessToken
 from core.logging_utils import log_calls
@@ -51,11 +53,32 @@ def verify_init_data(init_data: str) -> dict | None:
             return None
         user_json = parsed.get("user", [None])[0]
         return json.loads(user_json) if user_json else {}
-    except Exception:
+    except (TypeError, ValueError, JSONDecodeError):
         log.exception("tg_init_data_verify_error")
         return None
 
-@extend_schema(responses=MeSerializer)
+@extend_schema(
+    tags=["Users"],
+    summary="Get current user profile",
+    description="Возвращает краткий профиль текущего авторизованного пользователя.",
+    responses={
+        200: MeSerializer,
+        401: OpenApiResponse(response=UserDetailSerializer, description="Пользователь не аутентифицирован"),
+    },
+    examples=[
+        OpenApiExample(
+            "Current user",
+            value={
+                "username": "buyer_01",
+                "telegram_id": 123456789,
+                "discount": "7.50",
+                "role": "manager",
+                "seller_store": None,
+            },
+            response_only=True,
+        )
+    ],
+)
 @api_view(["GET"])
 @log_calls()
 def me(request):
@@ -70,22 +93,45 @@ def me(request):
     })
 
 @extend_schema(
+    tags=["Users"],
+    summary="Authenticate Telegram WebApp user",
+    description=(
+        "Принимает `initData` из Telegram WebApp, валидирует подпись Telegram и возвращает "
+        "JWT access token для дальнейшей работы с API."
+    ),
     request=TelegramWebAppAuthRequestSerializer,
-    responses={200: TelegramWebAppAuthResponseSerializer, 403: UserDetailSerializer},
+    responses={
+        200: TelegramWebAppAuthResponseSerializer,
+        400: OpenApiResponse(response=UserDetailSerializer, description="Некорректное тело запроса"),
+        403: OpenApiResponse(response=UserDetailSerializer, description="Некорректный или просроченный Telegram initData"),
+    },
+    examples=[
+        OpenApiExample(
+            "Auth request",
+            value={"initData": "query_id=AAHdF6IQAAAAAN0XohDhrOrc&user=%7B...%7D&auth_date=1710000000&hash=..."},
+            request_only=True,
+        ),
+        OpenApiExample(
+            "Auth success",
+            value={"access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."},
+            response_only=True,
+        ),
+    ],
 )
 @api_view(["POST"])
 @permission_classes([permissions.AllowAny])
 @log_calls()
 def tg_webapp_auth(request):
     init_data = request.data.get("initData","")
-    tg_user = verify_init_data(init_data)
+    users_views = import_module("users.views")
+    tg_user = users_views.verify_init_data(init_data)
     if tg_user is None:
         log.warning("tg_webapp_auth_invalid_init_data")
         return Response({"detail":"invalid initData"}, status=403)
     telegram_id = tg_user.get("id")
     try:
         telegram_id = int(telegram_id)
-    except Exception:
+    except (TypeError, ValueError):
         log.warning("tg_webapp_auth_missing_tg_id")
         return Response({"detail": "invalid telegram user id"}, status=403)
     username = tg_user.get("username") or f"tg_{telegram_id}"

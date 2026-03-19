@@ -21,7 +21,7 @@
                aria-label="Открыть товар {{ c.review.product.name }}">
               {% with img=c.review.product.prefetched_images.0 %}
                 {% if img %}
-                  <img src="{{ img.url }}" alt="{{ c.review.product.name }}" loading="lazy" data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}">
+                  <img src="{{ img.public_url }}" alt="{{ c.review.product.name }}" loading="lazy" data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}">
                 {% else %}
                   <span class="account-comments-2026__thumb-fallback">🛍</span>
                 {% endif %}

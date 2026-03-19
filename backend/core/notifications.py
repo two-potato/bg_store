@@ -1,6 +1,14 @@
+"""Notification delivery helpers for email and Telegram.
+
+The backend uses these helpers from views, Celery tasks, and moderation flows.
+They centralize recipient resolution, bot-service HTTP calls, and quarantine
+logic for Telegram recipients that are known to reject messages.
+"""
+
 import logging
 import smtplib
 from typing import Iterable
+from json import JSONDecodeError
 
 import httpx
 from django.conf import settings
@@ -19,6 +27,7 @@ def _is_valid_telegram_id(value: int) -> bool:
 
 
 def notify_headers() -> dict[str, str]:
+    """Return authentication headers for internal bot-service HTTP endpoints."""
     return {"X-Internal-Token": str(getattr(settings, "INTERNAL_TOKEN", ""))}
 
 
@@ -39,10 +48,12 @@ def _telegram_quarantine_key(telegram_id: int) -> str:
 
 
 def is_telegram_recipient_quarantined(telegram_id: int) -> bool:
+    """Return whether a Telegram recipient is temporarily suppressed."""
     return bool(cache.get(_telegram_quarantine_key(telegram_id)))
 
 
 def quarantine_telegram_recipient(telegram_id: int, reason: str, ttl: int | None = None) -> None:
+    """Suppress a bad Telegram recipient for a configurable amount of time."""
     timeout = ttl or int(getattr(settings, "TELEGRAM_RECIPIENT_QUARANTINE_TTL", 6 * 60 * 60))
     cache.set(_telegram_quarantine_key(telegram_id), reason[:200], timeout=timeout)
 
@@ -70,6 +81,7 @@ def post_notify_json(
     success_event: str | None = None,
     extra: dict | None = None,
 ) -> tuple[bool, httpx.Response | None]:
+    """Send a synchronous JSON notification request to the local bot service."""
     log_target = logger or log
     metadata = {"path": path, **(extra or {})}
     try:
@@ -109,6 +121,7 @@ async def apost_notify_json(
     success_event: str | None = None,
     extra: dict | None = None,
 ) -> tuple[bool, httpx.Response | None]:
+    """Send an asynchronous JSON notification request to the local bot service."""
     log_target = logger or log
     metadata = {"path": path, **(extra or {})}
     try:
@@ -138,6 +151,7 @@ async def apost_notify_json(
 
 
 def admin_emails() -> list[str]:
+    """Resolve admin notification emails from explicit settings or Django ADMINS."""
     emails = list(getattr(settings, "ADMIN_NOTIFY_EMAILS", []) or [])
     if emails:
         return sorted({e.strip() for e in emails if e and e.strip()})
@@ -146,6 +160,7 @@ def admin_emails() -> list[str]:
 
 
 def admin_telegram_ids() -> list[int]:
+    """Resolve Telegram ids for admin-style notifications, excluding quarantined ids."""
     recipients: set[int] = set()
     explicit = list(getattr(settings, "ADMIN_NOTIFY_TELEGRAM_IDS", []) or [])
     recipients.update(
@@ -177,6 +192,7 @@ def send_mail_message(
     logger: logging.Logger | None = None,
     extra: dict | None = None,
 ) -> bool:
+    """Send an email with consistent logging and transport failure handling."""
     to = sorted({email.strip() for email in recipient_list if email and email.strip()})
     log_target = logger or log
     payload = {"subject": subject, "recipients": to, **(extra or {})}
@@ -204,10 +220,12 @@ def send_mail_message(
 
 
 def send_email_notification(subject: str, message: str, recipients: Iterable[str] | None = None) -> bool:
+    """Convenience wrapper that sends email to explicit recipients or admins."""
     return send_mail_message(subject=subject, message=message, recipient_list=list(recipients or admin_emails()))
 
 
 def send_telegram_text(telegram_id: int, text: str, timeout: float = 10.0) -> bool:
+    """Send a text message to a single Telegram recipient."""
     if is_telegram_recipient_quarantined(int(telegram_id)):
         log.info("notify_tg_send_skipped_quarantined", extra={"telegram_id": int(telegram_id)})
         return False
@@ -223,6 +241,7 @@ def send_telegram_text(telegram_id: int, text: str, timeout: float = 10.0) -> bo
 
 
 def send_telegram_bulk(text: str, recipients: Iterable[int] | None = None) -> int:
+    """Broadcast a text message to many Telegram recipients and return success count."""
     ids = [int(v) for v in (recipients or admin_telegram_ids()) if v and _is_valid_telegram_id(int(v))]
     sent = 0
     for tg in ids:
@@ -234,6 +253,7 @@ def send_telegram_bulk(text: str, recipients: Iterable[int] | None = None) -> in
 
 
 def send_telegram_group(text: str, timeout: float = 10.0) -> bool:
+    """Send a message to the shared Telegram group configured for the project."""
     ok, resp = post_notify_json(
         "/notify/send_group",
         {"text": text},
@@ -245,6 +265,6 @@ def send_telegram_group(text: str, timeout: float = 10.0) -> bool:
         return False
     try:
         return bool(resp.json().get("ok"))
-    except Exception:
+    except (JSONDecodeError, TypeError, ValueError):
         log.warning("notify_group_invalid_response")
         return False

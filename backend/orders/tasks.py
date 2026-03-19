@@ -1,6 +1,7 @@
 from celery import shared_task
 import logging
 import time
+from httpx import HTTPError
 from django.conf import settings
 from django.core.cache import cache
 import asyncio
@@ -13,6 +14,14 @@ from commerce.models import LegalEntityMembership
 from core.secure import sign_approve
 from core.pdf import render_invoice_pdf
 from .models import FakeAcquiringPayment
+from .notification_service import (
+    admin_email_recipients,
+    build_admin_order_email,
+    build_admin_order_telegram,
+    build_buyer_order_email,
+    build_buyer_order_telegram,
+    buyer_email_recipients,
+)
 from core.notifications import (
     admin_telegram_ids,
     apost_notify_json,
@@ -25,15 +34,6 @@ from core.notifications import (
 log = logging.getLogger("orders")
 
 
-def _admin_recipients() -> list[str]:
-    emails = list(getattr(settings, "ADMIN_NOTIFY_EMAILS", []) or [])
-    if emails:
-        return emails
-    # Django native ADMINS fallback: [("Name", "email@example.com"), ...]
-    admins = getattr(settings, "ADMINS", []) or []
-    return [email for _, email in admins if email]
-
-
 def _admin_telegram_recipients() -> list[int]:
     return admin_telegram_ids()
 
@@ -42,92 +42,40 @@ def _is_valid_telegram_id(value: int) -> bool:
     return -(10**14) <= int(value) <= 10**14 and int(value) != 0
 
 
-def _buyer_emails(order: Order) -> list[str]:
-    recipients = set()
-    if order.customer_email:
-        recipients.add(order.customer_email.strip())
-    if getattr(order.placed_by, "email", None):
-        recipients.add(order.placed_by.email.strip())
-    profile = getattr(order.placed_by, "profile", None)
-    if profile and getattr(profile, "contact_email", None):
-        recipients.add(profile.contact_email.strip())
-    return sorted({email for email in recipients if email})
-
-
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def notify_admin_order_status_email(self, order_id: int, event: str, previous_status: str | None = None):
-    order = Order.objects.select_related("legal_entity", "placed_by").get(id=order_id)
-    recipients = _admin_recipients()
+    order = Order.objects.select_related("legal_entity", "placed_by").filter(id=order_id).first()
+    if order is None:
+        log.warning("order_email_order_missing", extra={"order_id": order_id, "event": event})
+        return
+    recipients = admin_email_recipients()
     if not recipients:
         log.warning("order_email_no_recipients", extra={"order_id": order_id, "event": event})
         return
-
-    status_text = order.get_status_display()
-    seller_count = max(1, order.seller_splits.count())
-    if event == "created":
-        subject = f"[Servio] Новый заказ #{order.id}"
-        body = (
-            f"Создан новый заказ #{order.id}\n"
-            f"Статус: {status_text}\n"
-            f"Клиент: {order.buyer_display()}\n"
-            f"Юрлицо: {order.legal_entity or '-'}\n"
-            f"Поставщиков в заказе: {seller_count}\n"
-            f"Сумма: {order.total}\n"
-        )
-    else:
-        subject = f"[Servio] Заказ #{order.id}: статус изменен"
-        body = (
-            f"Заказ #{order.id}: статус изменен\n"
-            f"Было: {previous_status or '-'}\n"
-            f"Стало: {status_text}\n"
-            f"Клиент: {order.buyer_display()}\n"
-            f"Юрлицо: {order.legal_entity or '-'}\n"
-            f"Поставщиков в заказе: {seller_count}\n"
-            f"Сумма: {order.total}\n"
-        )
+    admin_message = build_admin_order_email(order, event=event, previous_status=previous_status)
 
     send_mail_message(
-        subject=subject,
-        message=body,
+        subject=admin_message.subject,
+        message=admin_message.body,
         recipient_list=recipients,
         logger=log,
         extra={"order_id": order_id, "event": event},
     )
-    buyer_recipients = _buyer_emails(order)
+    buyer_recipients = buyer_email_recipients(order)
     if buyer_recipients:
-        buyer_subject = f"Servio: заказ #{order.id}"
-        buyer_body = (
-            f"Статус вашего заказа #{order.id}: {status_text}\n"
-            f"Сумма: {order.total}\n"
-            f"Если у вас есть вопросы, ответьте на это письмо."
-        )
-        send_email_notification(buyer_subject, buyer_body, recipients=buyer_recipients)
+        buyer_message = build_buyer_order_email(order)
+        send_email_notification(buyer_message.subject, buyer_message.body, recipients=buyer_recipients)
 
 
 @shared_task(bind=True, max_retries=0, default_retry_delay=30)
 def notify_order_status_telegram(self, order_id: int, event: str, previous_status: str | None = None):
-    order = Order.objects.select_related("legal_entity", "placed_by", "placed_by__profile").get(id=order_id)
+    order = Order.objects.select_related("legal_entity", "placed_by", "placed_by__profile").filter(id=order_id).first()
+    if order is None:
+        log.warning("order_status_tg_order_missing", extra={"order_id": order_id, "event": event})
+        return
     recipients = _admin_telegram_recipients()
 
-    status_text = order.get_status_display()
-    if event == "created":
-        text = (
-            f"🆕 Новый заказ <b>#{order.id}</b>\n"
-            f"Статус: <b>{status_text}</b>\n"
-            f"Клиент: {order.buyer_display()}\n"
-            f"Юрлицо: {order.legal_entity or '-'}\n"
-            f"Сумма: {order.total}"
-        )
-    else:
-        prev_text = previous_status or "-"
-        text = (
-            f"🔔 Заказ <b>#{order.id}</b>: статус изменён\n"
-            f"Было: <code>{prev_text}</code>\n"
-            f"Стало: <b>{status_text}</b>\n"
-            f"Клиент: {order.buyer_display()}\n"
-            f"Юрлицо: {order.legal_entity or '-'}\n"
-            f"Сумма: {order.total}"
-        )
+    text = build_admin_order_telegram(order, event=event, previous_status=previous_status)
 
     async def send():
         from httpx import AsyncClient
@@ -152,17 +100,13 @@ def notify_order_status_telegram(self, order_id: int, event: str, previous_statu
 
     try:
         asyncio.run(send())
-    except Exception:
+    except (RuntimeError, HTTPError):
         log.exception("order_status_tg_send_failed", extra={"order_id": order_id, "event": event, "recipients": recipients})
         return
     # Buyer notification in Telegram when account is linked.
     buyer_tg = getattr(getattr(order.placed_by, "profile", None), "telegram_id", None)
     if buyer_tg:
-        buyer_text = (
-            f"📦 Обновление по заказу <b>#{order.id}</b>\n"
-            f"Текущий статус: <b>{status_text}</b>\n"
-            f"Сумма: {order.total}"
-        )
+        buyer_text = build_buyer_order_telegram(order)
         send_telegram_bulk(buyer_text, recipients=[int(buyer_tg)])
     log.info(
         "order_status_tg_sent",
@@ -212,8 +156,8 @@ def notify_entity_admins_order_created(self, order_id: int):
     # Try to notify managers group via notify-bot (if configured)
     try:
         asyncio.run(_notify_group(order_id))
-    except Exception:
-        pass
+    except (RuntimeError, HTTPError):
+        log.exception("entity_admin_group_notify_failed", extra={"order_id": order_id})
     dur = (time.perf_counter_ns() - t0) / 1_000_000
     log.info("task_done notify_entity_admins_order_created", extra={"order_id": order_id, "duration_ms": round(dur,2)})
 

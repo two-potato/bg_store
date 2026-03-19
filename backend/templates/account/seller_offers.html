@@ -1,0 +1,93 @@
+{% extends "account/layout.html" %}
+{% block account_main %}
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero compact">
+    <div class="account-2026__hero-title">Offers и склады</div>
+    <div class="account-2026__hero-sub">Управление seller-specific офферами, ценой, MOQ, ETA и inventory по складам.</div>
+  </div>
+
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Новый или существующий оффер</h2>
+      <a class="account-2026__panel-link" href="/account/seller/" hx-boost="false">К seller dashboard</a>
+    </div>
+    <form method="post" class="account-2026__form">
+      {% csrf_token %}
+      <div class="grid md:grid-cols-3 gap-3">
+        <div>
+          <label class="label" for="id_product"><span class="label-text">Товар</span></label>
+          <select id="id_product" name="product" class="select select-bordered w-full" required>
+            <option value="">Выберите товар</option>
+            {% for p in form.fields.product.queryset %}
+              <option value="{{ p.id }}" {% if form.product.value|stringformat:"s" == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}{% if p.brand %} · {{ p.brand.name }}{% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="id_offer_title"><span class="label-text">Название оффера</span></label>
+          <input id="id_offer_title" type="text" name="offer_title" class="input input-bordered w-full" value="{{ form.offer_title.value|default_if_none:'' }}">
+        </div>
+        <div>
+          <label class="label" for="id_status"><span class="label-text">Статус</span></label>
+          <select id="id_status" name="status" class="select select-bordered w-full">
+            {% for value, label in form.fields.status.choices %}
+              <option value="{{ value }}" {% if form.status.value|stringformat:"s" == value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="id_price"><span class="label-text">Цена</span></label>
+          <input id="id_price" type="number" min="0" step="0.01" name="price" class="input input-bordered w-full" value="{{ form.price.value|default_if_none:'' }}" required>
+        </div>
+        <div>
+          <label class="label" for="id_min_order_qty"><span class="label-text">MOQ</span></label>
+          <input id="id_min_order_qty" type="number" min="1" name="min_order_qty" class="input input-bordered w-full" value="{{ form.min_order_qty.value|default_if_none:'1' }}">
+        </div>
+        <div>
+          <label class="label" for="id_lead_time_days"><span class="label-text">ETA, дней</span></label>
+          <input id="id_lead_time_days" type="number" min="0" name="lead_time_days" class="input input-bordered w-full" value="{{ form.lead_time_days.value|default_if_none:'0' }}">
+        </div>
+      </div>
+      <div>
+        <label class="label" for="id_warehouse_source"><span class="label-text">Источник склада</span></label>
+        <input id="id_warehouse_source" type="text" name="warehouse_source" class="input input-bordered w-full" value="{{ form.warehouse_source.value|default_if_none:'' }}">
+      </div>
+      {% if form.errors %}
+        <div class="alert alert-error text-sm"><span>Проверьте поля оффера.</span></div>
+      {% endif %}
+      <button class="btn btn-primary" type="submit">Сохранить оффер</button>
+    </form>
+  </section>
+
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Мои офферы</h2>
+      <a class="account-2026__panel-link" href="/account/seller/products/add/" hx-boost="false">Карточки товаров</a>
+    </div>
+    {% if offers %}
+      <div class="overflow-x-auto">
+        <table class="table table-sm account-2026__table">
+          <thead>
+            <tr><th>Товар</th><th>Цена</th><th>MOQ</th><th>ETA</th><th>Статус</th><th>Склады</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for offer in offers %}
+              <tr>
+                <td>{{ offer.product.name }}</td>
+                <td>{{ offer.price }} ₽</td>
+                <td>{{ offer.min_order_qty }}</td>
+                <td>{{ offer.lead_time_days }} д.</td>
+                <td>{{ offer.get_status_display }}</td>
+                <td>{{ offer.inventories.all|length }}</td>
+                <td class="text-right"><a class="btn btn-xs btn-primary" href="/account/seller/offers/{{ offer.id }}/" hx-boost="false">Управлять</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="alert">Офферов пока нет.</div>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

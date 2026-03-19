@@ -21,7 +21,7 @@
             {% with img=it.product.prefetched_images.0 %}
               {% if img %}
                 <img class="order-thumbs-2026__img"
-                     src="{{ img.url }}"
+                     src="{{ img.public_url }}"
                      alt="{{ it.name }}"
                      loading="lazy"
                      data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}">

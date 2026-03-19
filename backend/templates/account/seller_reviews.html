@@ -1,0 +1,52 @@
+{% extends "account/layout.html" %}
+{% load math_extras %}
+{% block account_main %}
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero compact">
+    <div class="account-2026__hero-title">Отзывы покупателей</div>
+    <div class="account-2026__hero-sub">Отвечайте на product reviews и поддерживайте репутацию магазина.</div>
+  </div>
+
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Лента отзывов</h2>
+      <a class="account-2026__panel-link" href="/account/seller/" hx-boost="false">К seller dashboard</a>
+    </div>
+    {% if reviews %}
+      <div class="space-y-3">
+        {% for review in reviews %}
+          <article class="rounded-2xl border border-base-300 p-4">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="font-semibold">{{ review.product.name }}</div>
+                <div class="text-xs text-base-content/60">{{ review.user.username }} · {{ review.rating }}/5 · {{ review.created_at|date:"d.m.Y H:i" }}</div>
+              </div>
+              <a class="account-2026__panel-link" href="/product/{{ review.product.slug }}/#reviews" hx-boost="false">Открыть карточку</a>
+            </div>
+            <p class="text-sm mt-3">{{ review.text|default:"Без текста" }}</p>
+            {% if review.comments.all %}
+              <div class="mt-3 space-y-2">
+                {% for comment in review.comments.all %}
+                  <div class="rounded-2xl bg-base-200 px-4 py-3 text-sm">
+                    <div class="text-xs text-base-content/60">{{ comment.user.username }} · {{ comment.created_at|date:"d.m.Y H:i" }}</div>
+                    <div class="mt-1">{{ comment.text }}</div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
+            {% with form=reply_forms|get_item:review.id %}
+              <form method="post" action="/account/seller/reviews/{{ review.id }}/reply/" class="grid gap-2 mt-3">
+                {% csrf_token %}
+                <textarea class="textarea textarea-bordered w-full" rows="3" name="review-{{ review.id }}-text" placeholder="Ответ продавца">{{ form.text.value|default_if_none:'' }}</textarea>
+                <button class="btn btn-primary btn-sm" type="submit">Сохранить ответ</button>
+              </form>
+            {% endwith %}
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="alert">Отзывов на ваши товары пока нет.</div>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

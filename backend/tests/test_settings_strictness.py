@@ -64,3 +64,20 @@ def test_strict_prod_accepts_https_csrf_and_parses_cors_origins(monkeypatch: pyt
     assert module.ALLOWED_HOSTS == ["servio.test", "www.servio.test"]
     assert module.CSRF_TRUSTED_ORIGINS == ["https://servio.test", "https://www.servio.test"]
     assert module.CORS_ALLOWED_ORIGINS == ["https://app.servio.test", "https://admin.servio.test"]
+
+
+def test_base_settings_disable_request_access_log_by_default(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("ENABLE_REQUEST_ACCESS_LOG", raising=False)
+
+    module = _load_base_settings_module()
+
+    assert "core.middleware.RequestLoggingMiddleware" not in module.MIDDLEWARE
+
+
+def test_base_settings_prefers_redis_cache_when_redis_url_present(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("REDIS_URL", "redis://redis:6379/1")
+
+    module = _load_base_settings_module()
+
+    assert module.CACHES["default"]["BACKEND"] == "django.core.cache.backends.redis.RedisCache"
+    assert module.CACHES["default"]["LOCATION"] == "redis://redis:6379/1"

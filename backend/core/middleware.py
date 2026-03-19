@@ -1,5 +1,9 @@
+"""HTTP middleware for request context propagation and access logging."""
+
 import logging
 import time
+from typing import Any
+
 from .logging_utils import set_request_context, clear_request_context
 
 
@@ -18,14 +22,16 @@ class RequestContextMiddleware:
 
     def __call__(self, request):
         rid = set_request_context(request)
+        response: Any | None = None
         try:
             response = self.get_response(request)
         finally:
             # Always add header and clear context
-            try:
-                response["X-Request-ID"] = rid
-            except Exception:
-                pass
+            if response is not None:
+                try:
+                    response["X-Request-ID"] = rid
+                except (TypeError, AttributeError):
+                    pass
             clear_request_context()
         return response
 
@@ -51,4 +57,3 @@ class RequestLoggingMiddleware:
             dur_ms,
         )
         return response
-

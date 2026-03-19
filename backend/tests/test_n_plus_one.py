@@ -340,13 +340,15 @@ def test_account_seller_home_query_growth_is_sublinear(client_logged, user):
     seller_order = SellerOrder.objects.create(order=base_order, seller=user, seller_store_name=store.name)
     for product in products[:2]:
         order_item = OrderItem.objects.create(order=base_order, product=product, name=product.name, price=product.price, qty=1)
-        SellerOrderItem.objects.create(
-            seller_order=seller_order,
+        SellerOrderItem.objects.update_or_create(
             order_item=order_item,
-            product=product,
-            name=product.name,
-            price=product.price,
-            qty=1,
+            defaults={
+                "seller_order": seller_order,
+                "product": product,
+                "name": product.name,
+                "price": product.price,
+                "qty": 1,
+            },
         )
 
     small = _query_count(client_logged, "/account/seller/")
@@ -356,13 +358,15 @@ def test_account_seller_home_query_growth_is_sublinear(client_logged, user):
         seller_order = SellerOrder.objects.create(order=order, seller=user, seller_store_name=store.name)
         for product in products:
             order_item = OrderItem.objects.create(order=order, product=product, name=f"{product.name}-{i}", price=product.price, qty=2)
-            SellerOrderItem.objects.create(
-                seller_order=seller_order,
+            SellerOrderItem.objects.update_or_create(
                 order_item=order_item,
-                product=product,
-                name=f"{product.name}-{i}",
-                price=product.price,
-                qty=2,
+                defaults={
+                    "seller_order": seller_order,
+                    "product": product,
+                    "name": f"{product.name}-{i}",
+                    "price": product.price,
+                    "qty": 2,
+                },
             )
 
     large = _query_count(client_logged, "/account/seller/")

@@ -2,7 +2,7 @@ import pytest
 
 from catalog.models import Brand, Category, Product
 from shopfront import search as sf_search
-from shopfront.search_service import HybridSearchProvider, rewrite_query
+from shopfront.search_service import HybridSearchProvider, build_query_variants, keyboard_layout_correction, rewrite_query
 
 
 pytestmark = pytest.mark.django_db
@@ -10,6 +10,17 @@ pytestmark = pytest.mark.django_db
 
 def test_rewrite_query_expands_marketplace_language():
     assert rewrite_query("одноразка для кофе") == "одноразовая посуда для кофе"
+
+
+def test_keyboard_layout_correction_recovers_russian_query():
+    assert keyboard_layout_correction("cbhjg") == "сироп"
+    assert rewrite_query("cbhjg") == "cbhjg"
+
+
+def test_query_variants_include_keyboard_corrected_candidate():
+    variants = build_query_variants("cbhjg")
+    assert "cbhjg" in variants
+    assert "сироп" in variants
 
 
 def test_hybrid_search_merges_lexical_and_semantic_candidates(settings, monkeypatch):
@@ -44,7 +55,7 @@ def test_hybrid_search_falls_back_when_es_unavailable(monkeypatch):
     )
 
     def _boom(*args, **kwargs):
-        raise sf_search.ESSearchUnavailable("es down")
+        raise sf_search.OpenSearchUnavailable("opensearch down")
 
     monkeypatch.setattr(sf_search, "live_search_bundle", _boom)
 

@@ -284,7 +284,7 @@ def test_async_notify_and_notify_exceptions(monkeypatch):
 
 
 def test_search_helpers_and_cache(monkeypatch, settings):
-    settings.ES_ENABLED = True
+    settings.OPENSEARCH_ENABLED = True
     cache.clear()
     assert sf_search._normalize_bundle((["1"], ["IT"], ["cup"])) == (["1"], ["IT"], ["cup"])
     assert sf_search._normalize_bundle((["1"], ["IT"])) == (["1"], ["IT"], [])
@@ -294,10 +294,10 @@ def test_search_helpers_and_cache(monkeypatch, settings):
     assert payload["size"] == 1
     assert payload["suggest"]["query_suggest"]["prefix"] == "ice tea"
 
-    settings.ES_ENABLED = False
-    with pytest.raises(sf_search.ESSearchUnavailable):
-        sf_search._es_search_bundle("cup", 2, 2)
-    settings.ES_ENABLED = True
+    settings.OPENSEARCH_ENABLED = False
+    with pytest.raises(sf_search.OpenSearchUnavailable):
+        sf_search._opensearch_search_bundle("cup", 2, 2)
+    settings.OPENSEARCH_ENABLED = True
 
     def _post(url, json, timeout):
         return _Resp(
@@ -315,7 +315,7 @@ def test_search_helpers_and_cache(monkeypatch, settings):
         )
 
     monkeypatch.setattr(sf_search.requests, "post", _post)
-    ids, countries, suggestions = sf_search._es_search_bundle("cup", 5, 2)
+    ids, countries, suggestions = sf_search._opensearch_search_bundle("cup", 5, 2)
     assert ids == [1, 2]
     assert countries == ["IT"]
     assert suggestions == ["Cup", "Mug"]
@@ -326,8 +326,8 @@ def test_search_helpers_and_cache(monkeypatch, settings):
     assert sf_search.live_search_bundle("cup", limit=5, country_limit=0) == cached
 
     monkeypatch.setattr(sf_search.requests, "post", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("down")))
-    with pytest.raises(sf_search.ESSearchUnavailable):
-        sf_search._es_search_bundle("cup", 5, 1)
+    with pytest.raises(sf_search.OpenSearchUnavailable):
+        sf_search._opensearch_search_bundle("cup", 5, 1)
 
 
 def test_recommendations_and_company_services():
@@ -654,7 +654,7 @@ def test_shopfront_tasks_and_live_search(monkeypatch):
 
     class _Provider:
         def live_bundle(self, query, limit, country_limit):
-            raise sf_search.ESSearchUnavailable("down")
+            raise sf_search.OpenSearchUnavailable("down")
 
     monkeypatch.setattr(
         "shopfront.live_search_service.DatabaseSearchProvider.live_bundle",

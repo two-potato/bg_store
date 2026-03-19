@@ -113,6 +113,15 @@
     </div>
   </section>
 
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Повторные закупки</h2>
+      <span class="account-2026__panel-note">Реальные reorder и replenishment сценарии на основе вашей истории</span>
+    </div>
+    {% include "shopfront/components/recommendation_section.html" with products=account_reorder_products title="Заказывают повторно" subtitle="Товары с самым сильным repeat-purchase сигналом по вашему аккаунту." recommendation_source="account_reorder" %}
+    {% include "shopfront/components/recommendation_section.html" with products=account_replenishment_products title="Пора пополнить" subtitle="Позиции, у которых подходит ожидаемый цикл пополнения." recommendation_source="account_replenishment" %}
+  </section>
+
   <div class="account-2026__workspace-grid">
     <section class="account-2026__panel" id="profile-edit">
       <div class="account-2026__panel-head">
@@ -154,7 +163,7 @@
           {% endif %}
         </div>
         {% if form.errors %}
-          <div class="alert alert-error text-sm">
+          <div class="alert alert-warning text-sm">
             <span>Проверьте заполнение формы.</span>
           </div>
         {% endif %}
@@ -193,6 +202,41 @@
         <a href="/collections/" hx-boost="false">Открыть коллекции</a>
         <a href="/promotions/" hx-boost="false">Посмотреть акции</a>
       </div>
+    </section>
+  </div>
+
+  <div class="account-2026__workspace-grid mt-3">
+    <section class="account-2026__panel">
+      <div class="account-2026__panel-head">
+        <h2 class="account-2026__panel-title">Notification center</h2>
+        <a class="account-2026__panel-link" href="/account/notifications/" hx-boost="false">Открыть всё</a>
+      </div>
+      <div class="space-y-2">
+        {% for item in notifications %}
+          <a class="block rounded-2xl border border-base-300 p-3 hover:bg-base-200/40" href="{{ item.href }}" hx-boost="false">
+            <div class="font-medium">{{ item.title }}</div>
+            <div class="text-xs text-base-content/60">{{ item.subtitle }} · {{ item.at|date:"d.m.Y H:i" }}</div>
+          </a>
+        {% empty %}
+          <div class="text-sm text-base-content/60">Событий пока нет.</div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="account-2026__panel">
+      <div class="account-2026__panel-head">
+        <h2 class="account-2026__panel-title">Preferences</h2>
+        <a class="account-2026__panel-link" href="/account/preferences/" hx-boost="false">Полная форма</a>
+      </div>
+      <form method="post" class="account-2026__form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="save_preferences">
+        <label class="label cursor-pointer justify-start gap-2"><input type="checkbox" class="checkbox" name="prefs-notify_email_orders" {% if preferences_form.notify_email_orders.value %}checked{% endif %}><span class="label-text">Email: заказы</span></label>
+        <label class="label cursor-pointer justify-start gap-2"><input type="checkbox" class="checkbox" name="prefs-notify_email_marketing" {% if preferences_form.notify_email_marketing.value %}checked{% endif %}><span class="label-text">Email: маркетинг</span></label>
+        <label class="label cursor-pointer justify-start gap-2"><input type="checkbox" class="checkbox" name="prefs-notify_telegram_orders" {% if preferences_form.notify_telegram_orders.value %}checked{% endif %}><span class="label-text">Telegram: заказы</span></label>
+        <label class="label cursor-pointer justify-start gap-2"><input type="checkbox" class="checkbox" name="prefs-notify_telegram_marketing" {% if preferences_form.notify_telegram_marketing.value %}checked{% endif %}><span class="label-text">Telegram: маркетинг</span></label>
+        <button class="btn btn-primary" type="submit">Сохранить предпочтения</button>
+      </form>
     </section>
   </div>
 </section>

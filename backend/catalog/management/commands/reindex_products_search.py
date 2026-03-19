@@ -4,18 +4,18 @@ import requests
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from catalog.es_index import product_doc
 from catalog.models import Product
+from catalog.opensearch_index import product_doc
 
 
 class Command(BaseCommand):
-    help = "Rebuild Elasticsearch index for products used by live search"
+    help = "Rebuild OpenSearch index for products used by live search"
 
     def handle(self, *args, **options):
-        es_url = settings.ES_URL.rstrip("/")
-        index = settings.ES_PRODUCTS_INDEX
-        timeout = settings.ES_TIMEOUT_SECONDS
-        index_url = f"{es_url}/{index}"
+        search_url = settings.OPENSEARCH_URL.rstrip("/")
+        index = settings.OPENSEARCH_PRODUCTS_INDEX
+        timeout = settings.OPENSEARCH_TIMEOUT_SECONDS
+        index_url = f"{search_url}/{index}"
 
         mappings = {
             "settings": {
@@ -36,7 +36,7 @@ class Command(BaseCommand):
                             "filter": ["lowercase", "asciifolding"],
                         }
                     },
-                }
+                },
             },
             "mappings": {
                 "properties": {
@@ -68,11 +68,7 @@ class Command(BaseCommand):
                     "country_of_origin": {
                         "type": "text",
                         "analyzer": "folding_text",
-                        "fields": {
-                            "keyword": {
-                                "type": "keyword",
-                            }
-                        },
+                        "fields": {"keyword": {"type": "keyword"}},
                     },
                     "country_of_origin_keyword": {
                         "type": "keyword",
@@ -112,31 +108,31 @@ class Command(BaseCommand):
         ).prefetch_related("tags").all().order_by("id")
         bulk_lines = []
         count = 0
-        for p in qs.iterator(chunk_size=500):
-            bulk_lines.append(json.dumps({"index": {"_index": index, "_id": p.id}}))
-            bulk_lines.append(json.dumps(product_doc(p), ensure_ascii=False))
+        for product in qs.iterator(chunk_size=500):
+            bulk_lines.append(json.dumps({"index": {"_index": index, "_id": product.id}}))
+            bulk_lines.append(json.dumps(product_doc(product), ensure_ascii=False))
             count += 1
 
             if len(bulk_lines) >= 1000:
                 payload = "\n".join(bulk_lines) + "\n"
-                r = requests.post(
-                    f"{es_url}/_bulk",
+                response = requests.post(
+                    f"{search_url}/_bulk",
                     data=payload.encode("utf-8"),
                     headers={"Content-Type": "application/x-ndjson"},
                     timeout=max(timeout, 5),
                 )
-                r.raise_for_status()
+                response.raise_for_status()
                 bulk_lines = []
 
         if bulk_lines:
             payload = "\n".join(bulk_lines) + "\n"
-            r = requests.post(
-                f"{es_url}/_bulk",
+            response = requests.post(
+                f"{search_url}/_bulk",
                 data=payload.encode("utf-8"),
                 headers={"Content-Type": "application/x-ndjson"},
                 timeout=max(timeout, 5),
             )
-            r.raise_for_status()
+            response.raise_for_status()
 
         refresh = requests.post(f"{index_url}/_refresh", timeout=timeout)
         refresh.raise_for_status()

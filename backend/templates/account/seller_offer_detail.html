@@ -1,0 +1,182 @@
+{% extends "account/layout.html" %}
+{% block account_main %}
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero compact">
+    <div class="account-2026__hero-title">Оффер #{{ offer.id }}</div>
+    <div class="account-2026__hero-sub">{{ offer.product.name }}: управление коммерческими условиями и складами.</div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+    <section class="account-2026__panel">
+      <div class="account-2026__panel-head">
+        <h2 class="account-2026__panel-title">Параметры оффера</h2>
+        <a class="account-2026__panel-link" href="/account/seller/offers/" hx-boost="false">К списку офферов</a>
+      </div>
+      <form method="post" class="account-2026__form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="update_offer">
+        <div class="grid gap-3">
+          <div>
+            <label class="label"><span class="label-text">Товар</span></label>
+            <select name="offer-product" class="select select-bordered w-full" disabled>
+              <option>{{ offer.product.name }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="label" for="id_offer-offer_title"><span class="label-text">Название оффера</span></label>
+            <input id="id_offer-offer_title" type="text" name="offer-offer_title" class="input input-bordered w-full" value="{{ offer_form.offer_title.value|default_if_none:'' }}">
+          </div>
+          <div class="grid md:grid-cols-2 gap-3">
+            <div>
+              <label class="label" for="id_offer-price"><span class="label-text">Цена</span></label>
+              <input id="id_offer-price" type="number" min="0" step="0.01" name="offer-price" class="input input-bordered w-full" value="{{ offer_form.price.value|default_if_none:'' }}">
+            </div>
+            <div>
+              <label class="label" for="id_offer-status"><span class="label-text">Статус</span></label>
+              <select id="id_offer-status" name="offer-status" class="select select-bordered w-full">
+                {% for value, label in offer_form.fields.status.choices %}
+                  <option value="{{ value }}" {% if offer_form.status.value|stringformat:"s" == value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="label" for="id_offer-min_order_qty"><span class="label-text">MOQ</span></label>
+              <input id="id_offer-min_order_qty" type="number" min="1" name="offer-min_order_qty" class="input input-bordered w-full" value="{{ offer_form.min_order_qty.value|default_if_none:'1' }}">
+            </div>
+            <div>
+              <label class="label" for="id_offer-lead_time_days"><span class="label-text">ETA, дней</span></label>
+              <input id="id_offer-lead_time_days" type="number" min="0" name="offer-lead_time_days" class="input input-bordered w-full" value="{{ offer_form.lead_time_days.value|default_if_none:'0' }}">
+            </div>
+          </div>
+          <div>
+            <label class="label" for="id_offer-warehouse_source"><span class="label-text">Источник склада</span></label>
+            <input id="id_offer-warehouse_source" type="text" name="offer-warehouse_source" class="input input-bordered w-full" value="{{ offer_form.warehouse_source.value|default_if_none:'' }}">
+          </div>
+          <button class="btn btn-primary" type="submit">Сохранить оффер</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="account-2026__panel">
+      <div class="account-2026__panel-head">
+        <h2 class="account-2026__panel-title">Добавить склад</h2>
+        <span class="account-2026__panel-link">Всего доступно: {{ offer.available_stock_qty }}</span>
+      </div>
+      <form method="post" class="account-2026__form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_inventory">
+        <div class="grid md:grid-cols-2 gap-3">
+          <div>
+            <label class="label" for="id_inventory-warehouse_name"><span class="label-text">Склад</span></label>
+            <input id="id_inventory-warehouse_name" type="text" name="inventory-warehouse_name" class="input input-bordered w-full" value="{{ inventory_form.warehouse_name.value|default_if_none:'' }}">
+          </div>
+          <div>
+            <label class="label" for="id_inventory-warehouse_code"><span class="label-text">Код склада</span></label>
+            <input id="id_inventory-warehouse_code" type="text" name="inventory-warehouse_code" class="input input-bordered w-full" value="{{ inventory_form.warehouse_code.value|default_if_none:'' }}">
+          </div>
+          <div>
+            <label class="label" for="id_inventory-stock_qty"><span class="label-text">Остаток</span></label>
+            <input id="id_inventory-stock_qty" type="number" name="inventory-stock_qty" class="input input-bordered w-full" value="{{ inventory_form.stock_qty.value|default_if_none:'0' }}">
+          </div>
+          <div>
+            <label class="label" for="id_inventory-reserved_qty"><span class="label-text">Резерв</span></label>
+            <input id="id_inventory-reserved_qty" type="number" name="inventory-reserved_qty" class="input input-bordered w-full" value="{{ inventory_form.reserved_qty.value|default_if_none:'0' }}">
+          </div>
+          <div>
+            <label class="label" for="id_inventory-incoming_qty"><span class="label-text">В пути</span></label>
+            <input id="id_inventory-incoming_qty" type="number" name="inventory-incoming_qty" class="input input-bordered w-full" value="{{ inventory_form.incoming_qty.value|default_if_none:'0' }}">
+          </div>
+          <div>
+            <label class="label" for="id_inventory-eta_days"><span class="label-text">ETA, дней</span></label>
+            <input id="id_inventory-eta_days" type="number" name="inventory-eta_days" class="input input-bordered w-full" value="{{ inventory_form.eta_days.value|default_if_none:'0' }}">
+          </div>
+        </div>
+        <label class="label cursor-pointer gap-2 mt-2"><input type="checkbox" class="checkbox" name="inventory-is_primary" {% if inventory_form.is_primary.value %}checked{% endif %}><span class="label-text">Основной склад</span></label>
+        <button class="btn btn-primary mt-3" type="submit">Добавить склад</button>
+      </form>
+    </section>
+  </div>
+
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Склады оффера</h2>
+      <a class="account-2026__panel-link" href="/product/{{ offer.product.slug }}/" hx-boost="false">Открыть товар</a>
+    </div>
+    {% if offer.inventories.all %}
+      <div class="overflow-x-auto">
+        <table class="table table-sm account-2026__table">
+          <thead>
+            <tr><th>Склад</th><th>Остаток</th><th>Резерв</th><th>Доступно</th><th>ETA</th><th>Primary</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for inv in offer.inventories.all %}
+              <tr>
+                <td>{{ inv.warehouse_name }}</td>
+                <td>{{ inv.stock_qty }}</td>
+                <td>{{ inv.reserved_qty }}</td>
+                <td>{{ inv.available_qty }}</td>
+                <td>{{ inv.eta_days }} д.</td>
+                <td>{% if inv.is_primary %}Да{% else %}—{% endif %}</td>
+                <td class="text-right">
+                  <div class="flex flex-col items-end gap-2">
+                    <form method="post" action="/account/seller/offers/{{ offer.id }}/inventories/{{ inv.id }}/adjust/" class="flex items-center justify-end gap-2">
+                      {% csrf_token %}
+                      <input type="hidden" name="adjust-inventory_id" value="{{ inv.id }}">
+                      <select class="select select-bordered select-xs" name="adjust-field_type">
+                        <option value="stock">Остаток</option>
+                        <option value="reserved">Резерв</option>
+                        <option value="incoming">В пути</option>
+                      </select>
+                      <input class="input input-bordered input-xs w-20" type="number" name="adjust-delta" placeholder="+/-">
+                      <input class="input input-bordered input-xs w-32" type="text" name="adjust-reason" placeholder="Причина">
+                      <button class="btn btn-xs btn-outline" type="submit">Движение</button>
+                    </form>
+                    <form method="post" action="/account/seller/offers/{{ offer.id }}/inventories/{{ inv.id }}/delete/">
+                      {% csrf_token %}
+                      <button class="btn btn-xs btn-outline" type="submit">Удалить</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="alert">Складских позиций пока нет.</div>
+    {% endif %}
+  </section>
+
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">История движения остатков</h2>
+      <span class="account-2026__panel-link">Последние 50 записей</span>
+    </div>
+    {% if movements %}
+      <div class="overflow-x-auto">
+        <table class="table table-sm account-2026__table">
+          <thead>
+            <tr><th>Дата</th><th>Склад</th><th>Поле</th><th class="text-right">Delta</th><th class="text-right">До</th><th class="text-right">После</th><th>Причина</th><th>Кто</th></tr>
+          </thead>
+          <tbody>
+            {% for movement in movements %}
+              <tr>
+                <td>{{ movement.created_at|date:"d.m.Y H:i" }}</td>
+                <td>{{ movement.inventory.warehouse_name }}</td>
+                <td>{{ movement.get_field_type_display }}</td>
+                <td class="text-right">{{ movement.delta }}</td>
+                <td class="text-right">{{ movement.before_value }}</td>
+                <td class="text-right">{{ movement.after_value }}</td>
+                <td>{{ movement.reason|default:"—" }}</td>
+                <td>{{ movement.actor.username|default:"system" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="alert">История движения пока пустая.</div>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

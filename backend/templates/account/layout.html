@@ -48,9 +48,41 @@
             <span class="account-2026__nav-link-title">Товары и карточки</span>
             <span class="account-2026__nav-link-meta">Контент, фото, остатки</span>
           </a>
-          <a class="account-2026__nav-link" href="/account/orders/" hx-boost="false">
-            <span class="account-2026__nav-link-title">Заказы и согласование</span>
-            <span class="account-2026__nav-link-meta">Fulfillment и статусы</span>
+          <a class="account-2026__nav-link {% if account_section == 'seller_offers' %}is-active{% endif %}" href="/account/seller/offers/" hx-boost="false">
+            <span class="account-2026__nav-link-title">Offers и склады</span>
+            <span class="account-2026__nav-link-meta">Цена, MOQ, inventory, ETA</span>
+          </a>
+          <a class="account-2026__nav-link {% if account_section == 'seller_warehouses' %}is-active{% endif %}" href="/account/seller/warehouses/" hx-boost="false">
+            <span class="account-2026__nav-link-title">Мультисклад</span>
+            <span class="account-2026__nav-link-meta">Остатки, резервы, incoming</span>
+          </a>
+          <a class="account-2026__nav-link {% if account_section == 'seller_orders' %}is-active{% endif %}" href="/account/seller/orders/" hx-boost="false">
+            <span class="account-2026__nav-link-title">Seller orders</span>
+            <span class="account-2026__nav-link-meta">Fulfillment, shipment, tracking</span>
+          </a>
+          <a class="account-2026__nav-link {% if account_section == 'seller_analytics' %}is-active{% endif %}" href="/account/seller/analytics/" hx-boost="false">
+            <span class="account-2026__nav-link-title">Аналитика</span>
+            <span class="account-2026__nav-link-meta">GMV, средний чек, топ SKU</span>
+          </a>
+          <a class="account-2026__nav-link {% if account_section == 'seller_payouts' %}is-active{% endif %}" href="/account/seller/payouts/" hx-boost="false">
+            <span class="account-2026__nav-link-title">Payouts</span>
+            <span class="account-2026__nav-link-meta">Комиссия и net payout</span>
+          </a>
+          <a class="account-2026__nav-link {% if account_section == 'seller_invoices' %}is-active{% endif %}" href="/account/seller/invoices/" hx-boost="false">
+            <span class="account-2026__nav-link-title">Seller invoices</span>
+            <span class="account-2026__nav-link-meta">Заказы по счёту и документы</span>
+          </a>
+          <a class="account-2026__nav-link {% if account_section == 'seller_questions' %}is-active{% endif %}" href="/account/seller/questions/" hx-boost="false">
+            <span class="account-2026__nav-link-title">Вопросы по товарам</span>
+            <span class="account-2026__nav-link-meta">Очередь buyer questions и ответы</span>
+          </a>
+          <a class="account-2026__nav-link {% if account_section == 'seller_reviews' %}is-active{% endif %}" href="/account/seller/reviews/" hx-boost="false">
+            <span class="account-2026__nav-link-title">Отзывы покупателей</span>
+            <span class="account-2026__nav-link-meta">Ответы продавца и review thread</span>
+          </a>
+          <a class="account-2026__nav-link {% if account_section == 'approvals' %}is-active{% endif %}" href="/account/approvals/" hx-boost="false">
+            <span class="account-2026__nav-link-title">Approval inbox</span>
+            <span class="account-2026__nav-link-meta">Согласование B2B-заказов</span>
           </a>
           <a class="account-2026__nav-link" href="/account/comments/" hx-boost="false">
             <span class="account-2026__nav-link-title">Комментарии и отзывы</span>
@@ -94,6 +126,24 @@
              hx-push-url="true">
             <span class="account-2026__nav-link-title">Мои заказы</span>
             <span class="account-2026__nav-link-meta">История, статусы, повторы</span>
+          </a>
+          <a class="account-2026__nav-link {% if account_section == 'approvals' %}is-active{% endif %}"
+             href="/account/approvals/"
+             hx-boost="false">
+            <span class="account-2026__nav-link-title">Согласование</span>
+            <span class="account-2026__nav-link-meta">Очередь заказов на approval</span>
+          </a>
+          <a class="account-2026__nav-link {% if account_section == 'notifications' %}is-active{% endif %}"
+             href="/account/notifications/"
+             hx-boost="false">
+            <span class="account-2026__nav-link-title">Уведомления</span>
+            <span class="account-2026__nav-link-meta">Лента событий по заказам и спорам</span>
+          </a>
+          <a class="account-2026__nav-link {% if account_section == 'preferences' %}is-active{% endif %}"
+             href="/account/preferences/"
+             hx-boost="false">
+            <span class="account-2026__nav-link-title">Preferences</span>
+            <span class="account-2026__nav-link-meta">Email и Telegram каналы</span>
           </a>
           <a class="account-2026__nav-link {% if account_section == 'comments' %}is-active{% endif %}"
              href="/account/comments/"
@@ -159,12 +209,23 @@
       {% endif %}
       <div class="account-2026__nav-group">
         <div class="account-2026__nav-group-title">Аккаунт</div>
-        <a class="account-2026__nav-link is-danger" href="/account/logout/">
+        <a class="account-2026__nav-link" href="/account/logout/">
           <span class="account-2026__nav-link-title">Выйти</span>
           <span class="account-2026__nav-link-meta">Завершить текущую сессию</span>
         </a>
       </div>
     </nav>
+    {% if request.user.is_staff or profile.role == "admin" %}
+      <nav class="account-2026__nav mt-3">
+        <div class="account-2026__nav-group">
+          <div class="account-2026__nav-group-title">Marketplace ops</div>
+          <a class="account-2026__nav-link {% if account_section == 'marketplace_ops' %}is-active{% endif %}" href="/account/marketplace/" hx-boost="false">
+            <span class="account-2026__nav-link-title">Moderation queue</span>
+            <span class="account-2026__nav-link-meta">Stores, products, commission</span>
+          </a>
+        </div>
+      </nav>
+    {% endif %}
   </aside>
   {% block account_main %}{% endblock %}
 </section>

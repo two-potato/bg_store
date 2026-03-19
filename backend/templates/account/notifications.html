@@ -1,0 +1,24 @@
+{% extends "account/layout.html" %}
+{% block account_main %}
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero compact">
+    <div class="account-2026__hero-title">Уведомления</div>
+    <div class="account-2026__hero-sub">Лента событий по заказам, диспутам и support tickets.</div>
+  </div>
+  <section class="account-2026__panel">
+    {% if notifications %}
+      <div class="space-y-3">
+        {% for item in notifications %}
+          <a class="block rounded-2xl border border-base-300 p-4 hover:bg-base-200/40" href="{{ item.href }}" hx-boost="false">
+            <div class="font-medium">{{ item.title }}</div>
+            <div class="text-sm text-base-content/70">{{ item.subtitle }}</div>
+            <div class="text-xs text-base-content/50 mt-1">{{ item.at|date:"d.m.Y H:i" }}</div>
+          </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="alert">Уведомлений пока нет.</div>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import aiohttp
 from aiogram.filters import Command
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup
 from fastapi import Depends, FastAPI, HTTPException, status
 from pydantic import BaseModel, Field
@@ -34,6 +34,7 @@ INTERNAL_TOKEN = os.getenv("INTERNAL_TOKEN", "change-me")
 ORDER_APPROVE_SECRET = os.getenv("ORDER_APPROVE_SECRET", "dev-secret")
 MANAGERS_GROUP_ID = env_int("MANAGERS_GROUP_ID", 0)
 NOTIFY_USE_UPDATES_FALLBACK = os.getenv("NOTIFY_USE_UPDATES_FALLBACK", "0") == "1"
+ALERTMANAGER_SKIP_IF_NO_CHAT = os.getenv("ALERTMANAGER_SKIP_IF_NO_CHAT", "0") == "1"
 ALLOWED_DOC_ROOTS = [
     Path(p).resolve()
     for p in (os.getenv("ALLOWED_DOC_ROOTS", "/app/media,/tmp").split(","))
@@ -81,6 +82,10 @@ def _fmt_alert(a: AlertmanagerAlert) -> str:
     return "\n".join(parts)
 
 
+def _has_alert_target_candidates() -> bool:
+    return bool(MANAGERS_GROUP_ID or NOTIFY_USE_UPDATES_FALLBACK)
+
+
 async def _send_to_managers_chat(text: str) -> int | None:
     candidates: list[int] = []
     if MANAGERS_GROUP_ID:
@@ -91,7 +96,8 @@ async def _send_to_managers_chat(text: str) -> int | None:
     if NOTIFY_USE_UPDATES_FALLBACK:
         try:
             updates = await bot.get_updates(limit=30, timeout=0)
-        except Exception:
+        except TelegramAPIError as exc:
+            log.warning("notify_get_updates_failed", extra={"reason": str(exc)})
             updates = []
         for upd in updates:
             chat_id = None
@@ -108,7 +114,8 @@ async def _send_to_managers_chat(text: str) -> int | None:
         try:
             await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
             return chat_id
-        except Exception:
+        except TelegramAPIError as exc:
+            log.warning("notify_group_send_failed", extra={"chat_id": chat_id, "reason": str(exc)})
             continue
     return None
 
@@ -129,13 +136,10 @@ async def send_kb(payload: MsgKb, _auth: None = Depends(require_internal_token))
             extra={"telegram_id": payload.telegram_id, "detail": str(exc), "rows": len(payload.keyboard)},
         )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    try:
-        log.info(
-            "notify_send_kb",
-            extra={"telegram_id": payload.telegram_id, "len": len(payload.text or ""), "rows": len(payload.keyboard)},
-        )
-    except Exception:
-        pass
+    log.info(
+        "notify_send_kb",
+        extra={"telegram_id": payload.telegram_id, "len": len(payload.text or ""), "rows": len(payload.keyboard)},
+    )
     NOTIFY_SENT.labels(type="kb").inc()
     return {"ok": True}
 
@@ -157,10 +161,7 @@ async def send_document(payload: DocMsg, _auth: None = Depends(require_internal_
             extra={"telegram_id": payload.telegram_id, "path": payload.path, "detail": str(exc)},
         )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    try:
-        log.info("notify_send_document", extra={"telegram_id": payload.telegram_id, "path": payload.path})
-    except Exception:
-        pass
+    log.info("notify_send_document", extra={"telegram_id": payload.telegram_id, "path": payload.path})
     NOTIFY_SENT.labels(type="document").inc()
     return {"ok": True}
 
@@ -178,10 +179,7 @@ async def send_text(payload: TextMsg, _auth: None = Depends(require_internal_tok
             extra={"telegram_id": payload.telegram_id, "detail": str(exc), "len": len(payload.text or "")},
         )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    try:
-        log.info("notify_send_text", extra={"telegram_id": payload.telegram_id, "len": len(payload.text or "")})
-    except Exception:
-        pass
+    log.info("notify_send_text", extra={"telegram_id": payload.telegram_id, "len": len(payload.text or "")})
     NOTIFY_SENT.labels(type="text").inc()
     return {"ok": True}
 
@@ -197,6 +195,19 @@ async def send_group(payload: GroupMsg, _auth: None = Depends(require_internal_t
 
 @app.post("/notify/alertmanager")
 async def alertmanager_webhook(payload: AlertmanagerPayload):
+    if not _has_alert_target_candidates() and ALERTMANAGER_SKIP_IF_NO_CHAT:
+        log.warning(
+            "alertmanager_delivery_skipped_no_chat",
+            extra={"alerts_total": len(payload.alerts), "managers_group_id": MANAGERS_GROUP_ID},
+        )
+        return {
+            "ok": True,
+            "sent": 0,
+            "total": len(payload.alerts),
+            "skipped": True,
+            "reason": "no reachable chat configured",
+        }
+
     status_icon = "🚨" if payload.status == "firing" else "✅"
     title = "ALERT FIRING" if payload.status == "firing" else "ALERT RESOLVED"
     lines = [f"{status_icon} <b>{title}</b>"]
@@ -221,13 +232,10 @@ async def alertmanager_webhook(payload: AlertmanagerPayload):
 @dp.message(Command("start"))
 async def start(message):
     await message.answer(
-        "Это бот уведомлений BG Shop.\n"
+        "Это бот уведомлений Servio.\n"
         "Сюда приходят уведомления о заказах и изменении их статусов."
     )
-    try:
-        log.info("bot_start_cmd", extra={"user_id": message.from_user.id if message.from_user else None})
-    except Exception:
-        pass
+    log.info("bot_start_cmd", extra={"user_id": message.from_user.id if message.from_user else None})
 
 
 @dp.callback_query()
@@ -246,7 +254,7 @@ async def on_callback(callback):
             action, order_id, sig = data.split(":", 2)
             order_id = int(order_id)
             ts = int(time.time())
-    except Exception:
+    except ValueError:
         await callback.answer("Некорректные данные", show_alert=True)
         CALLBACKS.labels(action="bad").inc()
         return
@@ -258,18 +266,25 @@ async def on_callback(callback):
         return
 
     url = f"{BACKEND_URL}/api/orders/{order_id}/{'approve' if action == 'approve' else 'reject'}/"
-    async with aiohttp.ClientSession() as session:
-        resp = await session.post(
-            url,
-            headers={"X-Internal-Token": INTERNAL_TOKEN, "X-Admin-Telegram-Id": str(admin_tg)},
-        )
-        if resp.status == 200:
-            await callback.message.edit_text(
-                f"Заказ #{order_id}: {'подтверждён ✅' if action == 'approve' else 'отклонён ❌'}"
+    try:
+        async with aiohttp.ClientSession() as session:
+            resp = await session.post(
+                url,
+                headers={"X-Internal-Token": INTERNAL_TOKEN, "X-Admin-Telegram-Id": str(admin_tg)},
             )
-            await callback.answer("Готово")
-        else:
-            await callback.answer(f"Ошибка: {resp.status}", show_alert=True)
+    except aiohttp.ClientError as exc:
+        log.warning("notify_order_callback_transport_failed", extra={"order_id": order_id, "action": action, "reason": str(exc)})
+        await callback.answer("Сервис недоступен", show_alert=True)
+        CALLBACKS.labels(action="transport_failed").inc()
+        return
+
+    if resp.status == 200:
+        await callback.message.edit_text(
+            f"Заказ #{order_id}: {'подтверждён ✅' if action == 'approve' else 'отклонён ❌'}"
+        )
+        await callback.answer("Готово")
+    else:
+        await callback.answer(f"Ошибка: {resp.status}", show_alert=True)
 
     CALLBACKS.labels(action="approve" if action == "approve" else "reject").inc()
 

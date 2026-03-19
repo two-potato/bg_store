@@ -7,12 +7,60 @@ x-default-logging: &default-logging
     compress: "true"
 
 services:
+  bot-notify:
+    environment:
+      ALERTMANAGER_SKIP_IF_NO_CHAT: "1"
+
+  glitchtip-postgres:
+    image: public.ecr.aws/docker/library/postgres:16
+    container_name: servio-glitchtip-postgres
+    environment:
+      POSTGRES_DB: glitchtip
+      POSTGRES_USER: glitchtip
+      POSTGRES_PASSWORD: glitchtip
+    volumes:
+      - glitchtip_pgdata:/var/lib/postgresql/data
+    logging: *default-logging
+    restart: unless-stopped
+
+  glitchtip-redis:
+    image: valkey/valkey:8
+    container_name: servio-glitchtip-redis
+    logging: *default-logging
+    restart: unless-stopped
+
+  glitchtip:
+    image: glitchtip/glitchtip:6
+    container_name: servio-glitchtip
+    env_file:
+      - path: ./deploy/glitchtip/.env.example
+        required: true
+      - path: ./deploy/glitchtip/.env
+        required: false
+    environment:
+      DATABASE_URL: postgres://glitchtip:glitchtip@glitchtip-postgres:5432/glitchtip
+      VALKEY_URL: redis://glitchtip-redis:6379
+      PORT: 8000
+      SERVER_ROLE: all_in_one
+    depends_on:
+      - glitchtip-postgres
+      - glitchtip-redis
+    ports:
+      - "${GLITCHTIP_PORT:-18000}:8000"
+    volumes:
+      - glitchtip_uploads:/code/uploads
+    logging: *default-logging
+    restart: unless-stopped
+
   prometheus:
     image: mirror.gcr.io/prom/prometheus
     container_name: servio-prometheus
+    ports:
+      - "9090:9090"
     volumes:
       - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./deploy/prometheus/search_rules.yml:/etc/prometheus/search_rules.yml:ro
     logging: *default-logging
     restart: unless-stopped
 
@@ -42,6 +90,8 @@ services:
   alertmanager:
     image: mirror.gcr.io/prom/alertmanager
     container_name: servio-alertmanager
+    ports:
+      - "9093:9093"
     volumes:
       - ./deploy/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     logging: *default-logging
@@ -50,6 +100,8 @@ services:
   grafana:
     image: grafana/grafana:12.4.0
     container_name: servio-grafana
+    ports:
+      - "3000:3000"
     environment:
       GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
@@ -95,10 +147,10 @@ services:
     logging: *default-logging
     restart: unless-stopped
 
-  es-exporter:
+  opensearch-exporter:
     image: quay.io/prometheuscommunity/elasticsearch-exporter:v1.7.0
-    container_name: servio-es-exporter
-    command: ["--es.uri=http://es:9200", "--es.all"]
+    container_name: servio-opensearch-exporter
+    command: ["--es.uri=http://opensearch:9200", "--es.all"]
     logging: *default-logging
     restart: unless-stopped
 
@@ -132,6 +184,8 @@ services:
   blackbox:
     image: mirror.gcr.io/prom/blackbox-exporter:v0.24.0
     container_name: servio-blackbox
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./deploy/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
     logging: *default-logging
@@ -141,3 +195,5 @@ volumes:
   grafana:
   loki-wal:
   loki-data:
+  glitchtip_pgdata:
+  glitchtip_uploads:

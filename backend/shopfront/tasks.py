@@ -59,7 +59,7 @@ def notify_contact_feedback(self, *, name: str, phone: str, message: str, source
     recipients = _admin_emails()
     if recipients:
         send_mail_message(
-            subject="[BG Shop] Новая заявка с формы контактов",
+            subject="[Servio] Новая заявка с формы контактов",
             message=text,
             recipient_list=recipients,
             logger=log,

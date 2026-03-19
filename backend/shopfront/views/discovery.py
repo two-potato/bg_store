@@ -90,7 +90,7 @@ class FavoriteToggleView(JsonLoginRequiredMixin, LoginRequiredMixin, View):
                 "ok": True,
                 "favorited": created,
                 "tracking": {
-                    "event": "favorite_add" if created else "wishlist_remove",
+                    "event": "wishlist_add" if created else "wishlist_remove",
                     "ecommerce": {"items": [_tracking_item_from_product(product)]},
                 },
             }

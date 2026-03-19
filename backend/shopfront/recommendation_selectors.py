@@ -46,6 +46,13 @@ def _dedupe_ids(values: list[int], *, exclude: set[int] | None = None, limit: in
     return out
 
 
+def session_recently_viewed_ids(request, *, limit: int = 24) -> list[int]:
+    if request is None or not hasattr(request, "session"):
+        return []
+    raw_ids = request.session.get("recently_viewed_products", []) or []
+    return _dedupe_ids([int(value) for value in raw_ids if str(value).isdigit()], limit=limit)
+
+
 def recommendation_set_ids(kind: str, *, scope_type: str, scope_id: int = 0, limit: int = 0) -> list[int]:
     now = timezone.now()
     row = (
@@ -65,6 +72,20 @@ def popularity_snapshot_ids(*, scope_type: str = RecommendationPopularitySnapsho
         .values_list("product_id", flat=True)[:limit]
     )
     return list(rows)
+
+
+def scoped_popularity_ids(*, scope_type: str, scope_ids: list[int], window: str = "7d", limit_per_scope: int = 8, limit: int = 24, exclude: set[int] | None = None) -> list[int]:
+    values: list[int] = []
+    for scope_id in scope_ids:
+        values.extend(
+            popularity_snapshot_ids(
+                scope_type=scope_type,
+                scope_id=int(scope_id),
+                window=window,
+                limit=limit_per_scope,
+            )
+        )
+    return _dedupe_ids(values, exclude=exclude, limit=limit)
 
 
 def product_affinity_ids(product: Product, *, affinity_type: str = RecommendationProductAffinity.AffinityType.CO_PURCHASE, limit: int = 8) -> list[int]:
@@ -104,6 +125,56 @@ def user_affinity_seed_ids(user, *, limit: int = 24) -> list[int]:
         .values_list("product_id", flat=True)[:limit]
     )
     return _dedupe_ids(favorites_ids + recent_ids, limit=limit)
+
+
+def contextual_seed_candidates(seed_ids: list[int], *, limit: int = 24) -> list[int]:
+    seeds = _dedupe_ids(seed_ids, limit=max(limit, 24))
+    if not seeds:
+        return []
+    products = list(
+        Product.objects.filter(id__in=seeds)
+        .only("id", "brand_id", "category_id", "seller_id")
+    )
+    brand_ids = [int(product.brand_id) for product in products if product.brand_id]
+    category_ids = [int(product.category_id) for product in products if product.category_id]
+    seller_ids = [int(product.seller_id) for product in products if product.seller_id]
+    values = (
+        scoped_popularity_ids(
+            scope_type=RecommendationPopularitySnapshot.ScopeType.CATEGORY,
+            scope_ids=category_ids,
+            limit_per_scope=6,
+            limit=limit * 2,
+            exclude=set(seeds),
+        )
+        + scoped_popularity_ids(
+            scope_type=RecommendationPopularitySnapshot.ScopeType.BRAND,
+            scope_ids=brand_ids,
+            limit_per_scope=4,
+            limit=limit,
+            exclude=set(seeds),
+        )
+        + scoped_popularity_ids(
+            scope_type=RecommendationPopularitySnapshot.ScopeType.SELLER,
+            scope_ids=seller_ids,
+            limit_per_scope=4,
+            limit=limit,
+            exclude=set(seeds),
+        )
+    )
+    semantic_ids = list(
+        Product.objects.filter(
+            models.Q(brand_id__in=brand_ids) | models.Q(category_id__in=category_ids) | models.Q(seller_id__in=seller_ids)
+        )
+        .exclude(id__in=seeds)
+        .order_by("-is_promo", "-is_new", "name")
+        .distinct()
+        .values_list("id", flat=True)[: limit * 2]
+    )
+    return _dedupe_ids(values + semantic_ids, exclude=set(seeds), limit=limit)
+
+
+def session_contextual_candidates(request, *, limit: int = 24) -> list[int]:
+    return contextual_seed_candidates(session_recently_viewed_ids(request, limit=max(limit, 24)), limit=limit)
 
 
 def personalized_candidate_ids(user, *, limit: int = 48) -> list[int]:

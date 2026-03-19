@@ -189,14 +189,14 @@ def test_product_detail_query_growth_is_sublinear(client):
         review = ProductReview.objects.create(product=product, user=u, rating=5 - idx, text=f"review {idx}")
         ProductReviewComment.objects.create(review=review, user=u, text=f"comment {idx}")
 
-    small = _query_count(client, f"/product/{product.slug}/")
+    small = _query_count(client, f"/products/{product.slug}/")
 
     extra_users = [User.objects.create_user(username=f"n1x{i}", password="pass") for i in range(8)]
     for idx, u in enumerate(extra_users):
         review = ProductReview.objects.create(product=product, user=u, rating=4, text=f"extra review {idx}")
         ProductReviewComment.objects.create(review=review, user=u, text=f"extra comment {idx}")
 
-    large = _query_count(client, f"/product/{product.slug}/")
+    large = _query_count(client, f"/products/{product.slug}/")
 
     assert large <= small + 5
 
@@ -221,7 +221,7 @@ def test_product_detail_query_growth_with_photos_and_questions_is_sublinear(clie
         ProductReviewPhoto.objects.create(review=review, image_url=f"https://example.com/review-{idx}.jpg", ordering=idx)
         ProductQuestion.objects.create(product=product, user=reviewer, question_text=f"question {idx}", is_public=True)
 
-    small = _query_count(client, f"/product/{product.slug}/")
+    small = _query_count(client, f"/products/{product.slug}/")
 
     more_reviewers = [get_user_model().objects.create_user(username=f"n1richx{i}", password="pass") for i in range(8)]
     for idx, reviewer in enumerate(more_reviewers):
@@ -230,7 +230,7 @@ def test_product_detail_query_growth_with_photos_and_questions_is_sublinear(clie
         ProductReviewPhoto.objects.create(review=review, image_url=f"https://example.com/review-extra-{idx}.jpg", ordering=idx)
         ProductQuestion.objects.create(product=product, user=reviewer, question_text=f"extra question {idx}", is_public=True)
 
-    large = _query_count(client, f"/product/{product.slug}/")
+    large = _query_count(client, f"/products/{product.slug}/")
 
     assert large <= small + 5
 

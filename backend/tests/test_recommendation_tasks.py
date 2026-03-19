@@ -6,6 +6,7 @@ from catalog.models import Brand, Category, Product
 from orders.models import Order, OrderItem
 from shopfront.models import (
     FavoriteProduct,
+    RecommendationEvent,
     RecommendationPopularitySnapshot,
     RecommendationProductAffinity,
     RecommendationReplenishmentProfile,
@@ -54,7 +55,18 @@ def test_refresh_recommendation_popularity_and_sets(user):
         scope_type=RecommendationPopularitySnapshot.ScopeType.GLOBAL,
         product=p1,
     ).exists()
+    assert RecommendationPopularitySnapshot.objects.filter(
+        scope_type=RecommendationPopularitySnapshot.ScopeType.BRAND,
+        scope_id=brand.id,
+        product=p1,
+    ).exists()
+    assert RecommendationPopularitySnapshot.objects.filter(
+        scope_type=RecommendationPopularitySnapshot.ScopeType.SELLER,
+        scope_id=seller.id,
+        product=p1,
+    ).exists()
     assert RecommendationSet.objects.filter(kind="home_popular").exists()
+    assert RecommendationSet.objects.filter(kind="recently_viewed_home", scope_id=user.id).exists()
 
 
 def test_refresh_recommendation_affinities_builds_copurchase_edges(user):
@@ -74,6 +86,26 @@ def test_refresh_recommendation_affinities_builds_copurchase_edges(user):
         target_product=p2,
         affinity_type=RecommendationProductAffinity.AffinityType.CO_PURCHASE,
     )
+    assert edge.orders_count == 1
+
+
+def test_refresh_recommendation_affinities_builds_coview_similarity_edges(user):
+    seller = get_user_model().objects.create_user(username="seller_task_coview", password="pass")
+    brand = Brand.objects.create(name="Brand Task View")
+    category = Category.objects.create(name="Category Task View")
+    p1 = _make_product(seller=seller, brand=brand, category=category, sku="22220111", name="View A")
+    p2 = _make_product(seller=seller, brand=brand, category=category, sku="22220112", name="View B")
+    RecommendationEvent.objects.create(event="recommendation_impression", user=user, session_key="sess-1", request_id="req-1", product=p1)
+    RecommendationEvent.objects.create(event="recommendation_click", user=user, session_key="sess-1", request_id="req-1", product=p2)
+
+    refresh_recommendation_affinities()
+
+    edge = RecommendationProductAffinity.objects.get(
+        source_product=p1,
+        target_product=p2,
+        affinity_type=RecommendationProductAffinity.AffinityType.SIMILAR,
+    )
+    assert edge.views_count == 1
     assert edge.orders_count == 1
 
 

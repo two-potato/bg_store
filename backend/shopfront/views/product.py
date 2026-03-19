@@ -48,6 +48,7 @@ from . import (
     _product_json_ld,
     _product_primary_image,
     _product_recommendation_section,
+    _product_url,
     _record_recently_viewed,
     _recently_viewed_products,
     _seller_rating_summary,
@@ -56,8 +57,15 @@ from . import (
     _store_reviews_context,
     _tracking_item_from_product,
     _truncate_text,
+    _vendor_url,
     log,
 )
+
+
+def _seller_store_for_user(user):
+    if user is None:
+        return None
+    return SellerStore.objects.select_related("owner", "owner__profile", "legal_entity").filter(owner=user).first()
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
@@ -96,9 +104,7 @@ class ProductDetailView(TemplateView):
         apply_offer_snapshot([product])
         _record_recently_viewed(self.request, product)
         ctx.update(build_reviews_context(product, self.request.user, seller_rating_summary=_seller_rating_summary))
-        seller_store = getattr(getattr(product, "active_offer", None), "seller_store", None) or (
-            getattr(product.seller, "seller_store", None) if product.seller_id else None
-        )
+        seller_store = getattr(getattr(product, "active_offer", None), "seller_store", None) or _seller_store_for_user(product.seller if product.seller_id else None)
         seller_summary = _seller_rating_summary(getattr(product, "seller_id", None))
         store_summary = _store_rating_summary(seller_store)
         ctx["seller_store"] = seller_store
@@ -153,7 +159,7 @@ class ProductDetailView(TemplateView):
                 self.request,
                 title=f"{product.name} — {getattr(product.brand, 'name', 'Servio')} | Servio",
                 description=_truncate_text(product.description or f"{product.name} в каталоге Servio: поставки для ресторанов, кафе, баров и гостиничных проектов.", 170),
-                canonical=_absolute_url(self.request, f"/product/{product.slug}/"),
+                canonical=_absolute_url(self.request, _product_url(product)),
                 og_type="product",
                 og_image=_absolute_url(self.request, primary_image.url) if primary_image else _default_og_image(self.request),
                 json_ld=_product_json_ld(self.request, product, seller_store=seller_store),
@@ -179,7 +185,11 @@ class SellerStoreDetailView(TemplateView):
     @log_calls(log)
     def get(self, request, *args, **kwargs):
         get_token(request)
-        return super().get(request, *args, **kwargs)
+        store_slug = kwargs.get("store_slug")
+        store = SellerStore.objects.only("slug").filter(slug=store_slug).first()
+        if store is None:
+            raise Http404("Store not found")
+        return redirect("vendor_detail", vendor_slug=store.slug, permanent=True)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -204,29 +214,54 @@ class SellerStoreDetailView(TemplateView):
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
-class SellerProfileView(TemplateView):
-    template_name = "shopfront/seller_profile.html"
+class VendorDetailView(TemplateView):
+    store = None
     seller_user = None
 
     @log_calls(log)
     def get(self, request, *args, **kwargs):
         get_token(request)
+        vendor_slug = kwargs.get("vendor_slug")
+        self.store = SellerStore.objects.select_related("owner", "owner__profile", "legal_entity").filter(slug=vendor_slug).first()
+        if self.store is not None:
+            return super().get(request, *args, **kwargs)
         user_model = get_user_model()
-        seller_slug = kwargs.get("seller_slug")
-        seller_user = user_model.objects.select_related("profile").filter(profile__slug=seller_slug).first()
-        if seller_user is None:
-            legacy_user = user_model.objects.select_related("profile").filter(username=seller_slug).first()
-            if legacy_user is not None:
-                return redirect("seller_profile", seller_slug=legacy_user.profile.slug, permanent=True)
-            raise Http404("Seller not found")
-        self.seller_user = seller_user
+        self.seller_user = user_model.objects.select_related("profile").filter(profile__slug=vendor_slug).first()
+        if self.seller_user is None:
+            raise Http404("Vendor not found")
+        seller_store = _seller_store_for_user(self.seller_user)
+        if seller_store is not None and seller_store.slug and seller_store.slug != vendor_slug:
+            return redirect("vendor_detail", vendor_slug=seller_store.slug, permanent=True)
         return super().get(request, *args, **kwargs)
+
+    def get_template_names(self):
+        if self.store is not None:
+            return ["shopfront/store_detail.html"]
+        return ["shopfront/seller_profile.html"]
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        if self.store is not None:
+            store = self.store
+            product_ids = list(
+                Product.objects.filter(seller=store.owner).order_by("-is_new", "name").values_list("id", flat=True)[:60]
+            )
+            products = _ordered_products_with_related(product_ids, include_rating=True)
+            ctx.update({"store": store, "products": products, "store_rating": _store_rating_summary(store)})
+            ctx.update(_store_reviews_context(store, self.request.user))
+            ctx.update(
+                _seo_context(
+                    self.request,
+                    title=f"{store.name} — витрина поставщика | Servio",
+                    description=f"Ассортимент магазина {store.name} на Servio: поставщик товаров для HoReCa, актуальные позиции и профессиональный каталог.",
+                    canonical=_absolute_url(self.request, _vendor_url(store=store)),
+                )
+            )
+            return ctx
+
         seller_user = self.seller_user
         if seller_user is None:
-            raise Http404("Seller not found")
+            raise Http404("Vendor not found")
         memberships = LegalEntityMembership.objects.select_related("legal_entity", "role").filter(user=seller_user)
         stores = SellerStore.objects.select_related("legal_entity").filter(owner=seller_user).order_by("name")
         seller_rating = _seller_rating_summary(seller_user.id)
@@ -245,16 +280,39 @@ class SellerProfileView(TemplateView):
                 self.request,
                 title=f"{display_name} — профиль поставщика | Servio",
                 description=f"Профиль поставщика {display_name} на Servio: магазины, юридические данные и ассортимент для HoReCa.",
+                canonical=_absolute_url(self.request, _vendor_url(user=seller_user)),
             )
         )
         return ctx
+
+
+@method_decorator(ensure_csrf_cookie, name="dispatch")
+class SellerProfileView(TemplateView):
+    template_name = "shopfront/seller_profile.html"
+    seller_user = None
+
+    @log_calls(log)
+    def get(self, request, *args, **kwargs):
+        get_token(request)
+        user_model = get_user_model()
+        seller_slug = kwargs.get("seller_slug")
+        seller_user = user_model.objects.select_related("profile").filter(profile__slug=seller_slug).first()
+        if seller_user is None:
+            legacy_user = user_model.objects.select_related("profile").filter(username=seller_slug).first()
+            if legacy_user is not None:
+                return redirect("vendor_detail", vendor_slug=getattr(_seller_store_for_user(legacy_user), "slug", None) or legacy_user.profile.slug, permanent=True)
+            raise Http404("Seller not found")
+        return redirect("vendor_detail", vendor_slug=getattr(_seller_store_for_user(seller_user), "slug", None) or seller_user.profile.slug, permanent=True)
+
+    def get_context_data(self, **kwargs):
+        raise Http404("Seller not found")
 
 
 class SellerStoreLegacyRedirectView(View):
     @log_calls(log)
     def get(self, request, store_id: int):
         store = get_object_or_404(SellerStore, pk=store_id)
-        return redirect("seller_store_detail", store_slug=store.slug, permanent=True)
+        return redirect("vendor_detail", vendor_slug=store.slug, permanent=True)
 
 
 class SellerProfileLegacyRedirectView(View):
@@ -264,12 +322,13 @@ class SellerProfileLegacyRedirectView(View):
         seller_user = user_model.objects.select_related("profile").filter(username=username).first()
         if seller_user is None:
             raise Http404("Seller not found")
-        return redirect("seller_profile", seller_slug=seller_user.profile.slug, permanent=True)
+        return redirect("vendor_detail", vendor_slug=getattr(_seller_store_for_user(seller_user), "slug", None) or seller_user.profile.slug, permanent=True)
 
 
 class StoreReviewUpsertView(LoginRequiredMixin, View):
     @log_calls(log)
-    def post(self, request, store_slug):
+    def post(self, request, store_slug=None, vendor_slug=None):
+        store_slug = store_slug or vendor_slug
         store = get_object_or_404(SellerStore, slug=store_slug)
         raw_rating = (request.POST.get("rating") or "").strip()
         text = (request.POST.get("text") or "").strip()
@@ -279,7 +338,7 @@ class StoreReviewUpsertView(LoginRequiredMixin, View):
             rating = 0
         if rating < 1 or rating > 5:
             messages.error(request, "Рейтинг магазина должен быть от 1 до 5")
-            return redirect("seller_store_detail", store_slug=store.slug)
+            return redirect("vendor_detail", vendor_slug=store.slug)
 
         has_verified_purchase = OrderItem.objects.filter(
             order__placed_by=request.user,
@@ -292,24 +351,32 @@ class StoreReviewUpsertView(LoginRequiredMixin, View):
             defaults={"rating": rating, "text": text, "is_verified_buyer": has_verified_purchase},
         )
         messages.success(request, "Отзыв о магазине сохранён")
-        return redirect(f"{reverse('seller_store_detail', kwargs={'store_slug': store.slug})}#store-reviews")
+        return redirect(f"{reverse('vendor_detail', kwargs={'vendor_slug': store.slug})}#store-reviews")
 
 
 class StoreReviewDeleteView(LoginRequiredMixin, View):
     @log_calls(log)
-    def post(self, request, store_slug):
+    def post(self, request, store_slug=None, vendor_slug=None):
+        store_slug = store_slug or vendor_slug
         store = get_object_or_404(SellerStore, slug=store_slug)
         deleted, _ = StoreReview.objects.filter(store=store, user=request.user).delete()
         if deleted:
             messages.success(request, "Отзыв о магазине удалён")
-        return redirect(f"{reverse('seller_store_detail', kwargs={'store_slug': store.slug})}#store-reviews")
+        return redirect(f"{reverse('vendor_detail', kwargs={'vendor_slug': store.slug})}#store-reviews")
 
 
 class ProductPkRedirectView(View):
     @log_calls(log)
     def get(self, request, pk):
         product = get_object_or_404(Product, pk=pk)
-        return redirect(f"/product/{product.slug}/", permanent=True)
+        return redirect(_product_url(product), permanent=True)
+
+
+class ProductSlugRedirectView(View):
+    @log_calls(log)
+    def get(self, request, slug):
+        product = get_object_or_404(Product, slug=slug)
+        return redirect(_product_url(product), permanent=True)
 
 
 class ProductReviewUpsertView(LoginRequiredMixin, View):
@@ -326,13 +393,13 @@ class ProductReviewUpsertView(LoginRequiredMixin, View):
             if request.headers.get("HX-Request"):
                 return render_reviews_partial(request, product, seller_rating_summary=_seller_rating_summary, status=400)
             messages.error(request, "Рейтинг должен быть от 1 до 5")
-            return redirect(f"/product/{product.slug}/#reviews")
+            return redirect(f"{_product_url(product)}#reviews")
         upsert_product_review(product=product, user=request.user, rating=rating, text=text)
         context = build_reviews_context(product, request.user, seller_rating_summary=_seller_rating_summary)
         if request.headers.get("HX-Request"):
             return render(request, "shopfront/partials/product_reviews.html", context)
         messages.success(request, "Отзыв сохранен")
-        return redirect(f"/product/{product.slug}/#reviews")
+        return redirect(f"{_product_url(product)}#reviews")
 
 
 class ProductReviewDeleteView(LoginRequiredMixin, View):
@@ -345,7 +412,7 @@ class ProductReviewDeleteView(LoginRequiredMixin, View):
         context = build_reviews_context(product, request.user, seller_rating_summary=_seller_rating_summary)
         if request.headers.get("HX-Request"):
             return render(request, "shopfront/partials/product_reviews.html", context)
-        return redirect(f"/product/{product.slug}/#reviews")
+        return redirect(f"{_product_url(product)}#reviews")
 
 
 class ProductReviewCommentCreateView(LoginRequiredMixin, View):
@@ -357,12 +424,12 @@ class ProductReviewCommentCreateView(LoginRequiredMixin, View):
         if not text:
             if request.headers.get("HX-Request"):
                 return render_reviews_partial(request, product, seller_rating_summary=_seller_rating_summary, status=400)
-            return redirect(f"/product/{product.slug}/#reviews")
+            return redirect(f"{_product_url(product)}#reviews")
         create_review_comment(review=review, user=request.user, text=text)
         context = build_reviews_context(product, request.user, seller_rating_summary=_seller_rating_summary)
         if request.headers.get("HX-Request"):
             return render(request, "shopfront/partials/product_reviews.html", context)
-        return redirect(f"/product/{product.slug}/#reviews")
+        return redirect(f"{_product_url(product)}#reviews")
 
 
 class ProductReviewCommentUpdateView(LoginRequiredMixin, View):
@@ -382,12 +449,12 @@ class ProductReviewCommentUpdateView(LoginRequiredMixin, View):
         if not text:
             if request.headers.get("HX-Request"):
                 return render_reviews_partial(request, product, seller_rating_summary=_seller_rating_summary, status=400)
-            return redirect(f"/product/{product.slug}/#reviews")
+            return redirect(f"{_product_url(product)}#reviews")
         update_review_comment(comment=comment, text=text)
         context = build_reviews_context(product, request.user, seller_rating_summary=_seller_rating_summary)
         if request.headers.get("HX-Request"):
             return render(request, "shopfront/partials/product_reviews.html", context)
-        return redirect(f"/product/{product.slug}/#reviews")
+        return redirect(f"{_product_url(product)}#reviews")
 
 
 class ProductReviewCommentDeleteView(LoginRequiredMixin, View):
@@ -407,7 +474,7 @@ class ProductReviewCommentDeleteView(LoginRequiredMixin, View):
         context = build_reviews_context(product, request.user, seller_rating_summary=_seller_rating_summary)
         if request.headers.get("HX-Request"):
             return render(request, "shopfront/partials/product_reviews.html", context)
-        return redirect(f"/product/{product.slug}/#reviews")
+        return redirect(f"{_product_url(product)}#reviews")
 
 
 class ProductReviewVoteView(LoginRequiredMixin, View):
@@ -419,12 +486,12 @@ class ProductReviewVoteView(LoginRequiredMixin, View):
         if value not in {ProductReviewVote.Value.HELPFUL, ProductReviewVote.Value.UNHELPFUL}:
             if request.headers.get("HX-Request"):
                 return render_reviews_partial(request, product, seller_rating_summary=_seller_rating_summary, status=400)
-            return redirect(f"/product/{product.slug}/#reviews")
+            return redirect(f"{_product_url(product)}#reviews")
         apply_review_vote(review=review, user=request.user, value=value)
         context = build_reviews_context(product, request.user, seller_rating_summary=_seller_rating_summary)
         if request.headers.get("HX-Request"):
             return render(request, "shopfront/partials/product_reviews.html", context)
-        return redirect(f"/product/{product.slug}/#reviews")
+        return redirect(f"{_product_url(product)}#reviews")
 
 
 class ProductQuestionCreateView(LoginRequiredMixin, View):
@@ -435,13 +502,13 @@ class ProductQuestionCreateView(LoginRequiredMixin, View):
         if not question_text:
             if request.headers.get("HX-Request"):
                 return render_reviews_partial(request, product, seller_rating_summary=_seller_rating_summary, status=400)
-            return redirect(f"/product/{product.slug}/#questions")
+            return redirect(f"{_product_url(product)}#questions")
         create_product_question(product=product, user=request.user, question_text=question_text)
         context = build_reviews_context(product, request.user, seller_rating_summary=_seller_rating_summary)
         if request.headers.get("HX-Request"):
             return render(request, "shopfront/partials/product_reviews.html", context)
         messages.success(request, "Вопрос отправлен")
-        return redirect(f"/product/{product.slug}/#questions")
+        return redirect(f"{_product_url(product)}#questions")
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")

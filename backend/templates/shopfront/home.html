@@ -53,7 +53,7 @@
     <div class="servio-home__categories">
       {% for c in cats %}
         {% if forloop.counter <= 8 %}
-          <a class="servio-home__category" href="/catalog/?category={{ c.slug }}">
+          <a class="servio-home__category" href="/catalog/?category={{ c.full_slug_path|default:c.slug }}">
             <span class="servio-home__category-icon">{% include 'shopfront/icons/category.svg' %}</span>
             <strong>{{ c.name }}</strong>
             <span>Рабочий ассортимент для HoReCa</span>

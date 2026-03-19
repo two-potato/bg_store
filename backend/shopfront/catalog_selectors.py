@@ -11,6 +11,21 @@ from catalog.offer_service import active_offer_queryset, apply_offer_snapshot
 log = logging.getLogger("shopfront")
 
 
+def category_slug_path(category: Category | None, by_id: dict[int, Category] | None = None) -> str:
+    if category is None:
+        return ""
+    parts: list[str] = []
+    current = category
+    safety = 0
+    while current is not None and safety < 12:
+        if current.slug:
+            parts.append(current.slug)
+        parent_id = getattr(current, "parent_id", None)
+        current = by_id.get(parent_id) if by_id is not None and parent_id else getattr(current, "parent", None)
+        safety += 1
+    return "/".join(reversed(parts))
+
+
 def _cache_get(key, default=None):
     try:
         return cache.get(key, default)
@@ -55,6 +70,7 @@ def category_descendant_ids(category: Category | None) -> list[int]:
 
 def category_option_rows(categories: list[Category], max_depth: int | None = None) -> list[dict]:
     by_parent: dict[int | None, list[Category]] = {}
+    by_id = {category.id: category for category in categories}
     for category in categories:
         by_parent.setdefault(category.parent_id, []).append(category)
     for children in by_parent.values():
@@ -69,7 +85,7 @@ def category_option_rows(categories: list[Category], max_depth: int | None = Non
             rows.append(
                 {
                     "id": node.id,
-                    "slug": node.slug,
+                    "slug": category_slug_path(node, by_id),
                     "name": node.name,
                     "depth": depth,
                     "label": f'{"\u00A0\u00A0" * depth}{node.name}',

@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils.text import slugify
+from django.utils.functional import cached_property
 
 from core.models import TimeStampedModel
 
@@ -79,6 +80,18 @@ class Category(TimeStampedModel, SeoFieldsMixin):
 
     def __str__(self):
         return self.name
+
+    @cached_property
+    def full_slug_path(self) -> str:
+        parts: list[str] = []
+        current = self
+        safety = 0
+        while current is not None and safety < 12:
+            if current.slug:
+                parts.append(current.slug)
+            current = getattr(current, "parent", None)
+            safety += 1
+        return "/".join(reversed(parts))
 
     def save(self, *args, **kwargs):
         if not self.slug:

@@ -73,7 +73,7 @@
       <h2>Категории бренда</h2>
       <div class="flex flex-wrap gap-2">
         {% for category in child_categories %}
-          <a class="btn btn-sm btn-outline" href="/catalog/categories/{{ category.slug }}/" hx-boost="false">{{ category.name }}</a>
+          <a class="btn btn-sm btn-outline" href="/categories/{{ category.full_slug_path }}/" hx-boost="false">{{ category.name }}</a>
         {% endfor %}
       </div>
     </section>

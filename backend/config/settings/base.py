@@ -333,6 +333,14 @@ CACHE_TTL_CATALOG_API = int(os.getenv("CACHE_TTL_CATALOG_API", "120"))
 CACHE_TTL_COMMERCE_LOOKUPS = int(os.getenv("CACHE_TTL_COMMERCE_LOOKUPS", "600"))
 CACHE_TTL_PDP_SUMMARY = int(os.getenv("CACHE_TTL_PDP_SUMMARY", "300"))
 CACHE_TTL_PDP_RECOMMENDATIONS = int(os.getenv("CACHE_TTL_PDP_RECOMMENDATIONS", "180"))
+RECOMMENDATION_ML_ENABLED = _env_bool("RECOMMENDATION_ML_ENABLED", True)
+RECOMMENDATION_ML_ROLLOUT_PERCENT = int(os.getenv("RECOMMENDATION_ML_ROLLOUT_PERCENT", "0"))
+RECOMMENDATION_ML_SURFACES = [
+    value.strip()
+    for value in os.getenv("RECOMMENDATION_ML_SURFACES", "home,catalog").split(",")
+    if value.strip()
+]
+RECOMMENDATION_ML_TRAINING_WINDOW_DAYS = int(os.getenv("RECOMMENDATION_ML_TRAINING_WINDOW_DAYS", "30"))
 
 # Admin email notifications (orders lifecycle)
 ADMIN_NOTIFY_EMAILS = [
@@ -381,6 +389,26 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": timedelta(minutes=10),
     },
 }
+
+if RECOMMENDATION_ML_ENABLED:
+    CELERY_BEAT_SCHEDULE.update(
+        {
+            "recommendation-ml-refresh-features": {
+                "task": "shopfront.tasks.refresh_recommendation_ml_features",
+                "schedule": timedelta(hours=6),
+            },
+            "recommendation-ml-train-home": {
+                "task": "shopfront.tasks.train_recommendation_ml_surface",
+                "schedule": timedelta(days=1),
+                "kwargs": {"surface": "home", "label_kind": "purchase", "activate": True},
+            },
+            "recommendation-ml-train-catalog": {
+                "task": "shopfront.tasks.train_recommendation_ml_surface",
+                "schedule": timedelta(days=1),
+                "kwargs": {"surface": "catalog", "label_kind": "purchase", "activate": True},
+            },
+        }
+    )
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

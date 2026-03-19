@@ -15,13 +15,13 @@
             {% for product in products %}
               <th class="min-w-[240px]">
                 <div class="space-y-3">
-                  <a href="/product/{{ product.slug }}/" class="font-semibold" hx-boost="false">{{ product.name }}</a>
+                  <a href="/products/{{ product.slug }}/" class="font-semibold" hx-boost="false">{{ product.name }}</a>
                   <div class="text-sm text-base-content/70">
                     {% if product.brand %}<a href="/brands/{{ product.brand.slug }}/" hx-boost="false">{{ product.brand.name }}</a>{% endif %}
                     {% if product.series %} · <a href="/catalog/?series={{ product.series_id }}" hx-boost="false">{{ product.series.name }}</a>{% endif %}
                   </div>
                   <div class="flex flex-wrap gap-2">
-                    <a class="btn btn-xs btn-outline" href="/product/{{ product.slug }}/" hx-boost="false">Карточка</a>
+                    <a class="btn btn-xs btn-outline" href="/products/{{ product.slug }}/" hx-boost="false">Карточка</a>
 	                    <button class="btn btn-xs btn-outline"
 	                            type="button"
 	                            data-compare-toggle

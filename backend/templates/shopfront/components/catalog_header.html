@@ -6,7 +6,7 @@
       <a class="catalog-head-neo__crumb" href="/catalog/">Каталог</a>
       {% for crumb in category_breadcrumbs %}
         <span>/</span>
-        <a class="catalog-head-neo__crumb" href="/catalog/?category={{ crumb.slug }}">{{ crumb.name }}</a>
+        <a class="catalog-head-neo__crumb" href="/catalog/?category={{ crumb.full_slug_path }}">{{ crumb.name }}</a>
       {% endfor %}
     </nav>
   {% endif %}
@@ -112,7 +112,7 @@
       <div class="catalog-chip-rail__label">Подкатегории</div>
       <div class="catalog-chip-rail__track" aria-label="Подкатегории">
         {% for child in selected_category_children %}
-          <a class="catalog-active-chip" href="/catalog/?category={{ child.slug }}">{{ child.name }}</a>
+          <a class="catalog-active-chip" href="/catalog/?category={{ child.full_slug_path }}">{{ child.name }}</a>
         {% endfor %}
       </div>
     </section>

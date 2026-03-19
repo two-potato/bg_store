@@ -30,7 +30,7 @@
               <textarea class="textarea textarea-bordered w-full" rows="3" name="answer_text" placeholder="Ответ продавца">{{ question.answer_text }}</textarea>
               <label class="label cursor-pointer gap-2 justify-start"><input type="checkbox" class="checkbox" name="is_public" {% if question.is_public %}checked{% endif %}><span class="label-text">Показывать публично на карточке товара</span></label>
               <div class="flex items-center justify-between gap-2">
-                <a class="account-2026__panel-link" href="/product/{{ question.product.slug }}/" hx-boost="false">Открыть товар</a>
+                <a class="account-2026__panel-link" href="/products/{{ question.product.slug }}/" hx-boost="false">Открыть товар</a>
                 <button class="btn btn-primary btn-sm" type="submit">Сохранить ответ</button>
               </div>
               {% if question.answered_by %}

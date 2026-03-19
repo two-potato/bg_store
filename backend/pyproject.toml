@@ -22,7 +22,8 @@ dependencies = [
   "django-filter>=24.2",
   "prometheus-client>=0.20",
   "django-allauth>=64.0",
-  "sentry-sdk[django]>=2.18"
+  "sentry-sdk[django]>=2.18",
+  "scikit-learn>=1.5"
   , "requests>=2.32"
   , "cryptography>=42.0"
 ]

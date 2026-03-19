@@ -34,6 +34,10 @@
       payload.event === "search_result_click" ||
       payload.event === "recommendation_impression" ||
       payload.event === "recommendation_click" ||
+      payload.event === "add_to_cart" ||
+      payload.event === "remove_from_cart" ||
+      payload.event === "purchase" ||
+      payload.event === "recommendation_dismiss" ||
       payload.event === "favorite_add" ||
       payload.event === "saved_list_add"
     );
@@ -470,6 +474,22 @@
       item_name: target.getAttribute("data-search-product-name") || "",
       position: parseInt(target.getAttribute("data-search-position") || "0", 10) || 0,
     });
+  });
+
+  document.body.addEventListener("click", function (e) {
+    var target = e.target && e.target.closest ? e.target.closest("[data-recommendation-dismiss]") : null;
+    if (!target) return;
+    var card = target.closest ? target.closest(".product-card") : null;
+    push({
+      event: "recommendation_dismiss",
+      recommendation_source: target.getAttribute("data-recommendation-source") || "",
+      surface: target.getAttribute("data-recommendation-surface") || "",
+      item_id: target.getAttribute("data-search-product-id") || "",
+      item_name: target.getAttribute("data-search-product-name") || "",
+    });
+    if (card && card.parentNode) {
+      card.parentNode.removeChild(card);
+    }
   });
 
   window.ServioAnalytics = {

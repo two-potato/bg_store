@@ -17,7 +17,7 @@
             <div class="text-xs uppercase tracking-wide text-base-content/50 mb-2">Возможно, вы искали</div>
             <div class="flex flex-wrap gap-2">
               {% for suggestion in search_corrections %}
-                <a class="btn btn-sm btn-outline" href="/catalog/?q={{ suggestion|urlencode }}">{{ suggestion }}</a>
+                <a class="btn btn-sm btn-outline" href="/search/?q={{ suggestion|urlencode }}">{{ suggestion }}</a>
               {% endfor %}
             </div>
           </div>
@@ -25,10 +25,10 @@
         <div class="flex flex-wrap gap-2">
           <a class="btn btn-sm btn-outline" href="/catalog/">Сбросить фильтры</a>
           {% if sel_category and sel_category.parent %}
-            <a class="btn btn-sm btn-outline" href="/catalog/?category={{ sel_category.parent.slug }}">Вернуться в {{ sel_category.parent.name }}</a>
+            <a class="btn btn-sm btn-outline" href="/catalog/?category={{ sel_category.parent.full_slug_path|default:sel_category.parent.slug }}">Вернуться в {{ sel_category.parent.name }}</a>
           {% endif %}
           {% for suggestion in search_suggestions %}
-            <a class="btn btn-sm btn-ghost" href="/catalog/?q={{ suggestion|urlencode }}">{{ suggestion }}</a>
+            <a class="btn btn-sm btn-ghost" href="/search/?q={{ suggestion|urlencode }}">{{ suggestion }}</a>
           {% endfor %}
         </div>
         {% if zero_results_products %}

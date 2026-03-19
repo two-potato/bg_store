@@ -11,7 +11,7 @@
     <a href="/catalog/" hx-boost="false">Каталог</a>
     {% for crumb in breadcrumbs %}
       <span>/</span>
-      <a href="/catalog/categories/{{ crumb.slug }}/" hx-boost="false">{{ crumb.name }}</a>
+      <a href="/categories/{{ crumb.full_slug_path }}/" hx-boost="false">{{ crumb.name }}</a>
     {% endfor %}
     <span>/</span>
     <span>{{ p.name }}</span>
@@ -148,7 +148,7 @@
       </div>
       <div class="product-lite-2026__actions">
         {% if seller_store %}
-          <a class="btn btn-outline btn-sm" href="/stores/{{ seller_store.slug }}/" hx-boost="false">Магазин продавца</a>
+          <a class="btn btn-outline btn-sm" href="/vendors/{{ seller_store.slug }}/" hx-boost="false">Магазин продавца</a>
         {% endif %}
         {% if can_edit_product %}
           <a class="btn btn-outline btn-sm" href="/account/seller/products/{{ p.id }}/edit/" hx-boost="false">Редактировать карточку</a>
@@ -213,8 +213,8 @@
       <h2>Поставщик и классификация</h2>
       <dl class="product-lite-2026__facts">
         <div><dt>Бренд</dt><dd>{% if p.brand %}<a href="/brands/{{ p.brand.slug }}/" hx-boost="false">{{ p.brand.name }}</a>{% else %}—{% endif %}</dd></div>
-        {% if p.category %}<div><dt>Категория</dt><dd>{% if p.category.parent %}<a href="/catalog/categories/{{ p.category.parent.slug }}/" hx-boost="false">{{ p.category.parent.name }}</a> / {% endif %}<a href="/catalog/categories/{{ p.category.slug }}/" hx-boost="false">{{ p.category.name }}</a></dd></div>{% endif %}
-        {% if seller_store %}<div><dt>Магазин</dt><dd><a href="/stores/{{ seller_store.slug }}/" hx-boost="false">{{ seller_store.name }}</a>{% if store_rating_count %} · {{ store_rating_avg|floatformat:1 }} / 5{% endif %}</dd></div>{% endif %}
+        {% if p.category %}<div><dt>Категория</dt><dd>{% if p.category.parent %}<a href="/categories/{{ p.category.parent.full_slug_path }}/" hx-boost="false">{{ p.category.parent.name }}</a> / {% endif %}<a href="/categories/{{ p.category.full_slug_path }}/" hx-boost="false">{{ p.category.name }}</a></dd></div>{% endif %}
+        {% if seller_store %}<div><dt>Магазин</dt><dd><a href="/vendors/{{ seller_store.slug }}/" hx-boost="false">{{ seller_store.name }}</a>{% if store_rating_count %} · {{ store_rating_avg|floatformat:1 }} / 5{% endif %}</dd></div>{% endif %}
         {% if seller_rating_count %}<div><dt>Рейтинг продавца</dt><dd>{{ seller_rating_avg|floatformat:1 }} / 5 · {{ seller_rating_count }} отзывов</dd></div>{% endif %}
         <div><dt>НДС</dt><dd>Цена указана с НДС</dd></div>
         {% if p.flavor %}<div><dt>Вкус</dt><dd>{{ p.flavor }}</dd></div>{% endif %}
@@ -355,7 +355,7 @@
 </section>
 {% endif %}
 <section class="page-2026 product-reco-2026"
-         hx-get="/product/{{ p.slug }}/recommendations/fbt/"
+         hx-get="/products/{{ p.slug }}/recommendations/fbt/"
          hx-trigger="load delay:150ms"
          hx-target="this"
          hx-select=".product-reco-2026"
@@ -366,7 +366,7 @@
   </header>
 </section>
 <section class="page-2026 product-reco-2026"
-         hx-get="/product/{{ p.slug }}/recommendations/seller-cross/"
+         hx-get="/products/{{ p.slug }}/recommendations/seller-cross/"
          hx-trigger="load delay:250ms"
          hx-target="this"
          hx-select=".product-reco-2026"

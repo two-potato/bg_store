@@ -19,7 +19,9 @@ from ..checkout_common import attach_cart_badge_oob as _attach_cart_badge_oob, l
 from ..checkout_support import recommendation_impression_payload as _recommendation_impression_payload, tracking_item_from_product as _tracking_item_from_product
 from ..recommendation_attribution_service import (
     bind_cart_item_recommendation_attribution,
+    cart_item_recommendation_attribution,
     record_recommendation_event,
+    remove_cart_item_recommendation_attribution,
     recommendation_attribution_for_product,
 )
 from ..recommendation_service import cart_recommendations
@@ -170,7 +172,21 @@ class CartRemoveView(View):
     @log_calls(log)
     def post(self, request):
         pid = request.POST.get("product_id")
+        recommendation_attribution = cart_item_recommendation_attribution(request, product_id=pid)
+        product = None
+        if str(pid or "").isdigit():
+            product = Product.objects.filter(pk=int(pid)).first()
         remove_from_cart_session(request=request, product_id=pid)
+        if product is not None and recommendation_attribution:
+            record_recommendation_event(
+                request=request,
+                event_name="remove_from_cart",
+                product=product,
+                attribution=recommendation_attribution,
+                payload={"surface": "cart"},
+                logger=log,
+            )
+            remove_cart_item_recommendation_attribution(request, product_id=pid)
         cart_ctx = _cart_summary(request)
         target = (request.headers.get("HX-Target") or "").strip()
         template = "shopfront/partials/cart_content.html" if target == "cart-root" else "shopfront/partials/cart_panel.html"
@@ -189,6 +205,24 @@ class CartRemoveView(View):
 class CartClearView(View):
     @log_calls(log)
     def post(self, request):
+        cart_products = {
+            str(product_id): Product.objects.filter(pk=int(product_id)).first()
+            for product_id in list((request.session.get("cart") or {}).keys())
+            if str(product_id or "").isdigit()
+        }
+        for product_id, product in cart_products.items():
+            attribution = cart_item_recommendation_attribution(request, product_id=product_id)
+            if product is None or not attribution:
+                continue
+            record_recommendation_event(
+                request=request,
+                event_name="remove_from_cart",
+                product=product,
+                attribution=attribution,
+                payload={"surface": "cart", "clear_all": True},
+                logger=log,
+            )
+            remove_cart_item_recommendation_attribution(request, product_id=product_id)
         clear_cart_session(request=request)
         cart_ctx = _cart_summary(request)
         target = (request.headers.get("HX-Target") or "").strip()

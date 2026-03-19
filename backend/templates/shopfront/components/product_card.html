@@ -9,7 +9,7 @@ Usage:
 <div class="card product-card product-card--neo bg-base-100 h-full">
   {% with images=p.images.all|slice:":4" %}
     {% with slide_count=images|length %}
-      <a href="/product/{{ p.slug }}/"
+      <a href="/products/{{ p.slug }}/"
          class="product-card__media-link"
          aria-label="Подробнее о товаре {{ p.name }}"
          data-search-click
@@ -81,6 +81,22 @@ Usage:
                 </svg>
               </a>
             {% endif %}
+            {% if recommendation_source %}
+              <button type="button"
+                      class="product-card__quick-action"
+                      data-recommendation-dismiss
+                      data-recommendation-source="{{ recommendation_source }}"
+                      data-recommendation-surface="{{ recommendation_surface|default:'' }}"
+                      data-search-product-id="{{ p.id }}"
+                      data-search-product-name="{{ p.name }}"
+                      aria-label="Скрыть рекомендацию"
+                      title="Скрыть рекомендацию">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M18 6 6 18"></path>
+                  <path d="m6 6 12 12"></path>
+                </svg>
+              </button>
+            {% endif %}
           </div>
           {% if slide_count > 1 %}
             <button type="button" class="product-card-carousel__nav is-prev" data-carousel-prev="{{ p.id }}" aria-label="Предыдущее фото">‹</button>
@@ -105,7 +121,7 @@ Usage:
       {% endif %}
       <span class="product-card__pack">{{ p.pack_qty }} {{ p.unit }}</span>
     </div>
-    <a href="/product/{{ p.slug }}/"
+    <a href="/products/{{ p.slug }}/"
        class="product-card__name-link"
        aria-label="Открыть {{ p.name }}"
        data-search-click
@@ -130,17 +146,17 @@ Usage:
       {% endfor %}
     </div>
       {% if p.active_offer and p.active_offer.seller_store %}
-      <a class="product-card__store-link" href="/stores/{{ p.active_offer.seller_store.slug }}/" hx-boost="false">
+      <a class="product-card__store-link" href="/vendors/{{ p.active_offer.seller_store.slug }}/" hx-boost="false">
         {{ p.active_offer.seller_store.name }}
       </a>
       {% elif p.seller and p.seller.seller_store %}
-      <a class="product-card__store-link" href="/stores/{{ p.seller.seller_store.slug }}/" hx-boost="false">
+      <a class="product-card__store-link" href="/vendors/{{ p.seller.seller_store.slug }}/" hx-boost="false">
         {{ p.seller.seller_store.name }}
       </a>
     {% endif %}
     <div class="product-card__subline">
       <a class="product-card__rating"
-         href="/product/{{ p.slug }}/#product-reviews"
+         href="/products/{{ p.slug }}/#product-reviews"
          hx-boost="false"
          aria-label="Перейти к отзывам о товаре">
         <span class="text-amber-400">★</span>

@@ -41,6 +41,8 @@ from . import (
     _absolute_url,
     _cache_get,
     _cache_set,
+    _category_path,
+    _category_url,
     _cached_catalog_brands,
     _cached_catalog_categories,
     _cached_catalog_tags,
@@ -109,7 +111,16 @@ class CatalogView(View):
             if str(category).isdigit():
                 selected_category_obj = Category.objects.select_related("parent").filter(id=int(category)).first()
             else:
-                selected_category_obj = Category.objects.select_related("parent").filter(slug=category).first()
+                category_parts = [part.strip() for part in str(category).split("/") if part.strip()]
+                if len(category_parts) > 1:
+                    cursor = None
+                    for part in category_parts:
+                        cursor = Category.objects.select_related("parent").filter(parent=cursor, slug=part).first()
+                        if cursor is None:
+                            break
+                    selected_category_obj = cursor
+                else:
+                    selected_category_obj = Category.objects.select_related("parent").filter(slug=category).first()
             if selected_category_obj:
                 qs = qs.filter(category_id__in=_category_descendant_ids(selected_category_obj))
             else:
@@ -287,7 +298,7 @@ class CatalogView(View):
             elif str(category).isdigit():
                 sel_category = next((item for item in categories if item.id == int(category)), None)
             else:
-                sel_category = next((item for item in categories if item.slug == category), None)
+                sel_category = next((item for item in categories if item.slug == category or _category_path(item) == category), None)
         else:
             sel_category = None
         sel_tag = _selected_tag_object(tag, tags)
@@ -314,12 +325,17 @@ class CatalogView(View):
         is_category_only = bool(category) and not any([q, brand, series, tag, sort, availability, delivery_eta, min_price, max_price]) and page == 1
         seo_robots = "index,follow" if (not any([q, brand, seller, series, tag, sort, availability, delivery_eta, min_price, max_price]) and page == 1) or is_category_only else "noindex,follow"
         if is_category_only:
-            seo_canonical = _absolute_url(request, f"/catalog/?{urlencode({'category': category})}")
+            seo_canonical = _absolute_url(request, _category_url(sel_category))
             category_name = sel_category.name if sel_category else str(category)
             seo_title = f"{category_name} — каталог Servio"
             seo_description = f"Товары категории «{category_name}» в каталоге Servio для HoReCa-закупок."
+        elif q:
+            search_query = urlencode({"q": q}) if q else ""
+            seo_canonical = _absolute_url(request, f"/search/{f'?{search_query}' if search_query else ''}")
+            seo_title = f"Поиск: {q} — Servio"
+            seo_description = f"Результаты поиска по запросу «{q}» в каталоге Servio."
         else:
-            seo_canonical = _absolute_url(request, "/catalog/")
+            seo_canonical = _absolute_url(request, request.path if request.path.startswith("/catalog") else "/catalog/")
             seo_title = "Каталог товаров для HoReCa — Servio"
             seo_description = "Каталог Servio: посуда, стекло, барный инвентарь, сервировка, упаковка, текстиль и расходные материалы для HoReCa."
 
@@ -368,7 +384,7 @@ class CatalogView(View):
                     "search_term": q,
                     "filters": {
                         "brand": brand or "",
-                        "category": getattr(sel_category, "slug", "") if sel_category else "",
+                        "category": _category_path(sel_category) if sel_category else "",
                         "seller": getattr(selected_seller_store, "slug", "") if selected_seller_store else "",
                         "series": getattr(selected_series_obj, "name", "") if selected_series_obj else "",
                         "tag": tag or "",
@@ -482,7 +498,7 @@ class CatalogFilterSuggestionsView(View):
             breadcrumb_map = _category_breadcrumb_label_map(categories)
             for category in categories:
                 name = (category.name or "").strip()
-                slug = (category.slug or "").strip()
+                slug = (_category_path(category) or "").strip()
                 breadcrumb = breadcrumb_map.get(category.id, name)
                 haystacks = [name.casefold(), slug.casefold(), breadcrumb.casefold()]
                 if not any(normalized_query in haystack for haystack in haystacks if haystack):

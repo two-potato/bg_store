@@ -10,7 +10,7 @@
     <div class="account-2026__panel-head">
       <h2 class="account-2026__panel-title">{% if page_mode == "edit" %}Карточка {{ product_obj.name }}{% else %}Новый товар{% endif %}</h2>
       {% if page_mode == "edit" %}
-        <a class="account-2026__panel-link" href="/product/{{ product_obj.slug }}/" hx-boost="false">Открыть карточку</a>
+        <a class="account-2026__panel-link" href="/products/{{ product_obj.slug }}/" hx-boost="false">Открыть карточку</a>
         <a class="account-2026__panel-link" href="/account/seller/offers/" hx-boost="false">Offers и склады</a>
       {% else %}
         <a class="account-2026__panel-link" href="/account/seller/products/export/" hx-boost="false">Экспорт CSV</a>
@@ -155,7 +155,7 @@
       <div class="flex flex-wrap gap-2">
         <button class="btn btn-primary">{% if page_mode == "edit" %}Сохранить изменения{% else %}Добавить товар{% endif %}</button>
         {% if page_mode == "edit" %}
-          <a class="btn btn-outline" href="/product/{{ product_obj.slug }}/" hx-boost="false">Открыть карточку</a>
+          <a class="btn btn-outline" href="/products/{{ product_obj.slug }}/" hx-boost="false">Открыть карточку</a>
           <a class="btn btn-ghost" href="/account/seller/products/add/" hx-boost="false">Новый товар</a>
         {% endif %}
       </div>
@@ -284,7 +284,7 @@
                 <td>{{ p.documents.count }}</td>
                 <td class="text-right">
                   <div class="flex justify-end gap-2">
-                    <a class="btn btn-xs btn-outline" href="/product/{{ p.slug }}/" hx-boost="false">Карточка</a>
+                    <a class="btn btn-xs btn-outline" href="/products/{{ p.slug }}/" hx-boost="false">Карточка</a>
                     <a class="btn btn-xs btn-outline" href="/account/seller/offers/" hx-boost="false">Оффер</a>
                     <a class="btn btn-xs btn-primary" href="/account/seller/products/{{ p.id }}/edit/" hx-boost="false">Редактировать</a>
                   </div>

@@ -11,7 +11,7 @@
         <a class="account-2026__hero-btn" href="/account/seller/offers/" hx-boost="false">Offers и склады</a>
         <a class="account-2026__hero-btn" href="/account/seller/orders/" hx-boost="false">Seller orders</a>
         {% if store %}
-          <a class="account-2026__hero-btn" href="/stores/{{ store.slug }}/" hx-boost="false">Открыть витрину</a>
+          <a class="account-2026__hero-btn" href="/vendors/{{ store.slug }}/" hx-boost="false">Открыть витрину</a>
         {% endif %}
       </div>
     </div>
@@ -81,7 +81,7 @@
         <span class="account-2026__action-meta">Управление ценой, MOQ, ETA и inventory</span>
       </a>
       {% if store %}
-        <a class="account-2026__action-tile" href="/stores/{{ store.slug }}/" hx-boost="false">
+        <a class="account-2026__action-tile" href="/vendors/{{ store.slug }}/" hx-boost="false">
           <span class="account-2026__action-title">Витрина магазина</span>
           <span class="account-2026__action-meta">Публичная storefront-страница</span>
         </a>
@@ -129,7 +129,7 @@
     <div class="account-2026__panel-head">
       <h2 class="account-2026__panel-title">Магазин продавца</h2>
       {% if store %}
-        <a class="account-2026__panel-link" href="/stores/{{ store.slug }}/" hx-boost="false">Открыть витрину</a>
+        <a class="account-2026__panel-link" href="/vendors/{{ store.slug }}/" hx-boost="false">Открыть витрину</a>
       {% endif %}
     </div>
     <form method="post" enctype="multipart/form-data" class="account-2026__form">

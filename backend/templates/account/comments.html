@@ -16,7 +16,7 @@
         {% for c in comments %}
           <article class="account-comments-2026__item">
             <a class="account-comments-2026__thumb"
-               href="/product/{{ c.review.product.slug }}/"
+               href="/products/{{ c.review.product.slug }}/"
                hx-boost="false"
                aria-label="Открыть товар {{ c.review.product.name }}">
               {% with img=c.review.product.prefetched_images.0 %}
@@ -30,14 +30,14 @@
             <div class="account-comments-2026__body">
               <div class="account-comments-2026__meta">
                 <a class="account-comments-2026__product"
-                   href="/product/{{ c.review.product.slug }}/"
+                   href="/products/{{ c.review.product.slug }}/"
                    hx-boost="false">{{ c.review.product.name }}</a>
                 <span class="account-comments-2026__date">{{ c.created_at|timezone:"Europe/Moscow"|date:"d.m.Y H:i" }}</span>
               </div>
               <p class="account-comments-2026__text">{{ c.text }}</p>
             </div>
             <div class="account-comments-2026__actions">
-              <a class="btn btn-outline btn-sm" href="/product/{{ c.review.product.slug }}/" hx-boost="false">К товару</a>
+              <a class="btn btn-outline btn-sm" href="/products/{{ c.review.product.slug }}/" hx-boost="false">К товару</a>
             </div>
           </article>
         {% endfor %}

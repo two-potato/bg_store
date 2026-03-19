@@ -9,6 +9,7 @@ from django.contrib import messages
 from django.core.paginator import EmptyPage
 from django.db.models import Count
 from django.middleware.csrf import get_token
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -28,6 +29,8 @@ from ..catalog_selectors import (
     cached_home_product_ids as _cached_home_product_ids,
     category_breadcrumbs as _category_breadcrumbs,
     category_descendant_ids as _category_descendant_ids,
+    category_slug_path as _category_slug_path,
+    ordered_products_with_related as _ordered_products_with_related,
 )
 from ..models import BrandSubscription
 from ..recommendation_service import home_recommendations_context
@@ -85,10 +88,28 @@ def _website_json_ld(request):
         "url": base,
         "potentialAction": {
             "@type": "SearchAction",
-            "target": f"{base}catalog/?q={{search_term_string}}",
+            "target": f"{base}search/?q={{search_term_string}}",
             "query-input": "required name=search_term_string",
         },
     }
+
+
+def _resolve_category_by_path(raw_path: str) -> Category:
+    parts = [part.strip() for part in str(raw_path or "").split("/") if part.strip()]
+    if not parts:
+        raise Http404("Category not found")
+    parent = None
+    category = None
+    for part in parts:
+        category = (
+            Category.objects.select_related("parent")
+            .filter(parent=parent, slug=part)
+            .first()
+        )
+        if category is None:
+            raise Http404("Category not found")
+        parent = category
+    return category
 
 
 def _organization_json_ld(request):
@@ -274,6 +295,13 @@ class BrandLegacyRedirectView(View):
         return redirect("brand_detail", brand_slug=brand.slug)
 
 
+class CategoryLegacyRedirectView(View):
+    @log_calls(log)
+    def get(self, request, category_slug: str):
+        category = get_object_or_404(Category.objects.select_related("parent"), slug=category_slug)
+        return redirect("category_detail", category_slug=_category_slug_path(category), permanent=True)
+
+
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class BrandDetailPageView(TemplateView):
     template_name = "shopfront/brand_detail.html"
@@ -329,7 +357,7 @@ class CategoryDetailPageView(TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        category = get_object_or_404(Category.objects.select_related("parent"), slug=kwargs["category_slug"])
+        category = _resolve_category_by_path(kwargs["category_slug"])
         category_ids = _category_descendant_ids(category)
         product_ids = list(Product.objects.filter(category_id__in=category_ids).order_by("-is_new", "name").values_list("id", flat=True)[:80])
         ctx["category"] = category
@@ -345,7 +373,7 @@ class CategoryDetailPageView(TemplateView):
                     category.meta_description or category.description or category.hero_text or f"Категория {category.name} в каталоге Servio.",
                     160,
                 ),
-                canonical=_absolute_url(self.request, reverse("category_detail", kwargs={"category_slug": category.slug})),
+                canonical=_absolute_url(self.request, reverse("category_detail", kwargs={"category_slug": _category_slug_path(category)})),
             )
         )
         return ctx

@@ -72,6 +72,7 @@ from ..catalog_selectors import (
     category_breadcrumbs as _category_breadcrumbs,
     category_descendant_ids as _category_descendant_ids,
     category_option_rows as _category_option_rows,
+    category_slug_path as _category_slug_path,
     facet_option_counts as _facet_option_counts,
     ordered_products_with_related as _ordered_products_with_related,
     seller_facet_counts as _seller_facet_counts,
@@ -153,6 +154,10 @@ def sitemap_xml(request):
     static_entries = [
         (reverse("home"), timezone.now()),
         (reverse("catalog"), timezone.now()),
+        (reverse("products"), timezone.now()),
+        (reverse("categories"), timezone.now()),
+        (reverse("vendors"), timezone.now()),
+        (reverse("search"), timezone.now()),
         (reverse("buyers"), timezone.now()),
         (reverse("suppliers"), timezone.now()),
         (reverse("brands"), timezone.now()),
@@ -172,23 +177,29 @@ def sitemap_xml(request):
             for slug, updated_at in Product.objects.exclude(slug="").values_list("slug", "updated_at")[:50000]
         ]
     )
+    categories = list(
+        Category.objects.select_related("parent")
+        .exclude(slug="")
+        .only("slug", "parent_id", "updated_at")
+    )
     urls.extend(
         [
-            (base + reverse("category_detail", kwargs={"category_slug": slug}), updated_at)
-            for slug, updated_at in Category.objects.exclude(slug="").values_list("slug", "updated_at")[:50000]
+            (base + reverse("category_detail", kwargs={"category_slug": _category_path(category)}), category.updated_at)
+            for category in categories
+            if _category_path(category)
         ]
     )
     urls.extend(
         [
-            (base + reverse("seller_store_detail", kwargs={"store_slug": slug}), updated_at)
+            (base + reverse("vendor_detail", kwargs={"vendor_slug": slug}), updated_at)
             for slug, updated_at in SellerStore.objects.exclude(slug="").values_list("slug", "updated_at")[:50000]
         ]
     )
     profile_lastmod = timezone.now()
     urls.extend(
         [
-            (base + reverse("seller_profile", kwargs={"seller_slug": slug}), profile_lastmod)
-            for slug in UserProfile.objects.exclude(slug="").values_list("slug", flat=True)[:50000]
+            (base + reverse("vendor_detail", kwargs={"vendor_slug": slug}), profile_lastmod)
+            for slug in UserProfile.objects.exclude(slug="").exclude(user__seller_store__isnull=False).values_list("slug", flat=True)[:50000]
         ]
     )
     urls.extend(
@@ -270,7 +281,7 @@ def _website_json_ld(request):
         "url": base,
         "potentialAction": {
             "@type": "SearchAction",
-            "target": f"{base}catalog/?q={{search_term_string}}",
+            "target": f"{base}search/?q={{search_term_string}}",
             "query-input": "required name=search_term_string",
         },
     }
@@ -322,7 +333,7 @@ def _product_json_ld(request, product: Product, seller_store: SellerStore | None
             "priceCurrency": "RUB",
             "price": str(price),
             "availability": availability,
-            "url": _absolute_url(request, f"/product/{product.slug}/"),
+            "url": _absolute_url(request, reverse("product", kwargs={"slug": product.slug})),
         },
     }
     if seller_store:
@@ -469,6 +480,46 @@ def _category_breadcrumb_label_map(categories) -> dict[int, str]:
     return labels
 
 
+def _category_path(category: Category | None) -> str:
+    return _category_slug_path(category)
+
+
+def _category_url(category: Category | None) -> str:
+    if category is None:
+        return reverse("categories")
+    return reverse("category_detail", kwargs={"category_slug": _category_path(category)})
+
+
+def _product_url(product: Product) -> str:
+    return reverse("product", kwargs={"slug": product.slug})
+
+
+def _seller_store_for_user(user):
+    if user is None:
+        return None
+    return SellerStore.objects.filter(owner=user).first()
+
+
+def _vendor_slug_for_user(user) -> str:
+    store = _seller_store_for_user(user)
+    if store is not None and getattr(store, "slug", ""):
+        return store.slug
+    profile = getattr(user, "profile", None)
+    if profile is not None and getattr(profile, "slug", ""):
+        return profile.slug
+    return ""
+
+
+def _vendor_url(store: SellerStore | None = None, user=None) -> str:
+    if store is not None and getattr(store, "slug", ""):
+        return reverse("vendor_detail", kwargs={"vendor_slug": store.slug})
+    if user is not None:
+        slug = _vendor_slug_for_user(user)
+        if slug:
+            return reverse("vendor_detail", kwargs={"vendor_slug": slug})
+    return reverse("vendors")
+
+
 def _selected_tag_object(selected_tag, tags):
     if not selected_tag:
         return None
@@ -541,7 +592,8 @@ def _online_payment_event_url(order: Order) -> str:
 
 def _tracking_item_from_product(product: Product, quantity: int = 1) -> dict:
     category_name = getattr(product.category, "name", "") or ""
-    seller_store = getattr(getattr(product, "seller", None), "seller_store", None)
+    seller = getattr(product, "seller", None)
+    seller_store = _seller_store_for_user(seller)
     offer = getattr(product, "active_offer", None) or resolve_product_offer(product)
     seller_store = getattr(offer, "seller_store", None) or seller_store
     price = getattr(product, "display_price", None) or getattr(offer, "price", None) or product.price
@@ -763,7 +815,7 @@ def _compare_fields(products: list[Product]) -> list[dict]:
         {"label": "Бренд", "values": [getattr(product.brand, "name", "—") or "—" for product in products]},
         {"label": "Серия", "values": [getattr(product.series, "name", "—") or "—" for product in products]},
         {"label": "Категория", "values": [getattr(product.category, "name", "—") or "—" for product in products]},
-        {"label": "Магазин", "values": [getattr(getattr(product.seller, "seller_store", None), "name", "—") or "—" for product in products]},
+        {"label": "Магазин", "values": [getattr(_seller_store_for_user(getattr(product, "seller", None)), "name", "—") or "—" for product in products]},
         {
             "label": "Рейтинг",
             "values": [

@@ -48,7 +48,7 @@
                     <div class="site-catalog-menu__section-title">Категории</div>
                     <div class="site-catalog-menu__grid">
                       {% for c in header_categories %}
-                        <a href="/catalog/?category={{ c.slug }}" hx-boost="false" class="site-catalog-menu__item">
+                        <a href="/catalog/?category={{ c.full_slug_path|default:c.slug }}" hx-boost="false" class="site-catalog-menu__item">
                           <span class="site-catalog-menu__item-icon">{% include 'shopfront/icons/category.svg' %}</span>
                           <span>{{ c.name }}</span>
                         </a>

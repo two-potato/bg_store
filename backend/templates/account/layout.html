@@ -92,13 +92,13 @@
         <div class="account-2026__nav-group">
           <div class="account-2026__nav-group-title">Публичный контур</div>
           {% if request.user.seller_store %}
-            <a class="account-2026__nav-link" href="/stores/{{ request.user.seller_store.slug }}/" hx-boost="false">
+            <a class="account-2026__nav-link" href="/vendors/{{ request.user.seller_store.slug }}/" hx-boost="false">
               <span class="account-2026__nav-link-title">Витрина магазина</span>
               <span class="account-2026__nav-link-meta">Публичная storefront-страница</span>
             </a>
           {% endif %}
           {% if request.user.profile.slug %}
-            <a class="account-2026__nav-link" href="/sellers/{{ request.user.profile.slug }}/" hx-boost="false">
+            <a class="account-2026__nav-link" href="/vendors/{{ request.user.profile.slug }}/" hx-boost="false">
               <span class="account-2026__nav-link-title">Публичный профиль</span>
               <span class="account-2026__nav-link-meta">Карточка продавца</span>
             </a>

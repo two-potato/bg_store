@@ -446,3 +446,93 @@ class RecommendationReplenishmentProfile(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"RecommendationReplenishmentProfile(user={self.user_id}, product={self.product_id})"
+
+
+class RecommendationFeatureSnapshot(TimeStampedModel):
+    class FeatureSet(models.TextChoices):
+        USER_V1 = "user_v1", "User v1"
+        PRODUCT_V1 = "product_v1", "Product v1"
+        GLOBAL_V1 = "global_v1", "Global v1"
+
+    class ScopeType(models.TextChoices):
+        USER = "user", "User"
+        PRODUCT = "product", "Product"
+        GLOBAL = "global", "Global"
+
+    feature_set = models.CharField(max_length=24, choices=FeatureSet.choices, db_index=True)
+    scope_type = models.CharField(max_length=24, choices=ScopeType.choices, db_index=True)
+    scope_id = models.PositiveIntegerField(default=0, db_index=True)
+    surface = models.CharField(max_length=32, blank=True, db_index=True)
+    payload = models.JSONField(default=dict, blank=True)
+    generated_at = models.DateTimeField(default=timezone.now, db_index=True)
+    expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["feature_set", "scope_type", "surface", "-generated_at", "-id"]
+        indexes = [
+            models.Index(fields=["feature_set", "scope_type", "scope_id", "surface", "-generated_at"], name="recofeat_lookup_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"RecommendationFeatureSnapshot({self.feature_set}, {self.scope_type}:{self.scope_id}, {self.surface or 'all'})"
+
+
+class RecommendationTrainingDataset(TimeStampedModel):
+    surface = models.CharField(max_length=32, db_index=True)
+    label_kind = models.CharField(max_length=24, default="purchase", db_index=True)
+    version = models.CharField(max_length=40, db_index=True)
+    window_start = models.DateTimeField(null=True, blank=True)
+    window_end = models.DateTimeField(null=True, blank=True)
+    row_count = models.PositiveIntegerField(default=0)
+    positive_count = models.PositiveIntegerField(default=0)
+    artifact_path = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["surface", "label_kind", "-created_at"], name="recods_surface_created_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"RecommendationTrainingDataset(surface={self.surface}, label={self.label_kind}, version={self.version})"
+
+
+class RecommendationModelArtifact(TimeStampedModel):
+    class Status(models.TextChoices):
+        TRAINING = "training", "Training"
+        READY = "ready", "Ready"
+        ACTIVE = "active", "Active"
+        RETIRED = "retired", "Retired"
+        FAILED = "failed", "Failed"
+
+    name = models.CharField(max_length=64, db_index=True, default="servio_ranker")
+    surface = models.CharField(max_length=32, db_index=True)
+    variant = models.CharField(max_length=24, db_index=True, default="ml_v1")
+    algorithm = models.CharField(max_length=32, default="logistic_regression")
+    version = models.CharField(max_length=40, db_index=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.TRAINING, db_index=True)
+    feature_names = models.JSONField(default=list, blank=True)
+    intercept = models.FloatField(default=0.0)
+    weights = models.JSONField(default=dict, blank=True)
+    metrics = models.JSONField(default=dict, blank=True)
+    artifact_path = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    trained_on = models.ForeignKey(
+        RecommendationTrainingDataset,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="models",
+    )
+    activated_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
+    class Meta:
+        ordering = ["surface", "variant", "-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["surface", "variant", "status", "-created_at"], name="recomodel_surface_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"RecommendationModelArtifact(surface={self.surface}, variant={self.variant}, version={self.version}, status={self.status})"

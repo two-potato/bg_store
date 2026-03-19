@@ -30,7 +30,7 @@
   <div class="twa-market__grid">
     {% for p in products %}
       <article class="twa-product-card">
-        <a class="twa-product-card__link" href="/product/{{ p.slug }}/" hx-boost="false" aria-label="Открыть товар {{ p.name }}">
+        <a class="twa-product-card__link" href="/products/{{ p.slug }}/" hx-boost="false" aria-label="Открыть товар {{ p.name }}">
           <figure class="twa-product-card__media">
             {% with first_image=p.prefetched_images.0 %}
               {% if first_image %}

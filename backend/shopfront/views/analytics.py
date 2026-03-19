@@ -65,6 +65,10 @@ class RecommendationFeedbackIngestView(View):
     allowed_events = {
         "recommendation_impression",
         "recommendation_click",
+        "add_to_cart",
+        "remove_from_cart",
+        "purchase",
+        "recommendation_dismiss",
         "favorite_add",
         "saved_list_add",
     }
@@ -103,7 +107,14 @@ class RecommendationFeedbackIngestView(View):
                     category_id=product.category_id,
                     position=position,
                     request_id=str(payload.get("request_id") or ""),
-                    payload={"experiment_variant": str(payload.get("experiment_variant") or "control")},
+                    payload={
+                        "experiment_variant": str(payload.get("experiment_variant") or "control"),
+                        "strategy": str(payload.get("strategy") or ""),
+                        "model_version": str(payload.get("model_version") or ""),
+                        "recommendation_reason_codes": [str(value) for value in (item.get("recommendation_reason_codes") or []) if str(value).strip()],
+                        "recommendation_candidate_sources": [str(value) for value in (item.get("recommendation_candidate_sources") or []) if str(value).strip()],
+                        "recommendation_score_hint": float(item.get("recommendation_score_hint") or 0),
+                    },
                 )
                 observe_recommendation_event(
                     event_name="recommendation_impression",

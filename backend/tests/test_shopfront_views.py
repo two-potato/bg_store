@@ -155,7 +155,19 @@ def test_recommendation_feedback_ingest_and_add_to_cart_linkage(client, db):
                 "surface": "home",
                 "experiment_variant": "ranked_v2",
                 "request_id": "req-1",
-                "ecommerce": {"items": [{"item_id": str(product.id), "item_name": product.name}]},
+                "strategy": "materialized_or_ranked",
+                "model_version": "heuristic_ltr_prep_v1",
+                "ecommerce": {
+                    "items": [
+                        {
+                            "item_id": str(product.id),
+                            "item_name": product.name,
+                            "recommendation_reason_codes": ["trending"],
+                            "recommendation_candidate_sources": ["global_popular"],
+                            "recommendation_score_hint": 1.25,
+                        }
+                    ]
+                },
             }
         ),
         content_type="application/json",
@@ -186,12 +198,14 @@ def test_recommendation_feedback_ingest_and_add_to_cart_linkage(client, db):
     assert trigger["analyticsEvent"]["recommendation_source"] == "home_popular"
     assert trigger["analyticsEvent"]["experiment_variant"] == "ranked_v2"
     assert RecommendationEvent.objects.filter(event="add_to_cart", recommendation_source="home_popular", product=product).exists()
+    impression = RecommendationEvent.objects.get(event="recommendation_impression", recommendation_source="home_popular", product=product)
+    assert impression.payload["recommendation_reason_codes"] == ["trending"]
 
 
 def test_catalog_renders_single_main_product_grid_id(client, db):
     _prod()
 
-    response = client.get("/catalog/?q=no-such-product-xyz")
+    response = client.get("/search/?q=no-such-product-xyz")
 
     assert response.status_code == 200
     assert response.text.count('id="product-grid"') == 1
@@ -251,7 +265,7 @@ def test_base_layout_uses_modular_frontend_assets(client, db):
     assert ">Каталог</span></summary>" in home.text
     assert 'href="#main-content"' in home.text
 
-    product = client.get(f"/product/{product_obj.slug}/")
+    product = client.get(f"/products/{product_obj.slug}/")
     assert product.status_code == 200
     assert "shopfront/css/components/product.css" in product.text
 
@@ -277,10 +291,10 @@ def test_robots_and_sitemap_exclude_private_routes(client, db):
 
     sitemap = client.get("/sitemap.xml")
     assert sitemap.status_code == 200
-    assert "/product/" in sitemap.text
+    assert "/products/" in sitemap.text
     assert "/brands/" in sitemap.text
     assert "/collections/" in sitemap.text
-    assert "/stores/" in sitemap.text
+    assert "/vendors/" in sitemap.text
     assert "<lastmod>" in sitemap.text
     assert "/cart/" not in sitemap.text
     assert "/checkout/" not in sitemap.text
@@ -310,7 +324,7 @@ def test_home_with_malformed_cart_entries(client, db):
 
 def test_product_page(client, db):
     p, *_ = _prod()
-    r = client.get(f"/product/{p.slug}/")
+    r = client.get(f"/products/{p.slug}/")
     assert r.status_code == 200
     assert "product_view" in r.text
 
@@ -327,9 +341,9 @@ def test_product_page_contains_store_link(client, db):
     p.seller = seller
     p.save(update_fields=["seller"])
 
-    r = client.get(f"/product/{p.slug}/")
+    r = client.get(f"/products/{p.slug}/")
     assert r.status_code == 200
-    assert f"/stores/{store.slug}/" in r.text
+    assert f"/vendors/{store.slug}/" in r.text
 
 
 def test_product_page_shows_commercial_fields_and_documents(client, db):
@@ -345,7 +359,7 @@ def test_product_page_shows_commercial_fields_and_documents(client, db):
         file_url="https://example.com/cert.pdf",
     )
 
-    r = client.get(f"/product/{p.slug}/")
+    r = client.get(f"/products/{p.slug}/")
     assert r.status_code == 200
     assert "Минимальный заказ" in r.text
     assert "от 6" in r.text
@@ -372,18 +386,16 @@ def test_store_and_seller_profile_pages(client, db):
     ProductReview.objects.create(product=p, user=reviewer, rating=5, text="great seller")
     StoreReview.objects.create(store=store, user=reviewer, rating=5, text="great store")
 
-    r_store = client.get(f"/stores/{store.slug}/")
+    r_store = client.get(f"/vendors/{store.slug}/")
     assert r_store.status_code == 200
     assert "Store description" in r_store.text
     assert p.name in r_store.text
-    assert f"/sellers/{seller.profile.slug}/" in r_store.text
+    assert f"/vendors/{seller.profile.slug}/" in r_store.text
     assert "Рейтинг магазина 5.0 / 5" in r_store.text
 
-    r_seller = client.get(f"/sellers/{seller.profile.slug}/")
-    assert r_seller.status_code == 200
-    assert le.name in r_seller.text
-    assert store.name in r_seller.text
-    assert "Рейтинг продавца 5.0 / 5" in r_seller.text
+    r_seller = client.get(f"/vendors/{seller.profile.slug}/")
+    assert r_seller.status_code in (301, 302)
+    assert r_seller.headers.get("Location", "").endswith(f"/vendors/{store.slug}/")
 
 
 def test_store_review_can_be_created_from_store_page(client_logged, user, db):
@@ -395,7 +407,7 @@ def test_store_review_can_be_created_from_store_page(client_logged, user, db):
     p.seller = seller
     p.save(update_fields=["seller"])
 
-    response = client_logged.post(f"/stores/{store.slug}/review/", {"rating": "5", "text": "Надёжный магазин"})
+    response = client_logged.post(f"/vendors/{store.slug}/review/", {"rating": "5", "text": "Надёжный магазин"})
 
     assert response.status_code == 302
     review = StoreReview.objects.get(store=store, user=user)
@@ -407,7 +419,7 @@ def test_product_legacy_pk_redirects_to_slug(client, db):
     p, *_ = _prod()
     r = client.get(f"/product/{p.id}/")
     assert r.status_code in (301, 302)
-    assert r.headers.get("Location", "").endswith(f"/product/{p.slug}/")
+    assert r.headers.get("Location", "").endswith(f"/products/{p.slug}/")
 
 
 def test_store_and_seller_legacy_redirects_to_slug(client, db):
@@ -418,12 +430,12 @@ def test_store_and_seller_legacy_redirects_to_slug(client, db):
 
     r_store_legacy = client.get(f"/stores/{store.id}/")
     assert r_store_legacy.status_code in (301, 302)
-    assert r_store_legacy.headers.get("Location", "").endswith(f"/stores/{store.slug}/")
+    assert r_store_legacy.headers.get("Location", "").endswith(f"/vendors/{store.slug}/")
 
-    r_seller_legacy = client.get(f"/sellers/{seller.username}/")
+    r_seller_legacy = client.get(f"/sellers/{seller.username}/legacy/")
     assert r_seller_legacy.status_code in (200, 301, 302)
     if r_seller_legacy.status_code in (301, 302):
-        assert r_seller_legacy.headers.get("Location", "").endswith(f"/sellers/{seller.profile.slug}/")
+        assert r_seller_legacy.headers.get("Location", "").endswith(f"/vendors/{store.slug}/")
 
 
 def test_brand_slug_redirect_and_collection_detail_pages(client, db):
@@ -491,7 +503,7 @@ def test_category_detail_page_and_offer_price(client, db):
     offer = SellerOffer.objects.create(product=product, seller=seller, seller_store=store, price=149, min_order_qty=2)
     SellerInventory.objects.create(offer=offer, warehouse_name="Main", stock_qty=9, reserved_qty=1, eta_days=1, is_primary=True)
 
-    r = client.get(f"/catalog/categories/{category.slug}/")
+    r = client.get(f"/categories/{category.slug}/")
     assert r.status_code == 200
     assert "Сиропы для бара" in r.text
     assert "SEO body for category" in r.text
@@ -529,7 +541,7 @@ def test_live_search_htmx_from_three_symbols(client, monkeypatch, db):
     assert "live-search-head__label" in live_resp.text
     assert "live-search-head__query" in live_resp.text
     assert "live-search-thumb" in live_resp.text
-    assert "/product/" in live_resp.text
+    assert "/products/" in live_resp.text
 
 
 def test_live_search_matches_store_name(client, monkeypatch, db):
@@ -587,7 +599,7 @@ def test_live_search_shows_typo_recovery_suggestions(client, monkeypatch, db):
     r = client.get("/search/live/?q=сиропы", HTTP_HX_REQUEST="true")
     assert r.status_code == 200
     assert "Подсказки" in r.text
-    assert "/catalog/?q=%D1%81%D0%B8%D1%80%D0%BE%D0%BF" in r.text
+    assert "/search/?q=%D1%81%D0%B8%D1%80%D0%BE%D0%BF" in r.text
     assert "Перейти в каталог и посмотреть альтернативы" in r.text
 
 
@@ -630,7 +642,7 @@ def test_catalog_q_uses_es_ids_only(client, monkeypatch, db):
             return SearchBundle(product_ids=[p2.id], countries=[], suggestions=[], provider="test")
 
     monkeypatch.setattr("shopfront.views.get_search_provider", lambda: _Provider())
-    r = client.get("/catalog/?q=alpha")
+    r = client.get("/search/?q=alpha")
     assert r.status_code == 200
     assert "Beta" in r.text
     assert "Alpha" not in r.text
@@ -689,7 +701,7 @@ def test_catalog_zero_results_shows_recovery_and_fallback_products(client, monke
             return SearchBundle(product_ids=[], countries=[], suggestions=[], provider="test")
 
     monkeypatch.setattr("shopfront.views.get_search_provider", lambda: _Provider())
-    r = client.get("/catalog/?q=сиропы")
+    r = client.get("/search/?q=сиропы")
     assert r.status_code == 200
     assert "Возможно, вы искали" in r.text
     assert "Fallback item" in r.text
@@ -763,7 +775,7 @@ def test_catalog_zero_results_renders_search_recovery_recommendations(client, mo
 
     monkeypatch.setattr("shopfront.views.catalog.search_recovery_recommendations", _fake_recovery)
 
-    response = client.get("/catalog/?q=totally-missing-query")
+    response = client.get("/search/?q=totally-missing-query")
 
     assert response.status_code == 200
     assert "Похожие товары по запросу" in response.text
@@ -854,8 +866,8 @@ def test_recently_viewed_products_are_shown_on_product_page(client, db):
     p1 = Product.objects.create(sku="33334444", name="First product", brand=b, category=c, price=10, stock_qty=1)
     p2 = Product.objects.create(sku="33334445", name="Second product", brand=b, category=c, price=10, stock_qty=1)
 
-    assert client.get(f"/product/{p1.slug}/").status_code == 200
-    r = client.get(f"/product/{p2.slug}/")
+    assert client.get(f"/products/{p1.slug}/").status_code == 200
+    r = client.get(f"/products/{p2.slug}/")
     assert r.status_code == 200
     assert "Вы недавно смотрели" in r.text
     assert "First product" in r.text
@@ -989,7 +1001,7 @@ def test_catalog_card_uses_actual_cart_qty_from_session(client, db):
     s["cart"] = {str(p.id): {"qty": 4}}
     s.save()
 
-    r = client.get(f"/catalog/?q={p.name}")
+    r = client.get(f"/search/?q={p.name}")
     assert r.status_code == 200
     assert 'data-pid="%s"' % p.id in r.text
     assert '>4</span>' in r.text
@@ -1621,7 +1633,7 @@ def test_product_review_upsert_create_and_update(client_logged, user, db):
     p, *_ = _prod()
 
     r1 = client_logged.post(
-        f"/product/{p.slug}/review/",
+        f"/products/{p.slug}/review/",
         {"rating": "5", "text": "Отличный товар"},
     )
     assert r1.status_code in (302, 303)
@@ -1631,7 +1643,7 @@ def test_product_review_upsert_create_and_update(client_logged, user, db):
     assert review.text == "Отличный товар"
 
     r2 = client_logged.post(
-        f"/product/{p.slug}/review/",
+        f"/products/{p.slug}/review/",
         {"rating": "3", "text": "Нормально"},
     )
     assert r2.status_code in (302, 303)
@@ -1643,7 +1655,7 @@ def test_product_review_upsert_create_and_update(client_logged, user, db):
 
 def test_product_review_upsert_requires_auth(client, db):
     p, *_ = _prod()
-    r = client.post(f"/product/{p.slug}/review/", {"rating": "4", "text": "ok"})
+    r = client.post(f"/products/{p.slug}/review/", {"rating": "4", "text": "ok"})
     assert r.status_code in (302, 303)
     assert "/account/login/" in r.headers.get("Location", "")
 
@@ -1651,7 +1663,7 @@ def test_product_review_upsert_requires_auth(client, db):
 def test_product_page_contains_reviews_block(client_logged, user, db):
     p, *_ = _prod()
     ProductReview.objects.create(product=p, user=user, rating=4, text="Good")
-    r = client_logged.get(f"/product/{p.slug}/")
+    r = client_logged.get(f"/products/{p.slug}/")
     assert r.status_code == 200
     assert 'id="product-reviews"' in r.text
     assert "Отзывы и рейтинг" in r.text
@@ -1664,7 +1676,7 @@ def test_product_page_renders_review_photos_and_public_questions(client_logged, 
     ProductReviewPhoto.objects.create(review=review, image_url="https://example.com/review-photo.jpg", caption="Photo proof")
     ProductQuestion.objects.create(product=p, user=user, question_text="Есть ли сертификат?", is_public=True)
 
-    r = client_logged.get(f"/product/{p.slug}/")
+    r = client_logged.get(f"/products/{p.slug}/")
     assert r.status_code == 200
     assert "https://example.com/review-photo.jpg" in r.text
     assert "Photo proof" in r.text
@@ -1673,11 +1685,11 @@ def test_product_page_renders_review_photos_and_public_questions(client_logged, 
 
 def test_product_page_defers_heavy_recommendation_sections(client_logged, user, db):
     p, *_ = _prod()
-    r = client_logged.get(f"/product/{p.slug}/")
+    r = client_logged.get(f"/products/{p.slug}/")
 
     assert r.status_code == 200
-    assert f'/product/{p.slug}/recommendations/fbt/' in r.text
-    assert f'/product/{p.slug}/recommendations/seller-cross/' in r.text
+    assert f'/products/{p.slug}/recommendations/fbt/' in r.text
+    assert f'/products/{p.slug}/recommendations/seller-cross/' in r.text
     assert 'hx-target="this"' in r.text
     assert 'hx-select=".product-reco-2026"' in r.text
     assert "Загружаем рекомендации" in r.text
@@ -1704,14 +1716,14 @@ def test_product_page_renders_substitute_block_when_candidates_exist(client_logg
         orders_count=1,
     )
 
-    r = client_logged.get(f"/product/{p.slug}/")
+    r = client_logged.get(f"/products/{p.slug}/")
     assert r.status_code == 200
     assert "Возможные альтернативы" in r.text
 
 
 def test_product_recommendation_section_endpoint_renders_partial(client_logged, user, db):
     p, *_ = _prod()
-    r = client_logged.get(f"/product/{p.slug}/recommendations/fbt/", HTTP_HX_REQUEST="true")
+    r = client_logged.get(f"/products/{p.slug}/recommendations/fbt/", HTTP_HX_REQUEST="true")
 
     assert r.status_code == 200
     assert "product-reco-2026" in r.text
@@ -1720,7 +1732,7 @@ def test_product_recommendation_section_endpoint_renders_partial(client_logged, 
 def test_product_review_upsert_htmx_returns_updated_reviews_panel(client_logged, user, db):
     p, *_ = _prod()
     r = client_logged.post(
-        f"/product/{p.slug}/review/",
+        f"/products/{p.slug}/review/",
         {"rating": "5", "text": "new htmx text"},
         HTTP_HX_REQUEST="true",
     )
@@ -1746,7 +1758,7 @@ def test_product_review_marks_verified_purchase_and_accepts_vote(client_logged, 
     )
     buyer_order.items.create(product=p, name=p.name, price=p.price, qty=1)
 
-    r_review = client_logged.post(f"/product/{p.slug}/review/", {"rating": "5", "text": "verified"})
+    r_review = client_logged.post(f"/products/{p.slug}/review/", {"rating": "5", "text": "verified"})
     assert r_review.status_code in (302, 303)
     review = ProductReview.objects.get(product=p, user=user)
     assert review.is_verified_purchase is True
@@ -1755,7 +1767,7 @@ def test_product_review_marks_verified_purchase_and_accepts_vote(client_logged, 
     User = get_user_model()
     voter = User.objects.create_user(username="review_voter", password="pass")
     client_logged.force_login(voter)
-    r_vote = client_logged.post(f"/product/{p.slug}/review/{review.id}/vote/", {"value": "helpful"}, HTTP_HX_REQUEST="true")
+    r_vote = client_logged.post(f"/products/{p.slug}/review/{review.id}/vote/", {"value": "helpful"}, HTTP_HX_REQUEST="true")
     assert r_vote.status_code == 200
     review.refresh_from_db()
     assert review.helpful_count == 1
@@ -1765,7 +1777,7 @@ def test_product_review_marks_verified_purchase_and_accepts_vote(client_logged, 
 def test_product_question_create(client_logged, user, db):
     p, *_ = _prod()
     r = client_logged.post(
-        f"/product/{p.slug}/questions/",
+        f"/products/{p.slug}/questions/",
         {"question_text": "Есть ли сертификат?"},
         HTTP_HX_REQUEST="true",
     )
@@ -1777,7 +1789,7 @@ def test_product_review_delete_by_author_htmx(client_logged, user, db):
     p, *_ = _prod()
     ProductReview.objects.create(product=p, user=user, rating=4, text="to delete")
     r = client_logged.post(
-        f"/product/{p.slug}/review/delete/",
+        f"/products/{p.slug}/review/delete/",
         HTTP_HX_REQUEST="true",
     )
     assert r.status_code == 200
@@ -1790,7 +1802,7 @@ def test_product_review_comment_create_update_delete_htmx(client_logged, user, d
     review = ProductReview.objects.create(product=p, user=user, rating=5, text="base")
 
     r_create = client_logged.post(
-        f"/product/{p.slug}/review/{review.id}/comment/",
+        f"/products/{p.slug}/review/{review.id}/comment/",
         {"text": "first comment"},
         HTTP_HX_REQUEST="true",
     )
@@ -1799,7 +1811,7 @@ def test_product_review_comment_create_update_delete_htmx(client_logged, user, d
     assert comment.text == "first comment"
 
     r_update = client_logged.post(
-        f"/product/{p.slug}/comment/{comment.id}/update/",
+        f"/products/{p.slug}/comment/{comment.id}/update/",
         {"text": "updated comment"},
         HTTP_HX_REQUEST="true",
     )
@@ -1808,7 +1820,7 @@ def test_product_review_comment_create_update_delete_htmx(client_logged, user, d
     assert comment.text == "updated comment"
 
     r_delete = client_logged.post(
-        f"/product/{p.slug}/comment/{comment.id}/delete/",
+        f"/products/{p.slug}/comment/{comment.id}/delete/",
         HTTP_HX_REQUEST="true",
     )
     assert r_delete.status_code == 200
@@ -1819,7 +1831,7 @@ def test_rating_visible_in_product_card_on_catalog(client_logged, user, db):
     p, *_ = _prod()
     ProductReview.objects.create(product=p, user=user, rating=4, text="ok")
 
-    r = client_logged.get(f"/catalog/?q={p.name}")
+    r = client_logged.get(f"/search/?q={p.name}")
     assert r.status_code == 200
     assert p.name in r.text
     assert "★" in r.text
@@ -1871,7 +1883,7 @@ def test_compare_launcher_hidden_until_compare_has_items(client, db):
 def test_catalog_card_keeps_compare_and_favorite_actions_for_guest(client, db):
     product, *_ = _prod()
 
-    response = client.get(f"/catalog/?q={product.name}")
+    response = client.get(f"/search/?q={product.name}")
 
     assert response.status_code == 200
     assert "data-compare-toggle" in response.text

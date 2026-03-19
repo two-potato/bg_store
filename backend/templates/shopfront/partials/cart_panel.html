@@ -8,7 +8,7 @@
           <div class="text-xs uppercase tracking-wide text-base-content/50">Поставщик</div>
           <div class="font-semibold text-sm">
             {% if group.slug %}
-              <a href="/stores/{{ group.slug }}/" hx-boost="false">{{ group.title }}</a>
+              <a href="/vendors/{{ group.slug }}/" hx-boost="false">{{ group.title }}</a>
             {% else %}
               {{ group.title }}
             {% endif %}

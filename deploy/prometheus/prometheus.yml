@@ -8,6 +8,7 @@ alerting:
 
 rule_files:
   - /etc/prometheus/alerts.yml
+  - /etc/prometheus/search_rules.yml
 
 scrape_configs:
   - job_name: 'prometheus'
@@ -40,9 +41,9 @@ scrape_configs:
     static_configs:
       - targets: ['redis-exporter:9121']
 
-  - job_name: 'elasticsearch'
+  - job_name: 'opensearch'
     static_configs:
-      - targets: ['es-exporter:9114']
+      - targets: ['opensearch-exporter:9114']
 
   - job_name: 'node'
     static_configs:
@@ -62,6 +63,7 @@ scrape_configs:
           - https://grafana.potatofarm.ru/api/health
           - http://backend:8000/health/
           - http://bot:8080/health
+          - http://host.docker.internal:18000/
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

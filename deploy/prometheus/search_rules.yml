@@ -1,0 +1,40 @@
+groups:
+  - name: search_funnel
+    interval: 30s
+    rules:
+      - record: servio:search:requests_rate5m
+        expr: sum by (surface, provider, outcome) (rate(servio_search_requests_total[5m]))
+
+      - record: servio:search:zero_result_share5m
+        expr: |
+          sum by (surface, provider) (rate(servio_search_zero_results_total[5m]))
+          /
+          clamp_min(
+            sum by (surface, provider) (rate(servio_search_requests_total[5m])),
+            0.000001
+          )
+
+      - record: servio:search:feedback_events_rate5m
+        expr: sum by (event_name, surface, origin) (rate(servio_search_feedback_events_total[5m]))
+
+      - record: servio:search:attributed_orders_rate5m
+        expr: sum by (source_channel, origin) (rate(servio_search_attributed_orders_total[5m]))
+
+      - record: servio:search:attributed_revenue_rate5m
+        expr: sum by (source_channel, origin) (rate(servio_search_attributed_revenue_total[5m]))
+
+      - record: servio:search:conversion_rate5m
+        expr: |
+          sum by (origin) (rate(servio_search_feedback_events_total{event_name="purchase"}[5m]))
+          /
+          clamp_min(
+            sum by (origin) (rate(servio_search_feedback_events_total{event_name="search_result_click"}[5m])),
+            0.000001
+          )
+
+      - record: servio:search:latency_p95_seconds5m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le, surface, provider) (rate(servio_search_latency_seconds_bucket[5m]))
+          )

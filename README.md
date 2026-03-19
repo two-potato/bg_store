@@ -1,8 +1,20 @@
-# Servio — Full Monorepo
+# Servio
 
-**Everything merged**: base + patches (auth via Telegram WebApp, legal entities workflow, orders w/ FSM, Celery tasks, bot notifier,
-PDF invoices, catalog, admin panel, and mobile-first frontend on HTMX + Bootstrap 5). Uses **uv** for Python.
+B2B marketplace monorepo on Django + HTMX with OpenSearch, Celery, Telegram bot integrations, and an observability stack.
 
+This README is the repository entrypoint. For current architecture and operational guidance, start with the source-of-truth docs listed below.
+
+
+## Start Here
+
+- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — current system architecture
+- [docs/BACKEND_GUIDE.md](./docs/BACKEND_GUIDE.md) — backend domain/layer structure
+- [docs/FRONTEND_ARCHITECTURE.md](./docs/FRONTEND_ARCHITECTURE.md) — storefront frontend/runtime model
+- [docs/LOCAL_DEVELOPMENT.md](./docs/LOCAL_DEVELOPMENT.md) — local dev workflow
+- [docs/DOCKER_GUIDE.md](./docs/DOCKER_GUIDE.md) — Docker stacks, env files, and validation
+- [docs/PRODUCTION_ENV_RU_2026-03-13.md](./docs/PRODUCTION_ENV_RU_2026-03-13.md) — production env checklist in Russian
+- [docs/DOC_OWNERSHIP_2026-03-13.md](./docs/DOC_OWNERSHIP_2026-03-13.md) — which docs are current vs historical
+- [docs/FULL_AUDIT_2026-03-12.md](./docs/FULL_AUDIT_2026-03-12.md) — latest full audit and remediation status
 
 ## Repository Structure
 
@@ -24,6 +36,7 @@ deploy/ — configs for monitoring, nginx, etc.
 ```bash
 cp backend/.env.example backend/.env
 cp bot/.env.example bot/.env
+cp bot/.env.notify.example bot/.env.notify
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 # new terminal:
 make migrate
@@ -31,12 +44,73 @@ make superuser
 ```
 
 Open:
-- Web (Nginx proxy): http://localhost/
-- Admin: http://localhost/admin/
-- API docs (Swagger): http://localhost/api/docs/
-- Metrics: http://localhost/metrics
+- Web (Nginx proxy): http://localhost:8080/
+- Admin: http://localhost:8080/admin/
+- API docs (Swagger): http://localhost:8080/api/docs/
+- API docs (Redoc): http://localhost:8080/api/redoc/
+- API schema: http://localhost:8080/api/schema/
+- Metrics endpoint on nginx: http://localhost:8080/metrics
+
+If you start the metrics overlay too:
+
 - Prometheus: http://localhost:9090
 - Grafana: http://localhost:3000  (admin / admin)
+- Alertmanager: http://localhost:9093
+- GlitchTip: http://localhost:18000
+
+Detailed reference:
+
+- [backend/API.md](./backend/API.md)
+- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
+- [docs/BACKEND_GUIDE.md](./docs/BACKEND_GUIDE.md)
+- [docs/FRONTEND_ARCHITECTURE.md](./docs/FRONTEND_ARCHITECTURE.md)
+- [docs/LOCAL_DEVELOPMENT.md](./docs/LOCAL_DEVELOPMENT.md)
+- [docs/DOCKER_GUIDE.md](./docs/DOCKER_GUIDE.md)
+
+Search:
+- OpenSearch runs locally as `opensearch:9200` inside compose
+- Reindex products after first boot:
+
+```bash
+docker compose exec backend python manage.py reindex_products_search
+```
+
+## Self-Hosted Error Tracking
+
+Local self-hosted Sentry-compatible tracking is available via GlitchTip.
+
+Start it:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.metrics.yml up -d glitchtip
+```
+
+Open:
+- GlitchTip: http://localhost:18000
+
+Then set `SENTRY_DSN` in `backend/.env`, `bot/.env`, or other service env files to the DSN of your GlitchTip project.
+
+## Tests
+
+Backend tests and lint now run in a dedicated dockerized service with dev dependencies and access to the compose network.
+
+Full suite with the repo coverage gate:
+
+```bash
+make test
+```
+
+Targeted run without the global `pytest.ini` coverage threshold:
+
+```bash
+make test-fast TEST_ARGS="tests/test_shopfront_views.py -k catalog_filter"
+```
+
+Lint in the same dev image:
+
+```bash
+make lint
+```
 
 ## Workflow: Dev -> Prod
 

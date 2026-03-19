@@ -19,6 +19,9 @@
 
 - [ ] Workflow `.github/workflows/deploy.yml` started on `main` push
 - [ ] Deploy job finished successfully
+- [ ] `backend/.env.prod` or equivalent secret source contains valid `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, and `METRICS_TOKEN`
+- [ ] `docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm backend /app/.venv/bin/python manage.py check --deploy` passes
+- [ ] `docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm backend /app/.venv/bin/python manage.py migrate --check` passes
 - [ ] `https://potatofarm.ru/health/` is `200`
 - [ ] Static and migrations applied
 
@@ -36,4 +39,3 @@
 - [ ] Identify last stable `main` commit SHA
 - [ ] Re-run deploy with stable SHA
 - [ ] Confirm health and critical paths again
-

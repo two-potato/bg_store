@@ -107,7 +107,7 @@ wait_for_service_health() {
 ensure_named_volumes() {
   local volumes=(
     "servio_pgdata"
-    "servio_esdata"
+    "servio_opensearchdata"
     "servio_redisdata"
     "servio_staticfiles"
   )
@@ -178,7 +178,7 @@ issue_or_renew_cert_standalone() {
 
 if [ ! -f "$LETSENCRYPT_CERT_PATH" ]; then
   log_step "TLS certificate not found, performing first-time issuance"
-  run_with_timeout 300 $COMPOSE_CORE up -d --build --remove-orphans db redis es bot bot-notify backend celery-worker celery-beat
+  run_with_timeout 300 $COMPOSE_CORE up -d --build --remove-orphans db redis opensearch bot bot-notify backend celery-worker celery-beat
   issue_or_renew_cert_standalone
 fi
 
@@ -195,7 +195,7 @@ fi
 
 log_step "Pulling/building and starting services"
 ensure_named_volumes
-run_with_timeout 300 $COMPOSE_FULL up -d --build --remove-orphans db redis es bot bot-notify backend celery-worker celery-beat grafana nginx
+run_with_timeout 300 $COMPOSE_FULL up -d --build --remove-orphans db redis opensearch bot bot-notify backend celery-worker celery-beat grafana nginx
 
 log_step "Waiting for core services"
 wait_for_service_health db 120

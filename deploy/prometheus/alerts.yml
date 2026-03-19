@@ -90,3 +90,48 @@ groups:
         annotations:
           summary: "Blackbox HTTP probe failed"
           description: "Probe to {{ $labels.instance }} is failing"
+
+      - alert: GlitchTipDown
+        expr: probe_success{job="blackbox", instance="http://host.docker.internal:18000/"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "GlitchTip is down"
+          description: "GlitchTip probe at {{ $labels.instance }} is failing for more than 2 minutes"
+
+      - alert: SearchZeroResultsHigh
+        expr: max(servio:search:zero_result_share5m) > 0.25
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Search zero-result share is high"
+          description: "Zero-result share is above 25% for {{ $labels.surface }}/{{ $labels.provider }} during the last 10 minutes"
+
+      - alert: SearchLatencyP95High
+        expr: max(servio:search:latency_p95_seconds5m) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Search latency p95 is high"
+          description: "Search p95 latency is above 0.8s for {{ $labels.surface }}/{{ $labels.provider }} during the last 10 minutes"
+
+      - alert: SearchClicksMissing
+        expr: sum(rate(servio_search_requests_total{outcome="ok"}[15m])) > 0.02 and sum(rate(servio_search_feedback_events_total{event_name="search_result_click"}[15m])) == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Search traffic has no click feedback"
+          description: "Search returns results, but no search_result_click events were observed for 15 minutes"
+
+      - alert: SearchAttributedOrdersMissing
+        expr: sum(increase(servio_search_feedback_events_total{event_name="search_result_click"}[6h])) > 20 and sum(increase(servio_search_attributed_orders_total[6h])) == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Search clicks are not converting into attributed orders"
+          description: "There were more than 20 search_result_click events in the last 6 hours, but zero attributed orders were recorded"

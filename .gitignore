@@ -28,3 +28,11 @@ logs/
 backend/logs/
 backend/.coverage
 backend/coverage.xml
+coverage.xml
+.artifacts/
+.codex/
+.playwright-cli/
+.tours/
+output/
+deploy/glitchtip/.env
+deploy/letsencrypt-local/

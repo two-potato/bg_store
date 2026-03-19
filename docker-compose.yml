@@ -11,7 +11,11 @@ services:
     image: servio-backend:dev
     container_name: servio-backend
     build: ./backend
-    env_file: ./backend/.env
+    env_file:
+      - path: ./backend/.env.example
+        required: true
+      - path: ./backend/.env
+        required: false
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -29,7 +33,10 @@ services:
       - db
       - redis
       - bot
+      - opensearch
     volumes:
+      - ./backend:/app
+      - /app/.venv
       - ./backend/media:/app/media
       - staticfiles:/app/staticfiles
       - ./logs:/app/logs
@@ -47,12 +54,18 @@ services:
   celery-worker:
     image: servio-backend:dev
     container_name: servio-worker
-    env_file: ./backend/.env
+    env_file:
+      - path: ./backend/.env.example
+        required: true
+      - path: ./backend/.env
+        required: false
     extra_hosts:
       - "host.docker.internal:host-gateway"
     command: ["python", "-m", "celery", "-A", "config.celery", "worker", "-l", "INFO"]
     depends_on: [backend, redis, db]
     volumes:
+      - ./backend:/app
+      - /app/.venv
       - ./logs:/app/logs
     logging: *default-logging
     restart: unless-stopped
@@ -60,21 +73,67 @@ services:
   celery-beat:
     image: servio-backend:dev
     container_name: servio-beat
-    env_file: ./backend/.env
+    env_file:
+      - path: ./backend/.env.example
+        required: true
+      - path: ./backend/.env
+        required: false
     extra_hosts:
       - "host.docker.internal:host-gateway"
     command: ["python", "-m", "celery", "-A", "config.celery", "beat", "-l", "INFO", "--schedule", "/tmp/celerybeat-schedule"]
     depends_on: [backend, redis, db]
     volumes:
+      - ./backend:/app
+      - /app/.venv
       - ./logs:/app/logs
     logging: *default-logging
     restart: unless-stopped
+
+  backend-test:
+    image: servio-backend:test
+    profiles: ["test"]
+    build:
+      context: ./backend
+      args:
+        INSTALL_DEV: "1"
+    env_file:
+      - path: ./backend/.env.example
+        required: true
+      - path: ./backend/.env
+        required: false
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      CACHE_BACKEND: redis
+      ENABLE_REQUEST_ACCESS_LOG: "0"
+      LOG_CALLS_ENABLED: "0"
+      REQUEST_LOG_LEVEL: WARNING
+      ENABLE_CATALOG_RATING: "0"
+      SENTRY_DSN: ""
+      PUBLIC_SENTRY_DSN: ""
+      SENTRY_BROWSER_SDK_URL: ""
+    depends_on:
+      - db
+      - redis
+      - opensearch
+    volumes:
+      - ./backend:/app
+      - /app/.venv
+      - ./backend/media:/app/media
+      - ./logs:/app/logs
+    logging: *default-logging
 
   bot:
     image: servio-bot:dev
     build: ./bot
     container_name: servio-bot
-    env_file: ./bot/.env
+    env_file:
+      - path: ./bot/.env.example
+        required: true
+      - path: ./bot/.env
+        required: false
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: ["python", "-m", "uvicorn", "app.main_shop:app", "--host", "0.0.0.0", "--port", "8080"]
     expose: ["8080"]
     healthcheck:
@@ -89,7 +148,13 @@ services:
     image: servio-bot:dev
     container_name: servio-bot-twa
     profiles: ["bots-extra"]
-    env_file: ./bot/.env.twa
+    env_file:
+      - path: ./bot/.env.example
+        required: true
+      - path: ./bot/.env.twa
+        required: false
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: ["python", "-m", "uvicorn", "app.main_shop:app", "--host", "0.0.0.0", "--port", "8080"]
     expose: ["8080"]
     healthcheck:
@@ -103,7 +168,13 @@ services:
   bot-notify:
     image: servio-bot:dev
     container_name: servio-bot-notify
-    env_file: ./bot/.env.notify
+    env_file:
+      - path: ./bot/.env.notify.example
+        required: true
+      - path: ./bot/.env.notify
+        required: false
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: ["python", "-m", "uvicorn", "app.main_notify:app", "--host", "0.0.0.0", "--port", "8080"]
     expose: ["8080"]
     healthcheck:
@@ -118,7 +189,11 @@ services:
     image: public.ecr.aws/docker/library/postgres:16
     container_name: servio-db
     command: ["postgres", "-c", "max_connections=1000", "-c", "shared_buffers=512MB"]
-    env_file: ./backend/.env
+    env_file:
+      - path: ./backend/.env.example
+        required: true
+      - path: ./backend/.env
+        required: false
     volumes:
       - pgdata:/var/lib/postgresql/data
     logging: *default-logging
@@ -141,15 +216,27 @@ services:
     logging: *default-logging
     restart: unless-stopped
 
-  es:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.0
-    container_name: servio-es
+  opensearch:
+    image: opensearchproject/opensearch:2.19.1
+    container_name: servio-opensearch
     environment:
       discovery.type: single-node
-      xpack.security.enabled: "false"
-      ES_JAVA_OPTS: "${ES_JAVA_OPTS:--Xms2g -Xmx2g}"
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: "${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-ServioOpenSearchLocal123!}"
+      bootstrap.memory_lock: "true"
+      OPENSEARCH_JAVA_OPTS: "${OPENSEARCH_JAVA_OPTS:--Xms512m -Xmx512m}"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
     volumes:
-      - esdata:/usr/share/elasticsearch/data
+      - opensearchdata:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9200/_cluster/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
     logging: *default-logging
     restart: unless-stopped
 
@@ -180,9 +267,9 @@ volumes:
   pgdata:
     external: true
     name: servio_pgdata
-  esdata:
+  opensearchdata:
     external: true
-    name: servio_esdata
+    name: servio_opensearchdata
   redisdata:
     external: true
     name: servio_redisdata

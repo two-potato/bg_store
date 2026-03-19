@@ -1,5 +1,14 @@
 services:
   backend:
+    env_file:
+      - path: ./backend/.env.example
+        required: true
+      - path: ./backend/.env.prod.example
+        required: true
+      - path: ./backend/.env
+        required: false
+      - path: ./backend/.env.prod
+        required: false
     environment:
       DEBUG: "0"
       DJANGO_SETTINGS_MODULE: config.settings.prod
@@ -26,6 +35,39 @@ services:
       - python:config.gunicorn
       - config.asgi:application
 
+  celery-worker:
+    env_file:
+      - path: ./backend/.env.example
+        required: true
+      - path: ./backend/.env.prod.example
+        required: true
+      - path: ./backend/.env
+        required: false
+      - path: ./backend/.env.prod
+        required: false
+
+  celery-beat:
+    env_file:
+      - path: ./backend/.env.example
+        required: true
+      - path: ./backend/.env.prod.example
+        required: true
+      - path: ./backend/.env
+        required: false
+      - path: ./backend/.env.prod
+        required: false
+
+  db:
+    env_file:
+      - path: ./backend/.env.example
+        required: true
+      - path: ./backend/.env.prod.example
+        required: true
+      - path: ./backend/.env
+        required: false
+      - path: ./backend/.env.prod
+        required: false
+
   nginx:
     build:
       context: ./deploy/nginx
@@ -46,4 +88,4 @@ services:
 volumes:
   pgdata:
     external: true
-    name: bad-guys-shop_pgdata
+    name: servio_pgdata

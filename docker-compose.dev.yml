@@ -6,7 +6,10 @@ services:
         INSTALL_DEV: 1
     environment:
       DEBUG: "1"
-      ES_ENABLED: "0"
+      OPENSEARCH_ENABLED: "1"
+      SENTRY_DSN: ""
+      PUBLIC_SENTRY_DSN: ""
+      SENTRY_BROWSER_SDK_URL: ""
     command:
       [
         "sh",
@@ -16,11 +19,13 @@ services:
   celery-worker:
     environment:
       DEBUG: "1"
-      ES_ENABLED: "0"
+      OPENSEARCH_ENABLED: "1"
+      SENTRY_DSN: ""
   celery-beat:
     environment:
       DEBUG: "1"
-      ES_ENABLED: "0"
+      OPENSEARCH_ENABLED: "1"
+      SENTRY_DSN: ""
   nginx:
     build:
       context: ./deploy/nginx

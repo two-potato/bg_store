@@ -7,7 +7,7 @@
 {% include "shopfront/components/tag_chips.html" %}
 
 <section class="catalog-layout-neo catalog-layout-neo--listing">
-  {% include "shopfront/components/product_grid.html" with products=products %}
+  {% include "shopfront/components/product_grid.html" with products=products grid_id="product-grid" %}
     {% if not products %}
       <div class="mt-4 rounded-2xl border border-base-200/80 bg-base-100 p-4">
         <h2 class="text-base font-semibold mb-2">Ничего не нашли</h2>
@@ -37,6 +37,16 @@
             {% include "shopfront/components/product_grid.html" with products=zero_results_products %}
           </div>
         {% endif %}
+        {% if search_recovery_products %}
+          <div class="mt-4 border-t border-base-200 pt-4">
+            {% include "shopfront/components/recommendation_section.html" with products=search_recovery_products title=search_recovery_title subtitle="Hybrid recovery блок объединяет семантический recall, affinity-профиль и popularity fallback." recommendation_source="search_recovery" tracking_payload=search_recovery_tracking_payload %}
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
+    {% if products and search_recovery_products %}
+      <div class="mt-4">
+        {% include "shopfront/components/recommendation_section.html" with products=search_recovery_products title=search_recovery_title subtitle="Если выдача выглядит слишком узкой, мы добавляем похожие позиции из hybrid recovery слоя." recommendation_source="search_recovery" tracking_payload=search_recovery_tracking_payload %}
       </div>
     {% endif %}
     {% if has_next %}

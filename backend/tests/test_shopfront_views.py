@@ -1,12 +1,16 @@
+import json
+
 import pytest
 from django.contrib.auth import get_user_model
+from django.test.utils import override_settings
 from catalog.models import Brand, Category, Collection, CollectionItem, Country, Product, ProductDocument, ProductQuestion, ProductReview, ProductReviewComment, ProductReviewPhoto, ProductReviewVote, Series, Tag, SellerOffer, SellerInventory
 from shopfront import search as sf_search
+from shopfront.search_attribution_service import SEARCH_ATTRIBUTION_SESSION_KEY
 from shopfront.search_service import SearchBundle
 from commerce.models import LegalEntity, LegalEntityMembership, DeliveryAddress, SellerStore, StoreReview
 from orders.models import Order, FakeAcquiringPayment
 from promotions.models import Coupon, PromotionRule, PromotionRedemption
-from shopfront.models import SavedList
+from shopfront.models import PersistentCart, RecommendationEvent, RecommendationPopularitySnapshot, RecommendationSet, SavedList
 from shopfront.tasks import notify_contact_feedback
 from users.models import UserProfile
 from catalog.models import ProductImage
@@ -18,7 +22,7 @@ def _prod():
     b = Brand.objects.create(name="B")
     s = Series.objects.create(brand=b, name="S")
     c = Category.objects.create(name="C")
-    p = Product.objects.create(sku="SKU-X", name="PX", brand=b, series=s, category=c, price=15, stock_qty=100)
+    p = Product.objects.create(sku="12345678", name="PX", brand=b, series=s, category=c, price=15, stock_qty=100)
     t = Tag.objects.create(name="Good", slug="good")
     p.tags.add(t)
     return p, b, c, t
@@ -34,44 +38,227 @@ def test_home_and_catalog_pages(client, db):
     assert r2.status_code == 200
 
 
-def test_base_layout_uses_modular_frontend_assets(client, db):
-    _prod()
-    response = client.get("/")
+def test_catalog_uses_async_filter_autocomplete(client, db):
+    _, brand, category, tag = _prod()
+
+    response = client.get(f"/catalog/?brand={brand.id}&category={category.slug}&tag={tag.slug}")
+
     assert response.status_code == 200
-    assert "shopfront/css/legacy/foundation.css" in response.text
-    assert "shopfront/css/legacy/catalog-mobile.css" in response.text
-    assert "shopfront/css/legacy/marketplace-surfaces.css" in response.text
-    assert "shopfront/css/legacy/footer-and-grid.css" in response.text
-    assert "shopfront/css/legacy/entity-pages-and-header.css" in response.text
-    assert "shopfront/css/legacy/catalog-compact-and-grid.css" in response.text
-    assert "shopfront/css/tokens.css" in response.text
-    assert "shopfront/css/base.css" in response.text
-    assert "shopfront/css/layout.css" in response.text
-    assert "shopfront/css/components/header.css" in response.text
-    assert "shopfront/css/components/brands.css" in response.text
-    assert "shopfront/css/components/footer.css" in response.text
-    assert "shopfront/css/components/product.css" in response.text
-    assert "shopfront/css/components/live-search.css" in response.text
-    assert "shopfront/css/components/account.css" in response.text
-    assert "shopfront/css/components/toast.css" in response.text
-    assert "shopfront/ui.runtime.js" in response.text
-    assert "shopfront/ui.product-cards.js" in response.text
-    assert "shopfront/ui.interactions.js" in response.text
-    assert "shopfront/ui.social.js" in response.text
-    assert "shopfront/unified-theme.css" not in response.text
-    assert "shopfront/servio.css" not in response.text
-    assert "shopfront/theme.css" not in response.text
-    assert "shopfront/refactor.frontend.css" not in response.text
-    assert "shopfront/ui.carousel.js" not in response.text
-    assert "hyperscript.org" not in response.text
-    assert "html-to-design/capture.js" not in response.text
-    assert 'data-compare-launcher' in response.text
-    assert 'hidden aria-hidden="true"' in response.text
-    assert 'site-catalog-menu' in response.text
-    assert 'site-header-v3__more-menu' in response.text
-    assert ">Каталог</span></summary>" in response.text
-    assert 'href="#main-content"' in response.text
-    assert 'id="main-content"' in response.text
+    assert 'data-catalog-autocomplete' in response.text
+    assert 'name="brand"' in response.text
+    assert 'name="category"' in response.text
+    assert 'name="tag"' in response.text
+    assert 'Начните вводить бренд' in response.text
+    assert 'Начните вводить категорию' in response.text
+    assert 'Начните вводить тег' in response.text
+    assert 'data-endpoint="/catalog/filter-suggestions/"' in response.text
+    assert '<select class="select select-bordered select-sm w-full catalog-select-2026" name="brand">' not in response.text
+    assert '<select class="select select-bordered select-sm w-full catalog-select-2026" name="category">' not in response.text
+    assert '<select class="select select-bordered select-sm w-full catalog-select-2026" name="tag">' not in response.text
+
+
+def test_catalog_filter_suggestions_endpoint(client, db):
+    _, _, category, tag = _prod()
+    brand = Brand.objects.create(name="Brewmaster")
+    child = Category.objects.create(name="Coffee Syrups", slug="coffee-syrups", parent=category)
+
+    brand_response = client.get("/catalog/filter-suggestions/?kind=brand&q=br")
+    assert brand_response.status_code == 200
+    assert any(item["value"] == str(brand.id) for item in brand_response.json()["items"])
+
+    category_response = client.get("/catalog/filter-suggestions/?kind=category&q=syr")
+    assert category_response.status_code == 200
+    category_items = category_response.json()["items"]
+    assert any(item["value"] == child.slug for item in category_items)
+    assert any("Coffee Syrups" in item["hint"] for item in category_items)
+
+    tag_response = client.get("/catalog/filter-suggestions/?kind=tag&q=goo")
+    assert tag_response.status_code == 200
+    assert any(item["value"] == tag.slug for item in tag_response.json()["items"])
+
+    short_response = client.get("/catalog/filter-suggestions/?kind=brand&q=b")
+    assert short_response.status_code == 200
+    assert short_response.json()["items"] == []
+
+    invalid_response = client.get("/catalog/filter-suggestions/?kind=unknown&q=test")
+    assert invalid_response.status_code == 400
+
+
+def test_search_feedback_ingest_accepts_search_event(client, db):
+    response = client.post(
+        "/analytics/search-feedback/",
+        data='{"event":"search","search_term":"сироп","results_count":12,"search_provider":"hybrid","search_rewrite_kind":"semantic_rewrite","page_type":"catalog","search_origin":"catalog_grid"}',
+        content_type="application/json",
+    )
+
+    assert response.status_code == 204
+
+
+def test_search_feedback_ingest_rejects_invalid_payload(client, db):
+    invalid_json = client.post(
+        "/analytics/search-feedback/",
+        data="{not-json",
+        content_type="application/json",
+    )
+    assert invalid_json.status_code == 400
+
+    unsupported = client.post(
+        "/analytics/search-feedback/",
+        data='{"event":"purchase"}',
+        content_type="application/json",
+    )
+    assert unsupported.status_code == 400
+
+
+def test_search_feedback_attribution_enriches_add_to_cart(client, db):
+    product, *_ = _prod()
+    response = client.post(
+        "/analytics/search-feedback/",
+        data=json.dumps(
+            {
+                "event": "search",
+                "search_term": "сироп",
+                "search_origin": "catalog_search",
+                "search_provider": "hybrid",
+                "search_rewrite_kind": "semantic_rewrite",
+                "results_count": 1,
+                "page_type": "catalog",
+                "ecommerce": {
+                    "items": [
+                        {"item_id": str(product.id), "item_name": product.name},
+                    ]
+                },
+            }
+        ),
+        content_type="application/json",
+    )
+    assert response.status_code == 204
+
+    add = client.post("/cart/add/", {"product_id": product.id, "qty": 1})
+    assert add.status_code == 200
+    trigger = json.loads(add.headers["HX-Trigger"])
+    analytics_event = trigger["analyticsEvent"]
+    assert analytics_event["search_term"] == "сироп"
+    assert analytics_event["search_origin"] == "catalog_search"
+    assert analytics_event["search_provider"] == "hybrid"
+    assert analytics_event["search_rewrite_kind"] == "semantic_rewrite"
+
+
+def test_recommendation_feedback_ingest_and_add_to_cart_linkage(client, db):
+    product, *_ = _prod()
+    response = client.post(
+        "/analytics/recommendation-feedback/",
+        data=json.dumps(
+            {
+                "event": "recommendation_impression",
+                "recommendation_source": "home_popular",
+                "surface": "home",
+                "experiment_variant": "ranked_v2",
+                "request_id": "req-1",
+                "ecommerce": {"items": [{"item_id": str(product.id), "item_name": product.name}]},
+            }
+        ),
+        content_type="application/json",
+    )
+    assert response.status_code == 204
+
+    click = client.post(
+        "/analytics/recommendation-feedback/",
+        data=json.dumps(
+            {
+                "event": "recommendation_click",
+                "recommendation_source": "home_popular",
+                "surface": "home",
+                "experiment_variant": "ranked_v2",
+                "request_id": "req-1",
+                "item_id": str(product.id),
+                "item_name": product.name,
+                "position": 1,
+            }
+        ),
+        content_type="application/json",
+    )
+    assert click.status_code == 204
+
+    add = client.post("/cart/add/", {"product_id": product.id, "qty": 1})
+    assert add.status_code == 200
+    trigger = json.loads(add.headers["HX-Trigger"])
+    assert trigger["analyticsEvent"]["recommendation_source"] == "home_popular"
+    assert trigger["analyticsEvent"]["experiment_variant"] == "ranked_v2"
+    assert RecommendationEvent.objects.filter(event="add_to_cart", recommendation_source="home_popular", product=product).exists()
+
+
+def test_catalog_renders_single_main_product_grid_id(client, db):
+    _prod()
+
+    response = client.get("/catalog/?q=no-such-product-xyz")
+
+    assert response.status_code == 200
+    assert response.text.count('id="product-grid"') == 1
+
+
+def test_recommendation_cards_expose_click_tracking_on_action_buttons(client, db):
+    product, *_ = _prod()
+    RecommendationPopularitySnapshot.objects.create(
+        scope_type=RecommendationPopularitySnapshot.ScopeType.GLOBAL,
+        scope_id=0,
+        product=product,
+        score="9.5000",
+    )
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert f'data-search-product-id="{product.id}"' in response.text
+    assert 'data-recommendation-click' in response.text
+    assert 'data-recommendation-source="home_popular"' in response.text
+
+
+def test_base_layout_uses_modular_frontend_assets(client, db):
+    product_obj, _, _, _ = _prod()
+    home = client.get("/")
+    assert home.status_code == 200
+    assert "shopfront/css/legacy/foundation.css" in home.text
+    assert "shopfront/css/legacy/catalog-mobile.css" in home.text
+    assert "shopfront/css/legacy/marketplace-surfaces.css" in home.text
+    assert "shopfront/css/legacy/footer-and-grid.css" in home.text
+    assert "shopfront/css/legacy/entity-pages-and-header.css" in home.text
+    assert "shopfront/css/legacy/catalog-compact-and-grid.css" in home.text
+    assert "shopfront/css/tokens.css" in home.text
+    assert "shopfront/css/base.css" in home.text
+    assert "shopfront/css/layout.css" in home.text
+    assert "shopfront/css/components/header.css" in home.text
+    assert "shopfront/css/components/brands.css" in home.text
+    assert "shopfront/css/components/footer.css" in home.text
+    assert "shopfront/css/components/live-search.css" in home.text
+    assert "shopfront/css/components/toast.css" in home.text
+    assert "shopfront/css/components/product.css" not in home.text
+    assert "shopfront/css/components/account.css" not in home.text
+    assert "shopfront/ui.runtime.js" in home.text
+    assert "shopfront/ui.product-cards.js" in home.text
+    assert "shopfront/ui.interactions.js" in home.text
+    assert "shopfront/ui.social.js" in home.text
+    assert "shopfront/unified-theme.css" not in home.text
+    assert "shopfront/servio.css" not in home.text
+    assert "shopfront/theme.css" not in home.text
+    assert "shopfront/refactor.frontend.css" not in home.text
+    assert "shopfront/ui.carousel.js" not in home.text
+    assert "hyperscript.org" not in home.text
+    assert "html-to-design/capture.js" not in home.text
+    assert 'data-compare-launcher' in home.text
+    assert 'hidden aria-hidden="true"' in home.text
+    assert 'site-catalog-menu' in home.text
+    assert 'site-header-v3__more-menu' in home.text
+    assert ">Каталог</span></summary>" in home.text
+    assert 'href="#main-content"' in home.text
+
+    product = client.get(f"/product/{product_obj.slug}/")
+    assert product.status_code == 200
+    assert "shopfront/css/components/product.css" in product.text
+
+    account = client.get("/account/login/")
+    assert account.status_code == 200
+    assert "shopfront/css/components/account.css" in account.text
+    assert 'id="main-content"' in home.text
 
 
 def test_robots_and_sitemap_exclude_private_routes(client, db):
@@ -275,6 +462,23 @@ def test_home_and_brands_use_generated_brand_logos_and_static_hero_images(client
     assert brands.status_code == 200
     assert "brand-index-2026__card" in brands.text
     assert "data:image/svg+xml;charset=UTF-8" in brands.text
+
+
+def test_home_renders_popular_recommendation_section(client_logged, user, db):
+    p, *_ = _prod()
+    from shopfront.models import RecommendationSet
+
+    RecommendationSet.objects.create(
+        kind="home_popular",
+        scope_type=RecommendationSet.ScopeType.GLOBAL,
+        scope_id=0,
+        source="test",
+        product_ids=[p.id],
+    )
+
+    home = client_logged.get("/")
+    assert home.status_code == 200
+    assert "Популярное в Servio" in home.text
 
 
 def test_category_detail_page_and_offer_price(client, db):
@@ -525,6 +729,47 @@ def test_saved_list_can_be_created_from_order(client_logged, user, db):
     assert saved_list.items.first().quantity == 3
 
 
+def test_account_home_and_orders_render_reorder_surfaces(client_logged, user, db):
+    product, *_ = _prod()
+    order = Order.objects.create(
+        customer_type=Order.CustomerType.INDIVIDUAL,
+        payment_method=Order.PaymentMethod.CASH,
+        customer_name="Ivan",
+        customer_phone="+79999999999",
+        address_text="Addr",
+        placed_by=user,
+    )
+    order.items.create(product=product, name=product.name, price=product.price, qty=2)
+
+    home = client_logged.get("/account/")
+    assert home.status_code == 200
+    assert "Заказывают повторно" in home.text
+    assert "Пора пополнить" in home.text
+
+    orders = client_logged.get("/account/orders/")
+    assert orders.status_code == 200
+    assert "Повторить прошлую закупку" in orders.text
+
+    detail = client_logged.get(f"/account/orders/{order.id}/")
+    assert detail.status_code == 200
+    assert "Повторить прошлую закупку" in detail.text
+
+
+def test_catalog_zero_results_renders_search_recovery_recommendations(client, monkeypatch, db):
+    product, *_ = _prod()
+
+    def _fake_recovery(query, *, user=None, request=None, limit=8):
+        return {"products": [product], "tracking_payload": "", "variant": "ranked_v2"}
+
+    monkeypatch.setattr("shopfront.views.catalog.search_recovery_recommendations", _fake_recovery)
+
+    response = client.get("/catalog/?q=totally-missing-query")
+
+    assert response.status_code == 200
+    assert "Похожие товары по запросу" in response.text
+    assert product.name in response.text
+
+
 def test_catalog_sort_by_rating_desc(client, db):
     b = Brand.objects.create(name="RatingBrand")
     c = Category.objects.create(name="RatingCategory")
@@ -564,7 +809,7 @@ def test_catalog_invalid_brand_does_not_error(client, db):
     assert r.status_code == 200
 
 
-def test_live_search_es_unavailable_returns_empty(client, monkeypatch, db):
+def test_live_search_opensearch_unavailable_returns_empty(client, monkeypatch, db):
     from catalog.models import Country
     country = Country.objects.create(name="Italy", iso_code="IT")
     b = Brand.objects.create(name="Lavazza")
@@ -580,7 +825,7 @@ def test_live_search_es_unavailable_returns_empty(client, monkeypatch, db):
     )
 
     def _boom(*args, **kwargs):
-        raise sf_search.ESSearchUnavailable("es down")
+        raise sf_search.OpenSearchUnavailable("opensearch down")
 
     monkeypatch.setattr(sf_search, "live_search_bundle", _boom)
 
@@ -625,6 +870,38 @@ def test_favorite_toggle_returns_tracking_payload(client, user, db):
     payload = r.json()
     assert payload["ok"] is True
     assert payload["tracking"]["event"] == "wishlist_add"
+
+
+def test_favorite_toggle_returns_json_401_for_fetch_guests(client, db):
+    p, *_ = _prod()
+
+    response = client.post(
+        "/favorites/toggle/",
+        {"product_id": p.id},
+        HTTP_ACCEPT="application/json",
+        HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+    )
+
+    assert response.status_code == 401
+    payload = response.json()
+    assert payload["ok"] is False
+    assert payload["error"] == "authentication_required"
+    assert "/account/login/" in payload["login_url"]
+
+
+def test_subscription_toggle_returns_json_401_for_fetch_guests(client, db):
+    brand = Brand.objects.create(name="Guest Brand")
+
+    response = client.post(
+        "/subscriptions/toggle/",
+        {"entity": "brand", "entity_id": brand.id},
+        HTTP_ACCEPT="application/json",
+        HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+    )
+
+    assert response.status_code == 401
+    payload = response.json()
+    assert payload["error"] == "authentication_required"
 
 
 def test_checkout_contains_begin_checkout_payload(client_logged, user, db):
@@ -739,6 +1016,7 @@ def test_checkout_company_and_individual(client_logged, user, db):
     r_sub = client_logged.post("/checkout/submit/", {
         "customer_type": "company",
         "payment_method": "cash",
+        "delivery_method": "courier",
         "legal_entity": le.id,
         "delivery_address": addr.id,
     })
@@ -748,6 +1026,8 @@ def test_checkout_company_and_individual(client_logged, user, db):
     assert str(first.subtotal) == "15.00"
     assert str(first.discount_amount) == "1.50"
     assert str(first.total) == "13.50"
+    assert first.delivery_method == Order.DeliveryMethod.COURIER
+    assert first.delivery_address == addr
 
     # individual submit
     s = client_logged.session
@@ -756,15 +1036,45 @@ def test_checkout_company_and_individual(client_logged, user, db):
     r_sub2 = client_logged.post("/checkout/submit/", {
         "customer_type": "individual",
         "payment_method": "cash",
+        "delivery_method": "pickup",
         "customer_name": "Ivan",
         "customer_phone": "+71234567890",
-        "address_text": "Street 1",
+        "pickup_point": "ПВЗ Москва, Лесная 5",
     })
     assert r_sub2.status_code in (302, 303)
     second = Order.objects.filter(placed_by=user).order_by("-id").first()
     assert str(second.subtotal) == "30.00"
     assert str(second.discount_amount) == "3.00"
     assert str(second.total) == "27.00"
+    assert second.delivery_method == Order.DeliveryMethod.PICKUP
+    assert second.pickup_point == "ПВЗ Москва, Лесная 5"
+    assert not second.address_text
+
+
+def test_checkout_company_pickup_without_delivery_address(client_logged, user, db):
+    p, *_ = _prod()
+    le = LegalEntity.objects.create(name="LE Pickup", inn="7707083894", bik="044525225", checking_account="40702810900000000002")
+    LegalEntityMembership.objects.create(user=user, legal_entity=le)
+    s = client_logged.session
+    s["cart"] = {str(p.id): {"qty": 1}}
+    s.save()
+
+    response = client_logged.post(
+        "/checkout/submit/",
+        {
+            "customer_type": "company",
+            "payment_method": "cash",
+            "delivery_method": "pickup",
+            "legal_entity": le.id,
+            "pickup_point": "ПВЗ Санкт-Петербург, Невский 28",
+        },
+    )
+
+    assert response.status_code in (302, 303)
+    order = Order.objects.filter(placed_by=user).order_by("-id").first()
+    assert order.delivery_method == Order.DeliveryMethod.PICKUP
+    assert order.pickup_point == "ПВЗ Санкт-Петербург, Невский 28"
+    assert order.delivery_address is None
 
 
 def test_checkout_applies_valid_coupon(client_logged, user, db):
@@ -886,6 +1196,146 @@ def test_checkout_mir_card_creates_fake_payment_panel(client_logged, user, db):
     assert payment.status in (FakeAcquiringPayment.Status.CREATED, FakeAcquiringPayment.Status.PROCESSING)
 
 
+def test_checkout_online_card_creates_online_payment_panel_and_delivery_slot(client_logged, user, db):
+    p, *_ = _prod()
+    s = client_logged.session
+    s["cart"] = {str(p.id): {"qty": 1}}
+    s.save()
+
+    r = client_logged.post(
+        "/checkout/submit/",
+        {
+            "customer_type": "individual",
+            "payment_method": "online_card",
+            "customer_name": "Ivan",
+            "customer_phone": "+71234567890",
+            "address_text": "Street 1",
+            "delivery_slot": "Пн-Пт, 10:00-14:00",
+        },
+        HTTP_HX_REQUEST="true",
+    )
+    assert r.status_code == 200
+    assert "Онлайн-эквайринг" in r.text
+    order = Order.objects.filter(placed_by=user).order_by("-id").first()
+    assert order.payment_method == Order.PaymentMethod.ONLINE_CARD
+    assert order.delivery_slot == "Пн-Пт, 10:00-14:00"
+    payment = FakeAcquiringPayment.objects.get(order=order)
+    assert payment.provider_payment_id.startswith("online_")
+
+
+def test_checkout_hx_redirects_to_created_order_detail(client_logged, user, db):
+    p, *_ = _prod()
+    s = client_logged.session
+    s["cart"] = {str(p.id): {"qty": 1}}
+    s.save()
+
+    response = client_logged.post(
+        "/checkout/submit/",
+        {
+            "customer_type": "individual",
+            "payment_method": "cash",
+            "customer_name": "Ivan",
+            "customer_phone": "+71234567890",
+            "address_text": "Street 1",
+        },
+        HTTP_HX_REQUEST="true",
+    )
+
+    order = Order.objects.filter(placed_by=user).order_by("-id").first()
+    assert order is not None
+    assert response.status_code == 200
+    assert response.headers["HX-Redirect"] == f"/account/orders/{order.id}/"
+
+
+def test_authenticated_multivendor_checkout_is_visible_and_clears_cart(client_logged, user, db):
+    p1, b1, c1, _ = _prod()
+    p2 = Product.objects.create(
+        sku="22345678",
+        name="PX-2",
+        brand=b1,
+        category=c1,
+        price=25,
+        stock_qty=50,
+    )
+    User = get_user_model()
+    seller_a = User.objects.create_user(username="seller_multi_a", password="pass")
+    seller_b = User.objects.create_user(username="seller_multi_b", password="pass")
+    p1.seller = seller_a
+    p1.save(update_fields=["seller"])
+    p2.seller = seller_b
+    p2.save(update_fields=["seller"])
+
+    session = client_logged.session
+    session["cart"] = {str(p1.id): {"qty": 2}, str(p2.id): {"qty": 3}}
+    session.save()
+    PersistentCart.objects.update_or_create(
+        user=user,
+        defaults={"payload": {str(p1.id): {"qty": 2}, str(p2.id): {"qty": 3}}},
+    )
+
+    response = client_logged.post(
+        "/checkout/submit/",
+        {
+            "customer_type": "individual",
+            "payment_method": "cash",
+            "customer_name": "Ivan",
+            "customer_phone": "+71234567890",
+            "address_text": "Street 1",
+        },
+        HTTP_HX_REQUEST="true",
+    )
+
+    order = Order.objects.filter(placed_by=user).order_by("-id").first()
+    assert order is not None
+    assert order.items.count() == 2
+    assert order.split_status == Order.SplitStatus.PLANNED
+    assert order.seller_orders.count() == 2
+    assert response.status_code == 200
+    assert response.headers["HX-Redirect"] == f"/account/orders/{order.id}/"
+
+    detail = client_logged.get(f"/account/orders/{order.id}/")
+    assert detail.status_code == 200
+    assert f"Заказ #{order.id}" in detail.text
+
+    orders_page = client_logged.get("/account/orders/")
+    assert orders_page.status_code == 200
+    assert f"Заказ #{order.id}" in orders_page.text
+
+    session = client_logged.session
+    assert session.get("cart") == {}
+    persistent = PersistentCart.objects.get(user=user)
+    assert persistent.payload == {}
+
+    cart_page = client_logged.get("/cart/")
+    assert cart_page.status_code == 200
+    assert "Корзина пуста" in cart_page.text
+
+
+def test_guest_checkout_hx_redirects_to_guest_order_detail(client, db):
+    p, *_ = _prod()
+    s = client.session
+    s["cart"] = {str(p.id): {"qty": 2}}
+    s.save()
+
+    response = client.post(
+        "/checkout/submit/",
+        {
+            "customer_type": "individual",
+            "payment_method": "cash",
+            "customer_name": "Guest Buyer",
+            "customer_email": "guest@example.com",
+            "customer_phone": "+79990000000",
+            "address_text": "Guest street 1",
+        },
+        HTTP_HX_REQUEST="true",
+    )
+
+    order = Order.objects.order_by("-id").first()
+    assert order is not None
+    assert response.status_code == 200
+    assert response.headers["HX-Redirect"] == f"/checkout/success/{order.id}/{order.guest_access_token}/"
+
+
 def test_guest_checkout_page_is_available(client, db):
     p, *_ = _prod()
     s = client.session
@@ -925,6 +1375,28 @@ def test_guest_checkout_individual_creates_public_order(client, db):
     assert order.guest_access_token
     assert f"/checkout/success/{order.id}/{order.guest_access_token}/" in r.text
     assert client.session["guest_order_tokens"][str(order.id)] == order.guest_access_token
+
+
+def test_checkout_pickup_requires_pickup_point(client_logged, db):
+    p, *_ = _prod()
+    s = client_logged.session
+    s["cart"] = {str(p.id): {"qty": 1}}
+    s.save()
+
+    response = client_logged.post(
+        "/checkout/submit/",
+        {
+            "customer_type": "individual",
+            "payment_method": "cash",
+            "delivery_method": "pickup",
+            "customer_name": "Guest Buyer",
+            "customer_phone": "+79990000000",
+        },
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert response.status_code == 422
+    assert "Выберите точку самовывоза" in response.text
 
 
 def test_guest_checkout_company_requires_auth(client, db):
@@ -980,6 +1452,62 @@ def test_guest_fake_payment_page_and_event_use_token(client, db):
     assert order.status == Order.Status.PAID
 
 
+@override_settings(ENABLE_DEMO_PAYMENTS=False)
+def test_guest_demo_payment_pages_are_disabled_when_demo_payments_off(client, db):
+    order = Order.objects.create(
+        customer_type=Order.CustomerType.INDIVIDUAL,
+        payment_method=Order.PaymentMethod.MIR_CARD,
+        customer_name="Guest Buyer",
+        customer_email="guest-pay@example.com",
+        customer_phone="+79995550000",
+        address_text="Guest pay street",
+        guest_access_token="guesttoken123",
+    )
+    FakeAcquiringPayment.objects.create(
+        order=order,
+        amount=15,
+        provider_payment_id=f"fake_guest_{order.id}",
+        status=FakeAcquiringPayment.Status.PROCESSING,
+        last_event=FakeAcquiringPayment.Event.START,
+        history=[],
+    )
+
+    page = client.get(f"/payments/fake/{order.id}/{order.guest_access_token}/")
+    event = client.post(
+        f"/payments/fake/{order.id}/{order.guest_access_token}/event/",
+        {"event": "success"},
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert page.status_code == 404
+    assert event.status_code == 404
+
+
+@override_settings(ENABLE_DEMO_PAYMENTS=False)
+def test_checkout_rejects_disabled_demo_payment_method(client_logged, db):
+    product, *_ = _prod()
+    session = client_logged.session
+    session["cart"] = {str(product.id): {"qty": 1}}
+    session.save()
+
+    response = client_logged.post(
+        "/checkout/submit/",
+        {
+            "customer_type": "individual",
+            "payment_method": "online_card",
+            "delivery_method": "courier",
+            "customer_name": "Guest Buyer",
+            "customer_email": "buyer@example.com",
+            "customer_phone": "+79990000000",
+            "address_text": "Moscow",
+        },
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert response.status_code == 422
+    assert "Выбранный способ оплаты недоступен" in response.text
+
+
 def test_fake_payment_event_success_marks_order_paid(client_logged, user, db):
     p, *_ = _prod()
     order = Order.objects.create(
@@ -999,6 +1527,31 @@ def test_fake_payment_event_success_marks_order_paid(client_logged, user, db):
         last_event=FakeAcquiringPayment.Event.START,
         history=[],
     )
+    session = client_logged.session
+    session[SEARCH_ATTRIBUTION_SESSION_KEY] = {
+        "orders": {
+            str(order.id): {
+                "ts": 9999999999,
+                "payload": {
+                    "attributed_item_count": 1,
+                    "attributed_queries": ["сироп"],
+                    "items": [
+                        {
+                            "product_id": str(p.id),
+                            "product_name": p.name,
+                            "qty": 1,
+                            "search_term": "сироп",
+                            "search_origin": "catalog_search",
+                            "search_provider": "hybrid",
+                            "search_rewrite_kind": "semantic_rewrite",
+                            "position": 1,
+                        }
+                    ],
+                },
+            }
+        }
+    }
+    session.save()
 
     r = client_logged.post(
         f"/payments/fake/{order.id}/event/",
@@ -1011,6 +1564,8 @@ def test_fake_payment_event_success_marks_order_paid(client_logged, user, db):
     payment = FakeAcquiringPayment.objects.get(order=order)
     assert order.status == Order.Status.PAID
     assert payment.status == FakeAcquiringPayment.Status.PAID
+    trigger_payload = json.loads(r.headers["HX-Trigger"])
+    assert trigger_payload["analyticsEvent"]["search_attribution"]["attributed_queries"] == ["сироп"]
 
 
 def test_checkout_error_response_contains_tracking_payload(client, db):
@@ -1123,7 +1678,35 @@ def test_product_page_defers_heavy_recommendation_sections(client_logged, user, 
     assert r.status_code == 200
     assert f'/product/{p.slug}/recommendations/fbt/' in r.text
     assert f'/product/{p.slug}/recommendations/seller-cross/' in r.text
+    assert 'hx-target="this"' in r.text
+    assert 'hx-select=".product-reco-2026"' in r.text
     assert "Загружаем рекомендации" in r.text
+
+
+def test_product_page_renders_substitute_block_when_candidates_exist(client_logged, user, db):
+    p, brand, cat, _tag = _prod()
+    alternative = Product.objects.create(
+        sku="55555555",
+        name="Alternative product",
+        brand=brand,
+        category=cat,
+        price=199,
+        stock_qty=5,
+        seller=p.seller,
+    )
+    from shopfront.models import RecommendationProductAffinity
+
+    RecommendationProductAffinity.objects.create(
+        source_product=p,
+        target_product=alternative,
+        affinity_type=RecommendationProductAffinity.AffinityType.SIMILAR,
+        score="2.0000",
+        orders_count=1,
+    )
+
+    r = client_logged.get(f"/product/{p.slug}/")
+    assert r.status_code == 200
+    assert "Возможные альтернативы" in r.text
 
 
 def test_product_recommendation_section_endpoint_renders_partial(client_logged, user, db):

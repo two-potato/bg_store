@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from uuid import uuid4
 
@@ -124,6 +125,7 @@ class BrandSubscription(TimeStampedModel):
 
 
 class RecentlyViewedProduct(TimeStampedModel):
+    updated_at = models.DateTimeField(default=timezone.now)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -148,6 +150,15 @@ class RecentlyViewedProduct(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"RecentlyViewed(user={self.user_id}, product={self.product_id})"
+
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+        if update_fields and set(update_fields) == {"updated_at"} and self.pk and self.updated_at:
+            type(self).objects.filter(pk=self.pk).update(updated_at=self.updated_at)
+            return
+        if not update_fields or "updated_at" in update_fields:
+            self.updated_at = timezone.now()
+        return super().save(*args, **kwargs)
 
 
 class SavedList(TimeStampedModel):
@@ -215,3 +226,223 @@ class SavedListItem(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"SavedListItem(list={self.saved_list_id}, product={self.product_id})"
+
+
+class RecommendationEvent(TimeStampedModel):
+    event = models.CharField(max_length=48, db_index=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="recommendation_events",
+    )
+    session_key = models.CharField(max_length=64, blank=True, db_index=True)
+    surface = models.CharField(max_length=32, blank=True, db_index=True)
+    recommendation_source = models.CharField(max_length=64, blank=True, db_index=True)
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="recommendation_events",
+    )
+    seller_id = models.IntegerField(null=True, blank=True)
+    brand_id = models.IntegerField(null=True, blank=True)
+    category_id = models.IntegerField(null=True, blank=True)
+    position = models.PositiveIntegerField(default=0)
+    request_id = models.CharField(max_length=64, blank=True, db_index=True)
+    payload = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["event", "-created_at"], name="recoevent_event_created_idx"),
+            models.Index(fields=["surface", "-created_at"], name="recoevent_surface_created_idx"),
+            models.Index(fields=["recommendation_source", "-created_at"], name="recoevent_src_created_idx"),
+            models.Index(fields=["user", "-created_at"], name="recoevent_user_created_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"RecommendationEvent(event={self.event}, product={self.product_id})"
+
+
+class RecommendationProductAffinity(TimeStampedModel):
+    class AffinityType(models.TextChoices):
+        CO_PURCHASE = "co_purchase", "Co-purchase"
+        SUBSTITUTE = "substitute", "Substitute"
+        SIMILAR = "similar", "Similar"
+        ACCESSORY = "accessory", "Accessory"
+
+    source_product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="outgoing_recommendation_affinities",
+    )
+    target_product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="incoming_recommendation_affinities",
+    )
+    affinity_type = models.CharField(max_length=24, choices=AffinityType.choices, default=AffinityType.CO_PURCHASE)
+    score = models.DecimalField(max_digits=12, decimal_places=4, default=0)
+    orders_count = models.PositiveIntegerField(default=0)
+    views_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-score", "-orders_count", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source_product", "target_product", "affinity_type"],
+                name="unique_reco_affinity_edge",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["source_product", "affinity_type", "-score"], name="recoaff_src_type_score_idx"),
+            models.Index(fields=["target_product", "affinity_type", "-score"], name="recoaff_tgt_type_score_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"RecommendationAffinity({self.source_product_id}->{self.target_product_id}, {self.affinity_type})"
+
+
+class RecommendationPopularitySnapshot(TimeStampedModel):
+    class ScopeType(models.TextChoices):
+        GLOBAL = "global", "Global"
+        CATEGORY = "category", "Category"
+        BRAND = "brand", "Brand"
+        SELLER = "seller", "Seller"
+
+    scope_type = models.CharField(max_length=24, choices=ScopeType.choices, default=ScopeType.GLOBAL)
+    scope_id = models.PositiveIntegerField(default=0)
+    window = models.CharField(max_length=16, default="7d")
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="recommendation_popularity_snapshots",
+    )
+    score = models.DecimalField(max_digits=12, decimal_places=4, default=0)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["scope_type", "scope_id", "window", "-score", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["scope_type", "scope_id", "window", "product"],
+                name="unique_reco_pop_snapshot",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["scope_type", "scope_id", "window", "-score"], name="recopop_scope_score_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"RecommendationPopularity(scope={self.scope_type}:{self.scope_id}, product={self.product_id})"
+
+
+class RecommendationSet(TimeStampedModel):
+    class ScopeType(models.TextChoices):
+        GLOBAL = "global", "Global"
+        USER = "user", "User"
+        PRODUCT = "product", "Product"
+        CATEGORY = "category", "Category"
+        BRAND = "brand", "Brand"
+        SELLER = "seller", "Seller"
+        CART = "cart", "Cart"
+        CHECKOUT = "checkout", "Checkout"
+        SEARCH = "search", "Search"
+
+    kind = models.CharField(max_length=48, db_index=True)
+    scope_type = models.CharField(max_length=24, choices=ScopeType.choices, default=ScopeType.GLOBAL)
+    scope_id = models.PositiveIntegerField(default=0, db_index=True)
+    source = models.CharField(max_length=64, blank=True, db_index=True)
+    product_ids = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    generated_at = models.DateTimeField(default=timezone.now, db_index=True)
+    expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
+    class Meta:
+        ordering = ["-generated_at", "-id"]
+        indexes = [
+            models.Index(fields=["kind", "scope_type", "scope_id", "-generated_at"], name="recoset_lookup_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"RecommendationSet(kind={self.kind}, scope={self.scope_type}:{self.scope_id})"
+
+    @property
+    def is_expired(self) -> bool:
+        return bool(self.expires_at and self.expires_at <= timezone.now())
+
+
+class RecommendationUserAffinity(TimeStampedModel):
+    class Dimension(models.TextChoices):
+        BRAND = "brand", "Brand"
+        CATEGORY = "category", "Category"
+        SELLER = "seller", "Seller"
+        TAG = "tag", "Tag"
+        PRICE_BAND = "price_band", "Price band"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="recommendation_affinities",
+    )
+    dimension = models.CharField(max_length=24, choices=Dimension.choices, db_index=True)
+    entity_id = models.PositiveIntegerField(default=0, db_index=True)
+    entity_key = models.CharField(max_length=64, blank=True, db_index=True)
+    score = models.DecimalField(max_digits=12, decimal_places=4, default=0)
+    event_count = models.PositiveIntegerField(default=0)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["user_id", "dimension", "-score", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "dimension", "entity_id", "entity_key"],
+                name="unique_reco_user_affinity",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["user", "dimension", "-score"], name="recouseraff_user_dim_idx"),
+            models.Index(fields=["dimension", "entity_id", "-score"], name="recouseraff_dim_entity_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"RecommendationUserAffinity(user={self.user_id}, {self.dimension}={self.entity_id or self.entity_key})"
+
+
+class RecommendationReplenishmentProfile(TimeStampedModel):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="recommendation_replenishment_profiles",
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="recommendation_replenishment_profiles",
+    )
+    first_ordered_at = models.DateTimeField(null=True, blank=True)
+    last_ordered_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    orders_count = models.PositiveIntegerField(default=0)
+    quantity_total = models.PositiveIntegerField(default=0)
+    expected_interval_days = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    score = models.DecimalField(max_digits=12, decimal_places=4, default=0)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["user_id", "-score", "-last_ordered_at", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "product"],
+                name="unique_reco_replenishment_profile",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["user", "-score", "-last_ordered_at"], name="recoreplen_user_score_idx"),
+            models.Index(fields=["product", "-score"], name="recoreplen_product_score_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"RecommendationReplenishmentProfile(user={self.user_id}, product={self.product_id})"

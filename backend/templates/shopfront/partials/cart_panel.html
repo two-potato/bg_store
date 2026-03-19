@@ -22,7 +22,7 @@
           <div class="flex items-center">
             {% with img=it.p.prefetched_images.0 %}
               {% if img %}
-                <img class="w-12 h-12 object-cover rounded mr-2" src="{{ img.url }}" alt="{{ it.p.name }}">
+                <img class="w-12 h-12 object-cover rounded mr-2" src="{{ img.public_url }}" alt="{{ it.p.name }}">
               {% else %}
                 <div class="w-12 h-12 rounded bg-base-200 flex items-center justify-center text-base-content/40 mr-2">{% include 'shopfront/icons/photo.svg' %}</div>
               {% endif %}

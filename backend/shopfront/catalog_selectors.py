@@ -53,7 +53,7 @@ def category_descendant_ids(category: Category | None) -> list[int]:
     return ids
 
 
-def category_option_rows(categories: list[Category]) -> list[dict]:
+def category_option_rows(categories: list[Category], max_depth: int | None = None) -> list[dict]:
     by_parent: dict[int | None, list[Category]] = {}
     for category in categories:
         by_parent.setdefault(category.parent_id, []).append(category)
@@ -64,6 +64,8 @@ def category_option_rows(categories: list[Category]) -> list[dict]:
 
     def walk(parent_id: int | None, depth: int) -> None:
         for node in by_parent.get(parent_id, []):
+            if max_depth is not None and depth > max_depth:
+                continue
             rows.append(
                 {
                     "id": node.id,
@@ -177,10 +179,11 @@ def ordered_products_with_related(product_ids, include_rating: bool = True):
 
 
 def cached_home_product_ids(limit: int = 12):
-    key = f"shopfront:home:product_ids:v2:{limit}"
+    latest_id = Product.objects.order_by("-id").values_list("id", flat=True).first() or 0
+    key = f"shopfront:home:product_ids:v5:{limit}:{latest_id}"
     ids = _cache_get(key)
     if ids is None:
-        ids = list(Product.objects.order_by("-is_new", "name", "id").values_list("id", flat=True)[:limit])
+        ids = list(Product.objects.order_by("-is_new", "-id").values_list("id", flat=True)[:limit])
         _cache_set(key, ids, timeout=getattr(settings, "CACHE_TTL_HOME", 180))
     return ids
 

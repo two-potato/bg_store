@@ -1,6 +1,101 @@
 (function () {
+  function monitoring() {
+    return window.ServioMonitoring || null;
+  }
+
   function runtime() {
     return window.ServioRuntime || null;
+  }
+
+  function showToast(message, variant) {
+    var rt = runtime();
+    if (rt && typeof rt.showToast === "function") {
+      rt.showToast(message, variant || "warning");
+      return;
+    }
+    if (window.ShopToast && typeof window.ShopToast.show === "function") {
+      window.ShopToast.show({ message: message, variant: variant || "warning" });
+    }
+  }
+
+  function csrfToken() {
+    var rt = runtime();
+    if (!rt || typeof rt.getCookie !== "function") return "";
+    return rt.getCookie("csrftoken");
+  }
+
+  function defaultLoginUrl() {
+    return "/account/login/?next=" + encodeURIComponent(window.location.pathname + window.location.search);
+  }
+
+  function captureSocialError(message, extra, error) {
+    var monitor = monitoring();
+    if (!monitor) return;
+    if (error && typeof monitor.captureException === "function") {
+      monitor.captureException(error, Object.assign({ kind: "social_toggle" }, extra || {}));
+      return;
+    }
+    if (typeof monitor.captureMessage === "function") {
+      monitor.captureMessage(message, "error", Object.assign({ kind: "social_toggle" }, extra || {}));
+    }
+  }
+
+  function parseJsonResponse(response, actionName) {
+    var contentType = String(response.headers.get("content-type") || "").toLowerCase();
+    var isJson = contentType.indexOf("application/json") >= 0;
+
+    if (response.status === 401 || response.status === 403) {
+      if (isJson) {
+        return response.json().then(function (payload) {
+          var authError = new Error(actionName + "_auth_required");
+          authError.code = "auth_required";
+          authError.status = response.status;
+          authError.loginUrl = payload && payload.login_url ? payload.login_url : defaultLoginUrl();
+          authError.payload = payload || {};
+          throw authError;
+        });
+      }
+      var unauthorizedError = new Error(actionName + "_auth_required");
+      unauthorizedError.code = "auth_required";
+      unauthorizedError.status = response.status;
+      unauthorizedError.loginUrl = response.url || defaultLoginUrl();
+      throw unauthorizedError;
+    }
+
+    if (!response.ok) {
+      var httpError = new Error(actionName + "_http_" + response.status);
+      httpError.status = response.status;
+      httpError.contentType = contentType;
+      httpError.redirected = !!response.redirected;
+      httpError.responseUrl = response.url || "";
+      throw httpError;
+    }
+
+    if (!isJson) {
+      var contentTypeError = new Error(actionName + "_unexpected_content_type");
+      contentTypeError.code = "unexpected_content_type";
+      contentTypeError.contentType = contentType;
+      contentTypeError.redirected = !!response.redirected;
+      contentTypeError.responseUrl = response.url || "";
+      if (response.redirected && response.url) {
+        contentTypeError.loginUrl = response.url;
+      }
+      throw contentTypeError;
+    }
+
+    return response.json();
+  }
+
+  function handleToggleError(message, extra, error) {
+    captureSocialError(message, extra, error);
+    if (error && (error.code === "auth_required" || error.loginUrl)) {
+      showToast("Нужно войти в аккаунт, чтобы продолжить", "warning");
+      window.setTimeout(function () {
+        window.location.href = error.loginUrl || defaultLoginUrl();
+      }, 180);
+      return;
+    }
+    showToast("Не удалось выполнить действие. Попробуйте еще раз.", "warning");
   }
 
   function initFavoriteToggles(root) {
@@ -26,21 +121,28 @@
           method: "POST",
           credentials: "same-origin",
           headers: {
+            "Accept": "application/json",
             "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-            "X-CSRFToken": runtime().getCookie("csrftoken")
+            "X-CSRFToken": csrfToken()
           },
           body: "product_id=" + encodeURIComponent(pid)
         })
-          .then(function (response) { return response.json(); })
+          .then(function (response) { return parseJsonResponse(response, "favorites_toggle"); })
           .then(function (data) {
-            if (!data || !data.ok) return;
+            if (!data || !data.ok) {
+              captureSocialError("favorites_toggle_rejected", { product_id: pid });
+              showToast("Не удалось обновить избранное", "warning");
+              return;
+            }
             var on = !!data.favorited;
             syncFavoriteUi(pid, on);
             if (window.ServioAnalytics && data.tracking) {
               window.ServioAnalytics.push(data.tracking);
             }
           })
-          .catch(function () {});
+          .catch(function (error) {
+            handleToggleError("favorites_toggle_failed", { product_id: pid }, error);
+          });
       });
     });
   }
@@ -60,14 +162,19 @@
           method: "POST",
           credentials: "same-origin",
           headers: {
+            "Accept": "application/json",
             "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-            "X-CSRFToken": runtime().getCookie("csrftoken")
+            "X-CSRFToken": csrfToken()
           },
           body: "entity=" + encodeURIComponent(entity) + "&entity_id=" + encodeURIComponent(entityId)
         })
-          .then(function (response) { return response.json(); })
+          .then(function (response) { return parseJsonResponse(response, "subscriptions_toggle"); })
           .then(function (data) {
-            if (!data || !data.ok) return;
+            if (!data || !data.ok) {
+              captureSocialError("subscriptions_toggle_rejected", { entity: entity, entity_id: entityId });
+              showToast("Не удалось обновить подписку", "warning");
+              return;
+            }
             var active = !!data.subscribed;
             btn.classList.toggle("is-active", active);
             btn.setAttribute("data-active", active ? "1" : "0");
@@ -84,7 +191,9 @@
               btn.textContent = active ? "Подписка на категорию включена" : "Подписаться на категорию";
             }
           })
-          .catch(function () {});
+          .catch(function (error) {
+            handleToggleError("subscriptions_toggle_failed", { entity: entity, entity_id: entityId }, error);
+          });
       });
     });
   }
@@ -146,17 +255,27 @@
           method: "POST",
           credentials: "same-origin",
           headers: {
+            "Accept": "application/json",
             "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-            "X-CSRFToken": runtime().getCookie("csrftoken")
+            "X-CSRFToken": csrfToken()
           },
           body: "product_id=" + encodeURIComponent(pid)
         })
-          .then(function (response) { return response.json(); })
+          .then(function (response) { return parseJsonResponse(response, "compare_toggle"); })
           .then(function (data) {
-            if (!data || !data.ok) return;
+            if (!data || !data.ok) {
+              captureSocialError("compare_toggle_rejected", { product_id: pid });
+              showToast("Не удалось обновить сравнение", "warning");
+              return;
+            }
             syncCompareUi(data);
+            if (window.ServioAnalytics && data.tracking) {
+              window.ServioAnalytics.push(data.tracking);
+            }
           })
-          .catch(function () {});
+          .catch(function (error) {
+            handleToggleError("compare_toggle_failed", { product_id: pid }, error);
+          });
       });
     });
   }

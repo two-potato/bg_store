@@ -1,9 +1,11 @@
-{% load static seo_extras %}
+{% load static seo_extras shopfront_state %}
 {% comment %}
 Reusable product card component
 Usage:
   include "shopfront/components/product_card.html" with p=product show_tags=True
 {% endcomment %}
+{% product_in_cart request p.id as product_in_cart %}
+{% product_favorited request p.id as product_favorited %}
 <div class="card product-card product-card--neo bg-base-100 h-full">
   {% with images=p.images.all|slice:":4" %}
     {% with slide_count=images|length %}
@@ -19,12 +21,13 @@ Usage:
          {% if recommendation_source %}
          data-recommendation-click
          data-recommendation-source="{{ recommendation_source }}"
+         data-recommendation-surface="{{ recommendation_surface|default:'' }}"
          {% endif %}>
         <figure class="media product-card-carousel" data-carousel-id="{{ p.id }}">
           <div class="product-card-carousel__track" id="pc-track-{{ p.id }}" data-index="0" data-count="{{ slide_count }}">
             {% for img in images %}
               <div class="product-card-carousel__slide">
-                <img src="{{ img.url }}" alt="{{ img|product_image_alt:p.name }}" loading="lazy" data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}"/>
+                <img src="{{ img.public_url }}" alt="{{ img|product_image_alt:p.name }}" loading="lazy" data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}"/>
               </div>
             {% empty %}
               <div class="product-card-carousel__slide">
@@ -35,8 +38,8 @@ Usage:
           {% if p.is_new or p.is_promo %}
             <div class="product-card__badges">
               {% if p.is_new %}<span class="badge badge-success">Новинка</span>{% endif %}
-              {% if p.is_promo %}<span class="badge badge-error">Акция</span>{% endif %}
-              {% if p.id in cart_product_ids %}<span class="badge product-card__in-cart-badge">В корзине</span>{% endif %}
+              {% if p.is_promo %}<span class="badge badge-warning">Акция</span>{% endif %}
+              {% if product_in_cart %}<span class="badge product-card__in-cart-badge">В корзине</span>{% endif %}
             </div>
           {% endif %}
           <div class="product-card__quick-actions">
@@ -57,10 +60,10 @@ Usage:
             </button>
             {% if request.user.is_authenticated %}
               <button type="button"
-                      class="product-card__quick-action product-card__favorite{% if p.id in favorite_product_ids %} is-active{% endif %}"
+                      class="product-card__quick-action product-card__favorite{% if product_favorited %} is-active{% endif %}"
                       data-favorite-toggle
                       data-product-id="{{ p.id }}"
-                      data-favorited="{% if p.id in favorite_product_ids %}1{% else %}0{% endif %}"
+                      data-favorited="{% if product_favorited %}1{% else %}0{% endif %}"
                       aria-label="Добавить в избранное"
                       title="Избранное">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -114,6 +117,7 @@ Usage:
        {% if recommendation_source %}
        data-recommendation-click
        data-recommendation-source="{{ recommendation_source }}"
+       data-recommendation-surface="{{ recommendation_surface|default:'' }}"
        {% endif %}>
       <div class="font-semibold product-card__title" title="{{ p.name }}">{{ p.name }}</div>
     </a>
@@ -156,13 +160,19 @@ Usage:
   <div class="card-footer product-card__footer mt-auto">
     <div class="product-card__price">{{ p.display_price }} <span class="product-card__currency">₽</span></div>
     <div class="product-card__footer-actions">
-      {% include "shopfront/components/cart_control.html" with pid=p.id in_stock=p.display_stock_qty icon_only=1 cart_product_ids=cart_product_ids %}
+      {% include "shopfront/components/cart_control.html" with pid=p.id in_stock=p.display_stock_qty icon_only=1 product_name=p.name recommendation_source=recommendation_source recommendation_surface=recommendation_surface recommendation_position=forloop.counter %}
       <form method="post" action="/buy-now/" class="product-card__buy-now-form">
         {% csrf_token %}
         <input type="hidden" name="product_id" value="{{ p.id }}">
         <input type="hidden" name="qty" value="1">
         <button class="btn btn-sm product-card__footer-btn product-card__buy-now-btn"
                 type="submit"
+                {% if recommendation_source %}data-recommendation-click{% endif %}
+                data-recommendation-source="{{ recommendation_source|default:'' }}"
+                data-recommendation-surface="{{ recommendation_surface|default:'' }}"
+                data-search-product-id="{{ p.id }}"
+                data-search-product-name="{{ p.name }}"
+                data-search-position="{{ forloop.counter|default:0 }}"
                 {% if p.display_stock_qty <= 0 %}disabled aria-disabled="true" title="Нет в наличии"{% else %}title="Купить в один клик"{% endif %}>
           {% include 'shopfront/icons/bolt.svg' %}
           <span class="sr-only">{% if p.display_stock_qty <= 0 %}Нет в наличии{% else %}Купить в один клик{% endif %}</span>

@@ -1,7 +1,10 @@
+"""Helpers for storefront checkout and demo payment page context building."""
+
 import json
 
 
 def ensure_checkout_idempotency_key(request, key_factory) -> str:
+    """Ensure the checkout session has a stable idempotency key."""
     checkout_idem_key = (request.session.get("checkout_idem_key") or "").strip()
     if not checkout_idem_key:
         checkout_idem_key = key_factory()
@@ -25,11 +28,18 @@ def build_checkout_context(
     checkout_step_tracking_payload,
     checkout_error_tracking_payload,
     checkout_cart_tracking_payload: str,
+    demo_payments_enabled: bool,
 ) -> dict:
+    """Build the template context for the checkout page."""
     return {
         **cart_ctx,
         "memberships": memberships,
         "addresses": addresses,
+        "pickup_points": [
+            "ПВЗ Москва, Лесная 5",
+            "ПВЗ Санкт-Петербург, Невский 28",
+            "Склад самовывоза Казань, Тихая 12",
+        ],
         "form_data": form_data or {},
         "checkout_error": checkout_error or "",
         "checkout_idem_key": checkout_idem_key,
@@ -37,6 +47,7 @@ def build_checkout_context(
         "individual_default_name": individual_default_name,
         "individual_default_email": individual_default_email,
         "company_snapshots": company_snapshots,
+        "demo_payments_enabled": demo_payments_enabled,
         "checkout_step_tracking_payload": json.dumps(checkout_step_tracking_payload, ensure_ascii=False)
         if cart_ctx["items"]
         else "",
@@ -56,6 +67,7 @@ def fake_payment_template_context(
     payment_page_url: str | None = None,
     payment_started_tracking_payload: str | None = None,
 ) -> dict:
+    """Build context for fake-payment and online-payment transition pages."""
     context = {
         "order": order,
         "payment": payment,

@@ -25,7 +25,7 @@
             <div class="product-card-carousel__track" data-index="0" data-count="{% if slide_count %}{{ slide_count }}{% else %}1{% endif %}">
               {% for img in images %}
                 <div class="product-card-carousel__slide">
-                  <img src="{{ img.url }}" class="product-lite-2026__image" alt="{{ img|product_image_alt:p.name }}" data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}">
+                  <img src="{{ img.public_url }}" class="product-lite-2026__image" alt="{{ img|product_image_alt:p.name }}" data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}">
                 </div>
               {% empty %}
                 <div class="product-card-carousel__slide">
@@ -50,7 +50,7 @@
     <aside class="product-lite-2026__summary reveal" data-anim="animate__fadeInUp">
       <div class="product-lite-2026__badges">
         {% if p.is_new %}<span class="badge badge-success">Новинка</span>{% endif %}
-        {% if p.is_promo %}<span class="badge badge-error">Акция</span>{% endif %}
+        {% if p.is_promo %}<span class="badge badge-warning">Акция</span>{% endif %}
         <button type="button"
                 class="btn btn-sm btn-outline product-lite-2026__fav-btn{% if compare_included %} is-active{% endif %}"
                 data-compare-toggle
@@ -117,6 +117,9 @@
                 hx-post="/cart/add/"
                 hx-vals='{"product_id": "{{ p.id }}"}'
                 hx-include="#qty-{{ p.id }}"
+                hx-target="this"
+                hx-select="unset"
+                hx-push-url="false"
                 hx-swap="none"
                 data-product-id="{{ p.id }}"
                 data-product-sku="{{ p.sku }}"
@@ -342,9 +345,20 @@
   {% include "shopfront/components/product_grid.html" with products=accessory_products %}
 </section>
 {% endif %}
+{% if substitute_products %}
+<section class="page-2026 product-reco-2026">
+  <header class="page-2026__header">
+    <h2>Возможные альтернативы</h2>
+    <p>Подобрали похожие замены с учетом категории, назначения и закупочной пригодности.</p>
+  </header>
+  {% include "shopfront/components/product_grid.html" with products=substitute_products %}
+</section>
+{% endif %}
 <section class="page-2026 product-reco-2026"
          hx-get="/product/{{ p.slug }}/recommendations/fbt/"
          hx-trigger="load delay:150ms"
+         hx-target="this"
+         hx-select=".product-reco-2026"
          hx-swap="outerHTML">
   <header class="page-2026__header">
     <h2>Часто покупают вместе</h2>
@@ -354,6 +368,8 @@
 <section class="page-2026 product-reco-2026"
          hx-get="/product/{{ p.slug }}/recommendations/seller-cross/"
          hx-trigger="load delay:250ms"
+         hx-target="this"
+         hx-select=".product-reco-2026"
          hx-swap="outerHTML">
   <header class="page-2026__header">
     <h2>Ещё у этого поставщика</h2>

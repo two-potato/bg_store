@@ -169,14 +169,6 @@ body.app-theme .account-2026__nav-link.is-active {
   color: #1d4ed8;
 }
 
-body.app-theme .account-2026__nav-link.is-danger:hover,
-body.app-theme .account-2026__nav-link.is-danger.is-active {
-  color: #b91c1c;
-  border-color: rgba(252, 165, 165, 0.55);
-  background: linear-gradient(135deg, rgba(254, 242, 242, 0.98), rgba(255, 248, 248, 0.96));
-  box-shadow: 0 12px 28px rgba(239, 68, 68, 0.08);
-}
-
 body.app-theme .account-2026__nav-link-title {
   display: block;
   font-size: 0.95rem;

@@ -5,11 +5,17 @@ body.app-theme .product-card--neo {
   flex-direction: column;
   min-height: 100%;
   padding: 16px;
+  gap: 12px;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease,
+    background-color 0.18s ease;
 }
 
 body.app-theme .product-card__media-link {
   display: block;
-  margin-bottom: 12px;
+  margin-bottom: 0;
 }
 
 body.app-theme .product-card__media-link figure {
@@ -34,6 +40,12 @@ body.app-theme .product-card-carousel__slide img {
   object-fit: contain;
   display: block;
   border-radius: 16px;
+  transition: transform 0.22s ease, filter 0.22s ease;
+}
+
+body.app-theme .product-card--neo:hover .product-card-carousel__slide img,
+body.app-theme .product-card--neo:focus-within .product-card-carousel__slide img {
+  transform: scale(1.02);
 }
 
 body.app-theme .product-card-carousel__nav {
@@ -190,17 +202,20 @@ body.app-theme .product-card__body-grid {
   align-content: start;
   flex: 1 1 auto;
   padding: 0;
-  gap: 0;
+  gap: 8px;
 }
 
 body.app-theme .product-card__footer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  column-gap: 8px;
+  column-gap: 12px;
+  row-gap: 8px;
   min-width: 0;
   padding: 0;
   margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid rgba(194, 209, 235, 0.7);
 }
 
 body.app-theme .product-card__footer-actions {
@@ -249,6 +264,12 @@ body.app-theme .product-card__footer-btn {
   justify-content: center;
   line-height: 1;
   vertical-align: middle;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease;
 }
 
 body.app-theme .product-card__buy-now-btn {
@@ -308,37 +329,31 @@ body.app-theme .product-card__meta-top {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 8px;
-  margin-bottom: 4px;
+  margin: 0;
 }
 
 body.app-theme .product-card__name-link {
   display: block;
-  margin-top: 4px;
-  margin-bottom: 8px;
+  margin: 0;
 }
 
 body.app-theme .product-card__traits {
-  margin-top: 4px;
-  margin-bottom: 8px;
+  margin: 0;
   gap: 8px;
 }
 
 body.app-theme .product-card__store-link {
   display: inline-flex;
   align-items: center;
-  margin-top: 4px;
-  margin-bottom: 8px;
+  margin: 0;
 }
 
 body.app-theme .product-card__subline {
-  margin-top: 2px;
-  margin-bottom: 12px;
+  margin: 0;
 }
 
 body.app-theme .product-card__price {
-  margin-top: 12px;
-  margin-bottom: 12px;
+  margin: 0;
 }
 
 body.app-theme .cart-control .stepper {
@@ -426,6 +441,7 @@ body.app-theme .catalog-tags-strip .tag-cloud-2026 {
 @media (max-width: 767px) {
   body.app-theme .product-card--neo {
     padding: 12px;
+    gap: 10px;
   }
 
   body.app-theme .product-card__media-link figure {
@@ -438,10 +454,12 @@ body.app-theme .catalog-tags-strip .tag-cloud-2026 {
 
   body.app-theme .product-card__footer {
     grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 10px;
+    padding-top: 10px;
   }
 
   body.app-theme .product-card__footer-actions {
-    gap: 8px;
+    gap: 6px;
   }
 }
 
@@ -475,8 +493,10 @@ body.app-theme .product-card__badges .badge-success {
   background: rgba(226, 255, 244, 0.94);
 }
 
-body.app-theme .product-card__badges .badge-error {
-  background: rgba(255, 239, 239, 0.96);
+body.app-theme .product-card__badges .badge-warning {
+  background: rgba(255, 247, 222, 0.96);
+  color: #9a6700;
+  border-color: rgba(245, 196, 82, 0.42);
 }
 
 body.app-theme .product-card__quick-actions {
@@ -502,12 +522,32 @@ body.app-theme .product-card__quick-action {
   align-items: center;
   justify-content: center;
   backdrop-filter: blur(4px);
+  transition:
+    transform 0.16s ease,
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
 body.app-theme .product-card__quick-action.is-active {
   background: #1f6fe8;
   border-color: #1f6fe8;
   color: #ffffff;
+}
+
+body.app-theme .product-card__quick-action:hover,
+body.app-theme .product-card__quick-action:focus-visible,
+body.app-theme .product-card__footer-btn:hover,
+body.app-theme .product-card__footer-btn:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(29, 79, 167, 0.12);
+}
+
+body.app-theme .product-card__quick-action:focus-visible,
+body.app-theme .product-card__footer-btn:focus-visible {
+  outline: 2px solid rgba(31, 111, 232, 0.18);
+  outline-offset: 2px;
 }
 
 body.app-theme .product-lite-2026 {

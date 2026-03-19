@@ -1,7 +1,7 @@
 import json
 import logging
 from collections import OrderedDict
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.db.models import Prefetch
 
@@ -26,7 +26,7 @@ def profile_discount_percent(request) -> Decimal:
     raw = getattr(profile, "discount", Decimal("0.00")) if profile else Decimal("0.00")
     try:
         pct = Decimal(str(raw))
-    except Exception:
+    except (InvalidOperation, TypeError, ValueError):
         pct = Decimal("0.00")
     if pct < 0:
         return Decimal("0.00")
@@ -41,7 +41,7 @@ def cart_summary(request):
     for raw_id in cart.keys():
         try:
             product_ids.append(int(raw_id))
-        except Exception:
+        except (TypeError, ValueError):
             continue
     products = {
         product.id: product
@@ -65,7 +65,7 @@ def cart_summary(request):
     for product_id, payload in cart.items():
         try:
             product_id_int = int(product_id)
-        except Exception:
+        except (TypeError, ValueError):
             continue
         product = products.get(product_id_int)
         if not product:
@@ -135,7 +135,7 @@ def cart_badge_context(request):
     for payload in cart.values():
         try:
             count += max(0, int(payload.get("qty", 0)))
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             continue
     return {"count": count, "subtotal": cart_ctx["subtotal"]}
 

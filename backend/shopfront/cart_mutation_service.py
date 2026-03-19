@@ -6,6 +6,8 @@ from catalog.models import Product
 from catalog.offer_service import active_offer_queryset, apply_offer_snapshot
 
 from .cart_store import persist_cart_for_user
+from .recommendation_attribution_service import clear_cart_recommendation_attribution, remove_cart_item_recommendation_attribution
+from .search_attribution_service import clear_cart_search_attribution, remove_cart_item_search_attribution
 
 
 def _load_cart_product(product_id: int):
@@ -45,12 +47,16 @@ def add_to_cart_session(*, request, product_id: int, qty: int, logger):
 def remove_from_cart_session(*, request, product_id: str | int):
     cart = request.session.setdefault("cart", {})
     cart.pop(str(product_id), None)
+    remove_cart_item_search_attribution(request, product_id=product_id)
+    remove_cart_item_recommendation_attribution(request, product_id=product_id)
     request.session.modified = True
     persist_cart_for_user(request.user, request.session.get("cart", {}))
 
 
 def clear_cart_session(*, request):
     request.session["cart"] = {}
+    clear_cart_search_attribution(request)
+    clear_cart_recommendation_attribution(request)
     request.session.modified = True
     persist_cart_for_user(request.user, request.session.get("cart", {}))
 

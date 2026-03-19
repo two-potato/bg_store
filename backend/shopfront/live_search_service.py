@@ -1,24 +1,36 @@
+"""Assembly helpers for the HTMX live-search widget.
+
+The service hides provider selection and fallback logic from views and returns a
+template-friendly context containing products, country suggestions, and query
+suggestions.
+"""
+
+import time
+
 from django.db.models import Prefetch, Q
 
 from catalog.models import Product, ProductImage
 from shopfront import search as sf_search
 
+from .search_observability import observe_search_response, observe_search_rewrite
 from .search_service import DatabaseSearchProvider, suggest_query_corrections
 
 
 def live_search_context(*, query: str, search_provider_getter, logger) -> dict:
+    """Build the live-search response context for a raw user query."""
     q = (query or "").strip()
     if len(q) < 3:
         return {"q": q, "products": [], "countries": [], "suggestions": [], "show": False}
 
-    es_failed = False
+    opensearch_failed = False
     suggestions = []
+    started = time.perf_counter()
     try:
         bundle = search_provider_getter().live_bundle(query=q, limit=8, country_limit=6)
         ids, countries, suggestions = bundle.product_ids, bundle.countries, bundle.suggestions
-    except sf_search.ESSearchUnavailable as exc:
-        logger.warning("live_search_es_unavailable", extra={"query": q, "reason": str(exc)})
-        es_failed = True
+    except sf_search.OpenSearchUnavailable as exc:
+        logger.warning("live_search_opensearch_unavailable", extra={"query": q, "reason": str(exc)})
+        opensearch_failed = True
         ids, countries, suggestions = [], [], []
 
     logger.info(
@@ -36,7 +48,7 @@ def live_search_context(*, query: str, search_provider_getter, logger) -> dict:
     if ids:
         order = {pid: idx for idx, pid in enumerate(ids)}
         products = sorted(base_qs.filter(id__in=ids), key=lambda product: order.get(product.id, 9999))
-    elif not es_failed:
+    elif not opensearch_failed:
         products = list(
             base_qs.filter(
                 Q(name__icontains=q)
@@ -69,10 +81,44 @@ def live_search_context(*, query: str, search_provider_getter, logger) -> dict:
             suggestions = suggest_query_corrections(q, limit=6)
     else:
         fallback_bundle = DatabaseSearchProvider().live_bundle(query=q, limit=8, country_limit=0)
+        bundle = fallback_bundle
         ids = fallback_bundle.product_ids
         suggestions = suggestions or fallback_bundle.suggestions
         products = list(base_qs.filter(id__in=ids).distinct().order_by("-is_new", "name")[:8])
         if not suggestions:
             suggestions = suggest_query_corrections(q, limit=6)
 
-    return {"q": q, "products": products, "countries": countries, "suggestions": suggestions[:8], "show": True}
+    observe_search_rewrite(
+        surface="live_search",
+        rewrite_kind=getattr(bundle, "rewrite_kind", ""),
+        logger=logger,
+        original_query=q,
+        effective_query=getattr(bundle, "effective_query", q),
+        rewritten_query=getattr(bundle, "rewritten_query", ""),
+    )
+    observe_search_response(
+        surface="live_search",
+        provider=getattr(bundle, "provider", "unknown"),
+        query=q,
+        effective_query=getattr(bundle, "effective_query", q),
+        rewritten_query=getattr(bundle, "rewritten_query", ""),
+        rewrite_kind=getattr(bundle, "rewrite_kind", ""),
+        duration_seconds=time.perf_counter() - started,
+        result_count=len(products),
+        suggestions_count=len(suggestions[:8]),
+        countries_count=len(countries),
+        top_product_ids=[product.id for product in products[:8]],
+        logger=logger,
+    )
+
+    return {
+        "q": q,
+        "products": products,
+        "countries": countries,
+        "suggestions": suggestions[:8],
+        "show": True,
+        "search_provider": getattr(bundle, "provider", "unknown"),
+        "search_effective_query": getattr(bundle, "effective_query", q),
+        "search_rewritten_query": getattr(bundle, "rewritten_query", ""),
+        "search_rewrite_kind": getattr(bundle, "rewrite_kind", ""),
+    }

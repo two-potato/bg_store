@@ -3,6 +3,30 @@
   const tg = window.Telegram && window.Telegram.WebApp;
   if (!tg) return;
 
+  function monitoring() {
+    return window.ServioMonitoring || null;
+  }
+
+  function csrfToken() {
+    const value = "; " + document.cookie;
+    const parts = value.split("; csrftoken=");
+    if (parts.length === 2) return parts.pop().split(";").shift();
+    return "";
+  }
+
+  function captureTelegramIssue(message, extra, error) {
+    const monitor = monitoring();
+    if (!monitor) return;
+    const payload = Object.assign({ kind: 'telegram_webapp' }, extra || {});
+    if (error && typeof monitor.captureException === 'function') {
+      monitor.captureException(error, payload);
+      return;
+    }
+    if (typeof monitor.captureMessage === 'function') {
+      monitor.captureMessage(message, 'warning', payload);
+    }
+  }
+
   try { tg.expand(); tg.ready(); } catch (e) {}
 
   function applyTheme(){
@@ -48,14 +72,28 @@
     const flagKey = 'twaLogged';
     const hasInit = !!(tg && (tg.initData || tg.initDataUnsafe));
     if (hasInit && !sessionStorage.getItem(flagKey)) {
-      const initData = (tg.initData || '').toString();
-      if (initData) {
-        const csrf = (document.querySelector('meta[name="csrf-token"]')||{}).content || '';
+        const initData = (tg.initData || '').toString();
+        if (initData) {
+        const csrf = (document.querySelector('meta[name="csrf-token"]')||{}).content || csrfToken();
         fetch('/account/twa/login/', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrf },
+          credentials: 'same-origin',
+          headers: {
+            'Accept': 'application/json, text/html;q=0.9,*/*;q=0.8',
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+            'X-CSRFToken': csrf,
+          },
           body: new URLSearchParams({ initData })
-        }).finally(() => { sessionStorage.setItem(flagKey, '1'); });
+        })
+          .then((response) => {
+            if (!response.ok) throw new Error('twa_login_http_' + response.status);
+          })
+          .catch((error) => {
+            captureTelegramIssue('telegram_auto_login_failed', {
+              path: '/account/twa/login/',
+            }, error);
+          })
+          .finally(() => { sessionStorage.setItem(flagKey, '1'); });
       }
     }
   } catch (e) {}

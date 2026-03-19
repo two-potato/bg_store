@@ -1,8 +1,16 @@
-from dataclasses import dataclass
+"""High-level search orchestration for live search and catalog discovery.
+
+Views use this module instead of talking to OpenSearch directly. It encapsulates
+query rewrites, provider selection, lexical fallback, semantic candidate
+collection, and simple reranking heuristics.
+"""
+
+from dataclasses import dataclass, field
 from difflib import get_close_matches
 from collections import defaultdict
 
 from django.conf import settings
+from django.core.cache import cache
 
 from django.db.models import Q
 
@@ -12,11 +20,15 @@ from . import search as es_search
 
 @dataclass
 class SearchBundle:
+    """Normalized result bundle returned by every search provider."""
     product_ids: list[int]
     countries: list[str]
     suggestions: list[str]
     provider: str
     rewritten_query: str = ""
+    effective_query: str = ""
+    rewrite_kind: str = ""
+    query_variants: list[str] = field(default_factory=list)
 
 
 SEARCH_SYNONYMS = {
@@ -36,27 +48,64 @@ SEMANTIC_QUERY_REWRITES = {
     "упаковка на вынос": "takeaway упаковка",
 }
 
+_EN_TO_RU_LAYOUT = str.maketrans(
+    {
+        "q": "й", "w": "ц", "e": "у", "r": "к", "t": "е", "y": "н", "u": "г", "i": "ш", "o": "щ", "p": "з",
+        "[": "х", "]": "ъ", "a": "ф", "s": "ы", "d": "в", "f": "а", "g": "п", "h": "р", "j": "о", "k": "л",
+        "l": "д", ";": "ж", "'": "э", "z": "я", "x": "ч", "c": "с", "v": "м", "b": "и", "n": "т", "m": "ь",
+        ",": "б", ".": "ю", "/": ".",
+    }
+)
+
+def _normalize_query(query: str) -> str:
+    return " ".join((query or "").strip().lower().split())
+
+
+def keyboard_layout_correction(query: str) -> str:
+    """Best-effort keyboard layout correction for mistyped ru/en queries."""
+    normalized = _normalize_query(query)
+    if not normalized or not getattr(settings, "SEARCH_KEYBOARD_LAYOUT_CORRECTION_ENABLED", True):
+        return normalized
+    has_latin = any("a" <= ch <= "z" for ch in normalized)
+    has_cyrillic = any("а" <= ch <= "я" or ch == "ё" for ch in normalized)
+    if has_latin and not has_cyrillic:
+        corrected = normalized.translate(_EN_TO_RU_LAYOUT)
+        return corrected or normalized
+    return normalized
+
 
 def build_query_variants(query: str) -> list[str]:
-    normalized = " ".join((query or "").strip().lower().split())
+    """Build lexical query variants from direct synonym substitutions."""
+    normalized = _normalize_query(query)
     if not normalized:
         return []
     variants = [normalized]
+    corrected = keyboard_layout_correction(normalized)
+    if corrected and corrected not in variants:
+        variants.append(corrected)
     alias = SEARCH_SYNONYMS.get(normalized)
     if alias and alias not in variants:
         variants.append(alias)
+    corrected_alias = SEARCH_SYNONYMS.get(corrected)
+    if corrected_alias and corrected_alias not in variants:
+        variants.append(corrected_alias)
     for source, target in SEARCH_SYNONYMS.items():
         if source in normalized:
             replaced = normalized.replace(source, target).strip()
+            if replaced and replaced not in variants:
+                variants.append(replaced)
+        if corrected and source in corrected:
+            replaced = corrected.replace(source, target).strip()
             if replaced and replaced not in variants:
                 variants.append(replaced)
     return variants[:4]
 
 
 def rewrite_query(query: str) -> str:
+    """Rewrite shorthand phrases into more catalog-friendly search terms."""
+    normalized = _normalize_query(query)
     if not getattr(settings, "SEARCH_QUERY_REWRITE_ENABLED", True):
-        return " ".join((query or "").strip().lower().split())
-    normalized = " ".join((query or "").strip().lower().split())
+        return normalized
     if not normalized:
         return ""
     rewritten = normalized
@@ -67,7 +116,8 @@ def rewrite_query(query: str) -> str:
 
 
 def semantic_query_variants(query: str) -> list[str]:
-    normalized = " ".join((query or "").strip().lower().split())
+    """Expand a query for semantic fallback matching in the database."""
+    normalized = _normalize_query(query)
     if not normalized:
         return []
     variants = build_query_variants(normalized)
@@ -82,6 +132,7 @@ def semantic_query_variants(query: str) -> list[str]:
 
 
 def suggest_query_corrections(query: str, limit: int = 5) -> list[str]:
+    """Suggest alternative queries from cached catalog vocabulary."""
     normalized = " ".join((query or "").strip().split())
     if len(normalized) < 3:
         return []
@@ -90,10 +141,19 @@ def suggest_query_corrections(query: str, limit: int = 5) -> list[str]:
         if variant.casefold() != normalized.casefold()
     ]
     candidates = []
-    candidates.extend(list(Brand.objects.order_by("name").values_list("name", flat=True)[:100]))
-    candidates.extend(list(Category.objects.order_by("name").values_list("name", flat=True)[:120]))
-    candidates.extend(list(Tag.objects.order_by("name").values_list("name", flat=True)[:80]))
-    candidates.extend(list(Product.objects.order_by("-is_new", "name").values_list("name", flat=True)[:150]))
+    if getattr(settings, "CACHE_SUGGESTION_CANDIDATES", True):
+        candidates = cache.get("shopfront:search:suggestion_candidates:v1") or []
+    if not candidates:
+        candidates.extend(list(Brand.objects.order_by("name").values_list("name", flat=True)[:100]))
+        candidates.extend(list(Category.objects.order_by("name").values_list("name", flat=True)[:120]))
+        candidates.extend(list(Tag.objects.order_by("name").values_list("name", flat=True)[:80]))
+        candidates.extend(list(Product.objects.order_by("-is_new", "name").values_list("name", flat=True)[:150]))
+        if getattr(settings, "CACHE_SUGGESTION_CANDIDATES", True):
+            cache.set(
+                "shopfront:search:suggestion_candidates:v1",
+                candidates,
+                timeout=int(getattr(settings, "SEARCH_SUGGESTION_CACHE_TTL", 900)),
+            )
     seen = set()
     deduped = []
     for item in candidates:
@@ -115,36 +175,54 @@ def suggest_query_corrections(query: str, limit: int = 5) -> list[str]:
 
 
 class SearchProvider:
+    """Abstract provider interface consumed by shopfront search flows."""
     code = "base"
 
     def live_bundle(self, query: str, limit: int = 8, country_limit: int = 6) -> SearchBundle:
         raise NotImplementedError
 
 
-class ElasticsearchSearchProvider(SearchProvider):
-    code = "elasticsearch"
+class OpenSearchSearchProvider(SearchProvider):
+    """Search provider backed by the low-level OpenSearch client."""
+    code = "opensearch"
 
     def live_bundle(self, query: str, limit: int = 8, country_limit: int = 6) -> SearchBundle:
-        raw = es_search.live_search_bundle(query=query, limit=limit, country_limit=country_limit)
+        effective_query = _normalize_query(query)
+        raw = es_search.live_search_bundle(query=effective_query, limit=limit, country_limit=country_limit)
         if len(raw) == 3:
             ids, countries, suggestions = raw
         else:
             ids, countries = raw
             suggestions = []
+        rewritten = rewrite_query(query)
+        rewrite_kind = []
+        normalized = _normalize_query(query)
+        if rewritten and rewritten != effective_query:
+            rewrite_kind.append("semantic_rewrite")
         return SearchBundle(
             product_ids=list(ids),
             countries=list(countries),
             suggestions=list(suggestions),
             provider=self.code,
-            rewritten_query=rewrite_query(query),
+            rewritten_query=rewritten,
+            effective_query=effective_query,
+            rewrite_kind="+".join(rewrite_kind),
+            query_variants=semantic_query_variants(query),
         )
 
 
 class DatabaseSearchProvider(SearchProvider):
+    """ORM-based provider used as a fallback when search infra is unavailable."""
     code = "database"
 
     def live_bundle(self, query: str, limit: int = 8, country_limit: int = 6) -> SearchBundle:
         variants = semantic_query_variants(query) or [query]
+        effective_query = _normalize_query(query)
+        rewritten = rewrite_query(query)
+        rewrite_kind = []
+        normalized = _normalize_query(query)
+        if rewritten and rewritten != effective_query:
+            rewrite_kind.append("semantic_rewrite")
         query_filter = Q()
         for variant in variants:
             query_filter |= (
@@ -182,11 +260,15 @@ class DatabaseSearchProvider(SearchProvider):
             countries=[],
             suggestions=suggestions[:limit],
             provider=self.code,
-            rewritten_query=rewrite_query(query),
+            rewritten_query=rewritten,
+            effective_query=effective_query,
+            rewrite_kind="+".join(rewrite_kind),
+            query_variants=variants[:],
         )
 
 
 def _semantic_candidate_ids(query: str, limit: int = 24) -> list[int]:
+    """Collect broader candidate ids from semantic-ish ORM matching."""
     variants = semantic_query_variants(query)
     if not variants:
         return []
@@ -211,6 +293,7 @@ def _semantic_candidate_ids(query: str, limit: int = 24) -> list[int]:
 
 
 def _rerank_product_ids(product_ids: list[int], query: str, limit: int = 8) -> list[int]:
+    """Apply lightweight heuristic reranking to merged lexical and semantic ids."""
     if not product_ids:
         return []
     if not getattr(settings, "SEARCH_RERANK_ENABLED", True):
@@ -257,13 +340,23 @@ def _rerank_product_ids(product_ids: list[int], query: str, limit: int = 8) -> l
 
 
 class HybridSearchProvider(SearchProvider):
+    """Provider that merges OpenSearch lexical recall with semantic DB recall."""
     code = "hybrid"
 
     def live_bundle(self, query: str, limit: int = 8, country_limit: int = 6) -> SearchBundle:
         rewritten = rewrite_query(query)
+        effective_query = _normalize_query(query)
+        rewrite_kind = []
+        normalized = _normalize_query(query)
+        if rewritten and rewritten != effective_query:
+            rewrite_kind.append("semantic_rewrite")
         try:
-            lexical_bundle = ElasticsearchSearchProvider().live_bundle(query=query, limit=max(limit * 2, 12), country_limit=country_limit)
-        except Exception:
+            lexical_bundle = OpenSearchSearchProvider().live_bundle(
+                query=query,
+                limit=max(limit * 2, 12),
+                country_limit=country_limit,
+            )
+        except es_search.OpenSearchUnavailable:
             lexical_bundle = DatabaseSearchProvider().live_bundle(query=query, limit=max(limit * 2, 12), country_limit=country_limit)
         semantic_ids = _semantic_candidate_ids(rewritten or query, limit=max(limit * 3, 24))
         merged = []
@@ -286,18 +379,19 @@ class HybridSearchProvider(SearchProvider):
             suggestions=suggestions[:limit],
             provider=self.code,
             rewritten_query=rewritten,
+            effective_query=effective_query,
+            rewrite_kind="+".join(rewrite_kind),
+            query_variants=semantic_query_variants(query),
         )
 
 
 def get_search_provider(prefer_semantic: bool = False) -> SearchProvider:
-    provider_code = getattr(settings, "SEARCH_PROVIDER", "elasticsearch")
+    """Resolve the active search provider from settings and feature flags."""
+    provider_code = getattr(settings, "SEARCH_PROVIDER", "opensearch")
     if prefer_semantic or getattr(settings, "SEMANTIC_SEARCH_ENABLED", False):
         return HybridSearchProvider()
     if provider_code == "hybrid":
         return HybridSearchProvider()
     if provider_code == "database":
         return DatabaseSearchProvider()
-    try:
-        return ElasticsearchSearchProvider()
-    except Exception:
-        return DatabaseSearchProvider()
+    return OpenSearchSearchProvider()

@@ -88,18 +88,32 @@ body.app-theme .toast-card.toast-card--success .toast-card__progress {
   background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
 }
 
+body.app-theme .toast-card.toast-card--warning {
+  border-color: #f7d79a;
+}
+
+body.app-theme .toast-card.toast-card--warning .toast-card__icon {
+  border-color: #f3c969;
+  color: #9a6700;
+  background: #fff7e8;
+}
+
+body.app-theme .toast-card.toast-card--warning .toast-card__progress {
+  background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
+}
+
 body.app-theme .toast-card.toast-card--danger {
-  border-color: #ffd6de;
+  border-color: #f6c7cf;
 }
 
 body.app-theme .toast-card.toast-card--danger .toast-card__icon {
-  border-color: #ffc0cd;
-  color: #be123c;
-  background: #fff1f4;
+  border-color: #efb8c0;
+  color: #b45309;
+  background: #fff4ee;
 }
 
 body.app-theme .toast-card.toast-card--danger .toast-card__progress {
-  background: linear-gradient(90deg, #fb7185 0%, #e11d48 100%);
+  background: linear-gradient(90deg, #f97316 0%, #ea580c 100%);
 }
 
 body.app-theme .toast-card.toast-card--info .toast-card__icon {

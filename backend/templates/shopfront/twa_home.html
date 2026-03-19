@@ -34,7 +34,7 @@
           <figure class="twa-product-card__media">
             {% with first_image=p.prefetched_images.0 %}
               {% if first_image %}
-                <img src="{{ first_image.url }}" alt="{{ first_image|product_image_alt:p.name }}" loading="lazy" data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}">
+                <img src="{{ first_image.public_url }}" alt="{{ first_image|product_image_alt:p.name }}" loading="lazy" data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}">
               {% else %}
                 <img src="{% static 'shopfront/product-placeholder.svg' %}" alt="{{ p.name }}" loading="lazy">
               {% endif %}

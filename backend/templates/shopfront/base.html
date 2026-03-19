@@ -35,6 +35,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="{% static 'shopfront/favicon-16x16.png' %}">
     <link rel="shortcut icon" href="{% static 'shopfront/favicon.ico' %}">
     <link rel="apple-touch-icon" sizes="180x180" href="{% static 'shopfront/apple-touch-icon.png' %}">
+    <link rel="preload" as="image" href="{% static 'shopfront/product-placeholder.svg' %}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -43,6 +44,10 @@
     {{ analytics_runtime_config|json_script:"servio-analytics-config" }}
     {{ analytics_identity_payload|json_script:"servio-analytics-identity" }}
     {{ analytics_require_consent|json_script:"servio-analytics-consent-mode" }}
+    {{ monitoring_runtime_config|json_script:"servio-monitoring-config" }}
+    {% if sentry_browser_sdk_url %}
+    <script src="{{ sentry_browser_sdk_url }}" crossorigin="anonymous"></script>
+    {% endif %}
     <!-- Tailwind (built) + extras -->
     <link rel="stylesheet" href="{% static 'css/app.css' %}">
     <link rel="stylesheet" href="{% static 'vendor/animate/animate.min.css' %}">
@@ -57,12 +62,18 @@
     <link rel="stylesheet" href="{% static 'shopfront/css/base.css' %}?v=20260309-41">
     <link rel="stylesheet" href="{% static 'shopfront/css/layout.css' %}?v=20260309-plaincss1">
     <link rel="stylesheet" href="{% static 'shopfront/css/components/header.css' %}?v=20260310-navspacing2">
+    {% if page_type == 'home' or page_type == 'twa_home' %}
     <link rel="stylesheet" href="{% static 'shopfront/css/components/home.css' %}?v=20260309-plaincss1">
+    {% endif %}
     <link rel="stylesheet" href="{% static 'shopfront/css/components/brands.css' %}?v=20260309-1">
-    <link rel="stylesheet" href="{% static 'shopfront/css/components/catalog.css' %}?v=20260310-cataloghero4">
-    <link rel="stylesheet" href="{% static 'shopfront/css/components/product.css' %}?v=20260310-cardflow3">
-    <link rel="stylesheet" href="{% static 'shopfront/css/components/live-search.css' %}?v=20260309-plaincss1">
+    <link rel="stylesheet" href="{% static 'shopfront/css/components/catalog.css' %}?v=20260313-catalogfilters1">
+    {% if page_type == 'product' or page_type == 'catalog' or page_type == 'search' or page_type == 'home' or page_type == 'twa_home' %}
+    <link rel="stylesheet" href="{% static 'shopfront/css/components/product.css' %}?v=20260316-cardflow5">
+    {% endif %}
+    <link rel="stylesheet" href="{% static 'shopfront/css/components/live-search.css' %}?v=20260316-live-search-redesign2">
+    {% if 'account' in page_type or page_type == 'login' or page_type == 'register' or page_type == 'confirm_email' %}
     <link rel="stylesheet" href="{% static 'shopfront/css/components/account.css' %}?v=20260310-account3">
+    {% endif %}
     <link rel="stylesheet" href="{% static 'shopfront/css/components/toast.css' %}?v=20260309-plaincss1">
     <link rel="stylesheet" href="{% static 'shopfront/css/components/footer.css' %}?v=20260309-plaincss1">
     {% block extra_head %}{% endblock %}
@@ -72,16 +83,25 @@
     <script defer src="{% static 'shopfront/htmx.csrf.js' %}"></script>
     <script defer src="{% static 'shopfront/ui.toast.js' %}"></script>
     <script defer src="{% static 'shopfront/ui.runtime.js' %}"></script>
+    <script defer src="{% static 'shopfront/error-monitoring.js' %}?v=20260310-monitoring2"></script>
     <script defer src="{% static 'shopfront/analytics.js' %}?v=20260309-analytics2"></script>
     <script defer src="{% static 'shopfront/ui.cart.js' %}?v=20260310-cardflow3"></script>
     <script defer src="{% static 'shopfront/ui.product-cards.js' %}"></script>
-    <script defer src="{% static 'shopfront/ui.interactions.js' %}"></script>
+    <script defer src="{% static 'shopfront/ui.interactions.js' %}?v=20260311-catalogautocomplete1"></script>
     <script defer src="{% static 'shopfront/ui.social.js' %}"></script>
     <script defer src="{% static 'shopfront/ui.base.js' %}"></script>
-    <script defer src="{% static 'shopfront/page.addresses.js' %}"></script>
+    {% if page_type == 'checkout' or page_type == 'fake_payment_page' or page_type == 'online_payment_page' or page_type == 'guest_fake_payment_page' or page_type == 'guest_online_payment_page' or page_type == 'guest_order_detail' %}
     <script defer src="{% static 'shopfront/page.checkout.js' %}?v=20260309-41"></script>
+    {% endif %}
+    {% if page_type == 'product' %}
     <script defer src="{% static 'shopfront/page.product.js' %}"></script>
+    {% endif %}
+    {% if page_type == 'delivery' or page_type == 'payment' or page_type == 'returns' or page_type == 'faq' or page_type == 'about' or page_type == 'contacts' %}
     <script defer src="{% static 'shopfront/page.legal.js' %}"></script>
+    {% endif %}
+    {% if page_type == 'account_addresses' or page_type == 'checkout' %}
+    <script defer src="{% static 'shopfront/page.addresses.js' %}"></script>
+    {% endif %}
     <script defer src="{% static 'shopfront/auth.js' %}"></script>
     <script defer src="{% static 'shopfront/cookie-consent.js' %}"></script>
     {% if ga_measurement_id %}
@@ -100,6 +120,9 @@
     {% block extra_scripts_head %}{% endblock %}
   </head>
   <body id="twa-root" class="bg-base-100 text-base-content app-theme" data-page-type="{{ page_type }}" hx-boost="true" hx-target="main" hx-select="main" hx-swap="outerHTML" hx-indicator="#htmx-indicator">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-[90] focus:rounded-xl focus:bg-base-100 focus:px-3 focus:py-2 focus:shadow-lg">
+      Перейти к основному содержимому
+    </a>
     {% if gtm_container_id %}
     <!-- Google Tag Manager (noscript) -->
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id={{ gtm_container_id }}"

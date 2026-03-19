@@ -1,10 +1,19 @@
+"""Recommendation helpers for the storefront.
+
+These functions intentionally stay heuristic and query-driven. They assemble
+personalized or merchandising-oriented sections without introducing a separate
+recommendation service.
+"""
+
 from __future__ import annotations
 
 from collections import Counter
+from datetime import timedelta
 
 from django.core.cache import cache
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
+from django.utils import timezone
 
 from catalog.models import Brand, Collection, Product
 from orders.models import OrderItem
@@ -15,6 +24,7 @@ User = get_user_model()
 
 
 def record_recent_view(user, product: Product, limit: int = 24) -> None:
+    """Persist a product view for an authenticated user with touch deduplication."""
     if not getattr(user, "is_authenticated", False):
         return
     cache_key = f"shopfront:recent-view-touch:v1:{user.id}:{product.id}"
@@ -22,7 +32,10 @@ def record_recent_view(user, product: Product, limit: int = 24) -> None:
         return
     obj, created = RecentlyViewedProduct.objects.get_or_create(user=user, product=product)
     if not created:
-        obj.save(update_fields=["updated_at"])
+        if obj.updated_at and obj.updated_at >= timezone.now() - timedelta(minutes=30):
+            cache.set(cache_key, True, timeout=1800)
+            return
+        RecentlyViewedProduct.objects.filter(pk=obj.pk).update(updated_at=timezone.now())
     stale_ids = list(
         RecentlyViewedProduct.objects.filter(user=user)
         .order_by("-updated_at")
@@ -34,6 +47,7 @@ def record_recent_view(user, product: Product, limit: int = 24) -> None:
 
 
 def recently_viewed_ids_for_user(user, limit: int = 12) -> list[int]:
+    """Return recently viewed product ids ordered from newest to oldest."""
     if not getattr(user, "is_authenticated", False):
         return []
     return list(
@@ -44,6 +58,7 @@ def recently_viewed_ids_for_user(user, limit: int = 12) -> list[int]:
 
 
 def frequently_bought_together_ids(product: Product, limit: int = 8) -> list[int]:
+    """Return product ids that most often co-occur with the given product in orders."""
     order_ids = list(OrderItem.objects.filter(product=product).values_list("order_id", flat=True)[:150])
     if not order_ids:
         return []
@@ -58,6 +73,7 @@ def frequently_bought_together_ids(product: Product, limit: int = 8) -> list[int
 
 
 def seller_cross_sell_ids(product: Product, limit: int = 8) -> list[int]:
+    """Return cross-sell candidates from the same seller but different categories."""
     if not product.seller_id:
         return []
     qs = Product.objects.filter(seller_id=product.seller_id).exclude(id=product.id)
@@ -67,6 +83,7 @@ def seller_cross_sell_ids(product: Product, limit: int = 8) -> list[int]:
 
 
 def personalized_home_sections(user, limit: int = 8) -> dict[str, list[int]]:
+    """Assemble personalized product sections for the home page."""
     if not getattr(user, "is_authenticated", False):
         return {"for_you": [], "based_on_lists": [], "brand_watch": []}
 
@@ -117,6 +134,7 @@ def personalized_home_sections(user, limit: int = 8) -> dict[str, list[int]]:
 
 
 def featured_collection_ids(limit: int = 3) -> list[int]:
+    """Return active featured collection ids for merchandising slots."""
     return list(
         Collection.objects.filter(is_active=True, is_featured=True)
         .order_by("-updated_at", "name")
@@ -125,6 +143,7 @@ def featured_collection_ids(limit: int = 3) -> list[int]:
 
 
 def brand_highlight_ids(limit: int = 6) -> list[int]:
+    """Return brand ids ranked by catalog depth for homepage highlights."""
     return list(
         Brand.objects.annotate(products_count=Count("products"))
         .filter(products_count__gt=0)

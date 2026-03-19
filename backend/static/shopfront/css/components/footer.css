@@ -1,0 +1,173 @@
+body.app-theme .site-footer {
+  background: transparent;
+  border-top: 0;
+}
+
+body.app-theme .site-footer-neo {
+  background: #fff;
+  border: 1px solid var(--pf-border);
+  border-radius: var(--pf-radius-xl);
+  box-shadow: var(--pf-shadow-soft);
+  padding: clamp(1rem, 2vw, 1.6rem);
+}
+
+body.app-theme .site-footer-neo__logo {
+  background: var(--pf-brand-soft);
+  color: var(--pf-brand);
+  border: 1px solid color-mix(in srgb, var(--pf-brand) 30%, white);
+}
+
+body.app-theme .site-footer-neo h4 {
+  color: var(--pf-text);
+}
+
+body.app-theme .site-footer-neo a,
+body.app-theme .site-footer-neo p,
+body.app-theme .site-footer-neo span {
+  color: #334155;
+}
+
+body.app-theme .site-footer-neo a:hover {
+  color: var(--pf-brand);
+}
+
+body.app-theme .site-footer.site-footer-2026 {
+  margin-top: 1.8rem;
+  border-top: 0;
+  background: transparent;
+}
+
+body.app-theme .site-footer-2026__shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+  padding: 0.2rem 0 1rem;
+}
+
+body.app-theme .site-footer-2026__brand,
+body.app-theme .site-footer-2026__col {
+  background: #ffffff;
+  border: 1px solid #d9e2fb;
+  border-radius: 16px;
+  padding: 0.95rem 1rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+body.app-theme .site-footer-2026__logo {
+  width: 2.45rem;
+  height: 2.45rem;
+  border-radius: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.96rem;
+  color: #ffffff;
+  background: linear-gradient(135deg, #2a8cff 0%, #1f6fe8 55%, #5f2fd6 100%);
+  margin-bottom: 0.62rem;
+}
+
+body.app-theme .site-footer-2026__logo-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-bottom: 0.62rem;
+}
+
+body.app-theme .site-footer-2026__logo-img {
+  display: block;
+  height: 2.35rem;
+  width: auto;
+  max-width: min(100%, 11.5rem);
+  object-fit: contain;
+}
+
+body.app-theme .site-footer-2026__brand h3,
+body.app-theme .site-footer-2026__col h4 {
+  margin: 0 0 0.52rem;
+  color: #111827;
+}
+
+body.app-theme .site-footer-2026__brand h3 {
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+body.app-theme .site-footer-2026__brand p {
+  margin: 0;
+  color: #475569;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+body.app-theme .site-footer-2026__meta {
+  margin-top: 0.72rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.38rem;
+}
+
+body.app-theme .site-footer-2026__meta span {
+  border: 1px solid #d9e2fb;
+  border-radius: 999px;
+  padding: 0.18rem 0.5rem;
+  color: #64748b;
+  background: #f8faff;
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+body.app-theme .site-footer-2026__col h4 {
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+body.app-theme .site-footer-2026__col a {
+  display: block;
+  color: #334155;
+  text-decoration: none;
+  font-size: 0.8rem;
+  line-height: 1.32;
+  margin-bottom: 0.38rem;
+}
+
+body.app-theme .site-footer-2026__col a:last-child {
+  margin-bottom: 0;
+}
+
+body.app-theme .site-footer-2026__col a:hover {
+  color: #1a5dcb;
+}
+
+body.app-theme .site-footer,
+body.app-theme .home-minimal-footer,
+body.app-theme .site-footer-neo,
+body.app-theme .site-footer-neo__brand,
+body.app-theme .site-footer-neo__col,
+body.app-theme .site-footer-neo__logo {
+  box-shadow: none;
+}
+
+@media (max-width: 1023.98px) {
+  body.app-theme .site-footer-2026__shell {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767.98px) {
+  body.app-theme .site-footer.site-footer-2026 {
+    margin-top: 1.2rem;
+    padding-bottom: 5rem;
+  }
+
+  body.app-theme .site-footer-2026__shell {
+    grid-template-columns: 1fr;
+    gap: 0.6rem;
+  }
+
+  body.app-theme .site-footer-2026__brand,
+  body.app-theme .site-footer-2026__col {
+    padding: 0.86rem 0.88rem;
+    border-radius: 14px;
+  }
+}

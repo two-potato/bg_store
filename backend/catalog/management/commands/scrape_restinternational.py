@@ -8,7 +8,7 @@ from catalog.models import Brand, Category, Product, ProductImage, Tag
 
 
 BASE = "https://restinternational.ru"
-HEADERS = {"User-Agent": "bgshop-bot/1.0 (+https://example.com)"}
+HEADERS = {"User-Agent": "servio-bot/1.0 (+https://servio.market)"}
 
 
 def fetch(url: str) -> str:

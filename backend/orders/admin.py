@@ -1,7 +1,10 @@
 from django import forms
 from django.contrib import admin
+from django.http import HttpResponse
+import csv
 import logging
-from .models import Order, OrderItem, FakeAcquiringPayment
+from .models import Order, OrderItem, FakeAcquiringPayment, OrderSellerSplit, SellerOrder, SellerOrderItem, Shipment, ShipmentItem, OrderApprovalLog
+from .services import plan_seller_splits, mark_seller_order_status
 
 
 class OrderItemInline(admin.TabularInline):
@@ -20,6 +23,27 @@ class FakeAcquiringPaymentInline(admin.StackedInline):
         ("История событий", {"fields": ("history",)}),
         ("Служебные", {"fields": ("created_at", "updated_at")}),
     )
+
+
+class OrderSellerSplitInline(admin.TabularInline):
+    model = OrderSellerSplit
+    extra = 0
+    readonly_fields = ("seller", "seller_store_name", "items_count", "subtotal", "status", "created_at")
+    can_delete = False
+
+
+class SellerOrderInline(admin.TabularInline):
+    model = SellerOrder
+    extra = 0
+    readonly_fields = ("seller", "seller_store_name", "status", "subtotal", "total", "accepted_at", "shipped_at", "delivered_at")
+    can_delete = False
+
+
+class OrderApprovalLogInline(admin.TabularInline):
+    model = OrderApprovalLog
+    extra = 0
+    readonly_fields = ("actor", "decision", "comment", "created_at")
+    can_delete = False
 
 
 class OrderAdminForm(forms.ModelForm):
@@ -48,10 +72,10 @@ class OrderAdminForm(forms.ModelForm):
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     form = OrderAdminForm
-    list_display = ("id", "status_label", "legal_entity", "placed_by", "total", "created_at")
-    list_filter = ("status", "legal_entity")
-    search_fields = ("id", "placed_by__username")
-    inlines = [OrderItemInline, FakeAcquiringPaymentInline]
+    list_display = ("id", "status_label", "approval_status", "split_status", "legal_entity", "placed_by", "coupon_code", "total", "created_at")
+    list_filter = ("status", "approval_status", "split_status", "legal_entity", "source_channel")
+    search_fields = ("id", "placed_by__username", "coupon_code", "customer_comment")
+    inlines = [OrderItemInline, OrderSellerSplitInline, SellerOrderInline, OrderApprovalLogInline, FakeAcquiringPaymentInline]
     readonly_fields = (
         "subtotal",
         "discount_amount",
@@ -67,6 +91,8 @@ class OrderAdmin(admin.ModelAdmin):
                 "customer_type", "payment_method",
                 "legal_entity", "placed_by", "delivery_address",
                 "customer_name", "customer_phone", "address_text",
+                "customer_comment", "coupon_code", "source_channel", "split_status",
+                "approval_status", "requested_by", "approved_by", "approved_at",
             )
         }),
         ("Суммы", {"fields": ("subtotal", "discount_amount", "total")}),
@@ -77,6 +103,8 @@ class OrderAdmin(admin.ModelAdmin):
         "mark_new",
         "mark_in_progress",
         "mark_completed",
+        "sync_split_structure",
+        "export_selected_rows",
     ]
 
     def mark_new(self, request, queryset):
@@ -109,6 +137,21 @@ class OrderAdmin(admin.ModelAdmin):
         return obj.get_status_display()
     status_label.short_description = "Статус"
 
+    @admin.action(description="Синхронизировать split-структуру")
+    def sync_split_structure(self, request, queryset):
+        for order in queryset:
+            plan_seller_splits(order)
+
+    @admin.action(description="Экспортировать заказы в CSV")
+    def export_selected_rows(self, request, queryset):
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="orders-export.csv"'
+        writer = csv.writer(response)
+        writer.writerow(["id", "status", "split_status", "placed_by", "total", "created_at"])
+        for order in queryset:
+            writer.writerow([order.id, order.status, order.split_status, order.placed_by_id, order.total, order.created_at])
+        return response
+
 @admin.register(OrderItem)
 class OrderItemAdmin(admin.ModelAdmin):
     list_display = ("id", "order", "product", "name", "price", "qty")
@@ -121,3 +164,68 @@ class FakeAcquiringPaymentAdmin(admin.ModelAdmin):
     search_fields = ("provider_payment_id", "order__id", "order__placed_by__username")
     list_filter = ("status", "last_event")
     readonly_fields = ("history", "created_at", "updated_at")
+
+
+@admin.register(OrderSellerSplit)
+class OrderSellerSplitAdmin(admin.ModelAdmin):
+    list_display = ("id", "order", "seller", "seller_store_name", "items_count", "subtotal", "status", "created_at")
+    search_fields = ("order__id", "seller__username", "seller_store_name")
+    list_filter = ("status",)
+
+
+class SellerOrderItemInline(admin.TabularInline):
+    model = SellerOrderItem
+    extra = 0
+    readonly_fields = ("order_item", "product", "seller_offer", "name", "price", "qty")
+    can_delete = False
+
+
+class ShipmentInline(admin.TabularInline):
+    model = Shipment
+    extra = 0
+    readonly_fields = ("tracking_number", "delivery_method", "warehouse_name", "status", "packed_at", "shipped_at", "delivered_at")
+    can_delete = False
+
+
+@admin.register(SellerOrder)
+class SellerOrderAdmin(admin.ModelAdmin):
+    list_display = ("id", "order", "seller", "seller_store_name", "status", "subtotal", "total", "created_at")
+    search_fields = ("order__id", "seller__username", "seller_store_name", "customer_comment")
+    list_filter = ("status",)
+    inlines = [SellerOrderItemInline, ShipmentInline]
+    actions = ("mark_accepted", "mark_shipped", "mark_delivered")
+
+    @admin.action(description="Отметить seller order как accepted")
+    def mark_accepted(self, request, queryset):
+        for seller_order in queryset:
+            mark_seller_order_status(seller_order, SellerOrder.Status.ACCEPTED)
+
+    @admin.action(description="Отметить seller order как shipped")
+    def mark_shipped(self, request, queryset):
+        for seller_order in queryset:
+            mark_seller_order_status(seller_order, SellerOrder.Status.SHIPPED)
+
+    @admin.action(description="Отметить seller order как delivered")
+    def mark_delivered(self, request, queryset):
+        for seller_order in queryset:
+            mark_seller_order_status(seller_order, SellerOrder.Status.DELIVERED)
+
+
+class ShipmentItemInline(admin.TabularInline):
+    model = ShipmentItem
+    extra = 0
+
+
+@admin.register(Shipment)
+class ShipmentAdmin(admin.ModelAdmin):
+    list_display = ("id", "seller_order", "tracking_number", "delivery_method", "warehouse_name", "status", "created_at")
+    search_fields = ("tracking_number", "seller_order__order__id", "warehouse_name")
+    list_filter = ("status", "delivery_method")
+    inlines = [ShipmentItemInline]
+
+
+@admin.register(OrderApprovalLog)
+class OrderApprovalLogAdmin(admin.ModelAdmin):
+    list_display = ("id", "order", "actor", "decision", "created_at")
+    search_fields = ("order__id", "actor__username", "comment")
+    list_filter = ("decision",)

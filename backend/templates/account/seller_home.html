@@ -1,0 +1,249 @@
+{% extends "account/layout.html" %}
+{% block account_main %}
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero">
+    <div class="account-2026__hero-copy">
+      <div class="account-2026__hero-kicker">Seller workspace</div>
+      <div class="account-2026__hero-title">Кабинет продавца</div>
+      <div class="account-2026__hero-sub">Управляйте магазином, карточками, остатками и seller orders из единой операционной панели.</div>
+      <div class="account-2026__hero-actions">
+        <a class="account-2026__hero-btn is-primary" href="/account/seller/products/add/" hx-boost="false">Управлять товарами</a>
+        <a class="account-2026__hero-btn" href="/account/seller/offers/" hx-boost="false">Offers и склады</a>
+        <a class="account-2026__hero-btn" href="/account/seller/orders/" hx-boost="false">Seller orders</a>
+        {% if store %}
+          <a class="account-2026__hero-btn" href="/vendors/{{ store.slug }}/" hx-boost="false">Открыть витрину</a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="account-2026__hero-stats">
+      <article class="account-2026__hero-stat">
+        <span class="account-2026__hero-stat-label">Магазин</span>
+        <strong>{{ store.name|default:"Не создан" }}</strong>
+      </article>
+      <article class="account-2026__hero-stat">
+        <span class="account-2026__hero-stat-label">Товаров</span>
+        <strong>{{ seller_metrics.products_count }}</strong>
+      </article>
+      <article class="account-2026__hero-stat">
+        <span class="account-2026__hero-stat-label">Seller orders</span>
+        <strong>{{ seller_metrics.seller_orders_count }}</strong>
+      </article>
+      <article class="account-2026__hero-stat">
+        <span class="account-2026__hero-stat-label">Низкие остатки</span>
+        <strong>{{ seller_metrics.low_inventory_count }}</strong>
+      </article>
+      <article class="account-2026__hero-stat">
+        <span class="account-2026__hero-stat-label">GMV</span>
+        <strong>{{ seller_metrics.gmv }} ₽</strong>
+      </article>
+    </div>
+  </div>
+
+  <section class="account-2026__panel">
+    <h2 class="account-2026__panel-title">Сводка продавца</h2>
+    <div class="account-2026__metrics">
+      <article class="account-2026__metric">
+        <div class="account-2026__metric-label">Магазин</div>
+        <div class="account-2026__metric-value">{{ store.name|default:"Не создан" }}</div>
+      </article>
+      <article class="account-2026__metric">
+        <div class="account-2026__metric-label">Товаров всего</div>
+        <div class="account-2026__metric-value">{{ seller_metrics.products_count }}</div>
+      </article>
+      <article class="account-2026__metric">
+        <div class="account-2026__metric-label">В наличии</div>
+        <div class="account-2026__metric-value">{{ seller_metrics.in_stock_count }}</div>
+      </article>
+      <article class="account-2026__metric">
+        <div class="account-2026__metric-label">Seller orders</div>
+        <div class="account-2026__metric-value">{{ seller_metrics.seller_orders_count }}</div>
+      </article>
+      <article class="account-2026__metric">
+        <div class="account-2026__metric-label">Новые отгрузки</div>
+        <div class="account-2026__metric-value">{{ seller_metrics.seller_orders_new_count }}</div>
+      </article>
+      <article class="account-2026__metric">
+        <div class="account-2026__metric-label">Низкие остатки</div>
+        <div class="account-2026__metric-value">{{ seller_metrics.low_inventory_count }}</div>
+      </article>
+      <article class="account-2026__metric">
+        <div class="account-2026__metric-label">Открытые диспуты</div>
+        <div class="account-2026__metric-value">{{ seller_metrics.claims_open_count }}</div>
+      </article>
+    </div>
+    <div class="account-2026__action-grid account-2026__action-grid--compact">
+      <a class="account-2026__action-tile is-primary" href="/account/seller/products/add/" hx-boost="false">
+        <span class="account-2026__action-title">Карточки товаров</span>
+        <span class="account-2026__action-meta">Создание, фото, контент и редактирование</span>
+      </a>
+      <a class="account-2026__action-tile" href="/account/seller/offers/" hx-boost="false">
+        <span class="account-2026__action-title">Offers и склады</span>
+        <span class="account-2026__action-meta">Управление ценой, MOQ, ETA и inventory</span>
+      </a>
+      {% if store %}
+        <a class="account-2026__action-tile" href="/vendors/{{ store.slug }}/" hx-boost="false">
+          <span class="account-2026__action-title">Витрина магазина</span>
+          <span class="account-2026__action-meta">Публичная storefront-страница</span>
+        </a>
+      {% endif %}
+      <a class="account-2026__action-tile" href="/account/seller/orders/" hx-boost="false">
+        <span class="account-2026__action-title">Seller orders</span>
+        <span class="account-2026__action-meta">Статусы, shipments и tracking</span>
+      </a>
+      <a class="account-2026__action-tile" href="/account/seller/warehouses/" hx-boost="false">
+        <span class="account-2026__action-title">Мультискладской dashboard</span>
+        <span class="account-2026__action-meta">Сводка по складам и incoming</span>
+      </a>
+      <a class="account-2026__action-tile" href="/account/seller/analytics/" hx-boost="false">
+        <span class="account-2026__action-title">Seller analytics</span>
+        <span class="account-2026__action-meta">Продажи, GMV и top SKU</span>
+      </a>
+      <a class="account-2026__action-tile" href="/account/seller/payouts/" hx-boost="false">
+        <span class="account-2026__action-title">Payouts</span>
+        <span class="account-2026__action-meta">Комиссия и выплаты</span>
+      </a>
+      <a class="account-2026__action-tile" href="/account/seller/invoices/" hx-boost="false">
+        <span class="account-2026__action-title">Seller invoices</span>
+        <span class="account-2026__action-meta">Заказы со счётом и документы</span>
+      </a>
+      <a class="account-2026__action-tile" href="/account/approvals/" hx-boost="false">
+        <span class="account-2026__action-title">Approval inbox</span>
+        <span class="account-2026__action-meta">Заказы, ожидающие согласования</span>
+      </a>
+      <a class="account-2026__action-tile" href="/account/comments/" hx-boost="false">
+        <span class="account-2026__action-title">Комментарии</span>
+        <span class="account-2026__action-meta">Отзывы и обратная связь</span>
+      </a>
+      <a class="account-2026__action-tile" href="/account/seller/questions/" hx-boost="false">
+        <span class="account-2026__action-title">Вопросы по товарам</span>
+        <span class="account-2026__action-meta">Ответы покупателям и публичность</span>
+      </a>
+      <a class="account-2026__action-tile" href="/account/seller/reviews/" hx-boost="false">
+        <span class="account-2026__action-title">Отзывы покупателей</span>
+        <span class="account-2026__action-meta">Репутация и seller replies</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Магазин продавца</h2>
+      {% if store %}
+        <a class="account-2026__panel-link" href="/vendors/{{ store.slug }}/" hx-boost="false">Открыть витрину</a>
+      {% endif %}
+    </div>
+    <form method="post" enctype="multipart/form-data" class="account-2026__form">
+      {% csrf_token %}
+      <div class="grid md:grid-cols-2 gap-3">
+        <div>
+          <label class="label" for="id_name"><span class="label-text">Название магазина</span></label>
+          <input id="id_name" type="text" name="name" class="input input-bordered w-full" value="{{ store_form.name.value|default_if_none:'' }}" required>
+        </div>
+        <div>
+          <label class="label" for="id_description"><span class="label-text">Описание магазина</span></label>
+          <textarea id="id_description" name="description" rows="3" class="textarea textarea-bordered w-full">{{ store_form.description.value|default_if_none:'' }}</textarea>
+        </div>
+        <div>
+          <label class="label" for="id_legal_entity"><span class="label-text">Юридическое лицо</span></label>
+          <select id="id_legal_entity" name="legal_entity" class="select select-bordered w-full" required>
+            <option value="">Выберите юрлицо</option>
+            {% for le in store_form.fields.legal_entity.queryset %}
+              <option value="{{ le.id }}" {% if store_form.legal_entity.value|stringformat:"s" == le.id|stringformat:"s" %}selected{% endif %}>
+                {{ le.name }} (ИНН {{ le.inn }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="id_photo"><span class="label-text">Аватар магазина</span></label>
+          <input id="id_photo" type="file" name="photo" class="file-input file-input-bordered w-full" accept="image/*">
+        </div>
+        <div>
+          <label class="label" for="id_sla_target_hours"><span class="label-text">SLA target, часов</span></label>
+          <input id="id_sla_target_hours" type="number" min="1" name="sla_target_hours" class="input input-bordered w-full" value="{{ store_form.sla_target_hours.value|default_if_none:'24' }}">
+        </div>
+        <div>
+          <label class="label" for="id_commission_rate"><span class="label-text">Комиссия, %</span></label>
+          <input id="id_commission_rate" type="number" min="0" step="0.01" name="commission_rate" class="input input-bordered w-full" value="{{ store_form.commission_rate.value|default_if_none:'0' }}">
+        </div>
+        <div class="md:col-span-2">
+          <label class="label" for="id_moderation_note"><span class="label-text">Заметка модерации / ops</span></label>
+          <input id="id_moderation_note" type="text" name="moderation_note" class="input input-bordered w-full" value="{{ store_form.moderation_note.value|default_if_none:'' }}">
+        </div>
+      </div>
+      {% if store and store.photo %}
+        <div class="text-sm text-base-content/70">Текущий аватар магазина: {{ store.photo.name }}</div>
+      {% endif %}
+      {% if store %}
+        <div class="text-sm text-base-content/60">Текущий moderation status: {{ store.get_moderation_status_display }}{% if store.is_featured %} · featured{% endif %}</div>
+      {% endif %}
+      {% if store_form.errors %}
+        <div class="alert alert-error text-sm"><span>Проверьте поля формы магазина.</span></div>
+      {% endif %}
+      <div class="flex gap-2">
+        <button class="btn btn-primary">Сохранить магазин</button>
+        <a class="btn btn-primary" href="/account/seller/products/add/" hx-boost="false">Перейти к добавлению товаров</a>
+      </div>
+    </form>
+  </section>
+
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Последние товары</h2>
+      <a class="account-2026__panel-link" href="/account/seller/products/add/" hx-boost="false">Открыть каталог продавца</a>
+    </div>
+    {% if latest_products %}
+      <div class="overflow-x-auto">
+        <table class="table table-sm account-2026__table">
+          <thead>
+            <tr><th>SKU</th><th>Товар</th><th>Цена</th><th>Остаток</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for p in latest_products %}
+              <tr>
+                <td>{{ p.sku }}</td>
+                <td>{{ p.name }}</td>
+                <td>{{ p.price }} ₽</td>
+                <td>{{ p.stock_qty }}</td>
+                <td class="text-right">
+                  <a class="btn btn-xs btn-outline" href="/account/seller/products/{{ p.id }}/edit/" hx-boost="false">Редактировать</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="alert">Товаров пока нет.</div>
+    {% endif %}
+  </section>
+
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Последние seller orders</h2>
+      <a class="account-2026__panel-link" href="/account/seller/orders/" hx-boost="false">Все seller orders</a>
+    </div>
+    {% if latest_seller_orders %}
+      <div class="account-grid-cards">
+        {% for seller_order in latest_seller_orders %}
+          <article class="account-entity-card">
+            <div class="account-entity-card__head">
+              <div>
+                <div class="account-entity-card__title">Seller order #{{ seller_order.id }}</div>
+                <div class="account-entity-card__meta">Обновлён {{ seller_order.updated_at|date:"d.m.Y H:i" }}</div>
+              </div>
+              <div class="account-entity-card__tag">{{ seller_order.get_status_display }}</div>
+            </div>
+            <div class="account-entity-card__body">Товаров: {{ seller_order.item_count }}</div>
+            <div class="account-entity-card__actions">
+              <a class="account-2026__panel-link" href="/account/seller/orders/{{ seller_order.id }}/" hx-boost="false">Открыть seller order</a>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="alert">Seller orders пока не появились.</div>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

@@ -2,9 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ dev, main ]
   pull_request:
-    branches: [ main ]
+    branches: [ dev, main ]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend:
@@ -38,6 +42,7 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
       DJANGO_SECRET_KEY: test-secret
       ALLOWED_HOSTS: localhost,127.0.0.1
+      CSRF_TRUSTED_ORIGINS: http://localhost,http://127.0.0.1
       DEBUG: 1
       TELEGRAM_BOT_TOKEN: test-token
 
@@ -55,15 +60,51 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
       - name: Install backend deps (dev)
         working-directory: backend
         run: |
           uv sync --no-cache
 
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Build frontend assets
+        run: |
+          npm run tw:build
+          test -s backend/static/css/app.css
+
+      - name: Install Chromium for browser smoke
+        run: npx playwright install --with-deps chromium
+
       - name: Run tests with coverage
         working-directory: backend
         run: |
           ./.venv/bin/python -m pytest
+
+      - name: Production settings preflight
+        working-directory: backend
+        env:
+          DEBUG: 0
+          DJANGO_SETTINGS_MODULE: config.settings.prod
+          DJANGO_SECRET_KEY: ci_prod_secret_key_2026_x7V4mK9pQ2nR8sT5uW1yZ6AaBbCcDdEe
+          INTERNAL_TOKEN: ci-internal-token
+          ORDER_APPROVE_SECRET: ci-order-approve-secret
+          METRICS_TOKEN: ci-metrics-token
+          TELEGRAM_BOT_TOKEN: ci-telegram-token
+          ALLOWED_HOSTS: servio.test,www.servio.test
+          CSRF_TRUSTED_ORIGINS: https://servio.test,https://www.servio.test
+        run: |
+          ./.venv/bin/python manage.py check --deploy --fail-level WARNING
+
+      - name: Check deploy-compose drift
+        run: |
+          python scripts/check_deploy_compose_drift.py
 
       - name: Enforce 100% coverage for views
         working-directory: backend
@@ -81,3 +122,46 @@ jobs:
         run: |
           backend/.venv/bin/python -m ruff check .
 
+      - name: Browser smoke
+        env:
+          OPENSEARCH_ENABLED: 0
+          SENTRY_DSN: ""
+          PUBLIC_SENTRY_DSN: ""
+          SENTRY_BROWSER_SDK_URL: ""
+          SMOKE_BASE_URL: http://127.0.0.1:8000
+          SMOKE_ARTIFACT_DIR: output/playwright
+        run: |
+          mkdir -p output/playwright
+          cd backend
+          ./.venv/bin/python manage.py migrate --noinput
+          ./.venv/bin/python manage.py seed_smoke_data
+          nohup ./.venv/bin/python manage.py runserver 127.0.0.1:8000 > ../output/playwright/django-server.log 2>&1 &
+          cd ..
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/health/ >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8000/health/ >/dev/null
+          npm run smoke:browser
+
+      - name: Visual regression check
+        env:
+          OPENSEARCH_ENABLED: 0
+          SENTRY_DSN: ""
+          PUBLIC_SENTRY_DSN: ""
+          SENTRY_BROWSER_SDK_URL: ""
+          SMOKE_BASE_URL: http://127.0.0.1:8000
+          VISUAL_BASELINE_DIR: tests/visual-baselines/storefront
+          VISUAL_CURRENT_DIR: output/playwright/current
+          VISUAL_DIFF_DIR: output/playwright/diff
+        run: |
+          npm run visual:check
+
+      - name: Upload browser smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-smoke-artifacts
+          path: output/playwright

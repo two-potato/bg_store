@@ -1,0 +1,21 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<section class="page-2026">
+  <header class="page-2026__header">
+    <h1>Коллекции и подборки</h1>
+    <p>Сезонные, сценарные и merchandising-ready страницы для быстрого discovery и repeat purchase.</p>
+  </header>
+  <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    {% for collection in collections %}
+      <article class="rounded-3xl border border-base-300 bg-base-100 p-6">
+        <div class="text-xs uppercase tracking-wide text-base-content/50 mb-2">Collection</div>
+        <h2 class="text-xl font-semibold mb-2">{{ collection.hero_title|default:collection.name }}</h2>
+        <p class="text-sm text-base-content/70 mb-4">{{ collection.hero_text|default:collection.description|truncatechars:180 }}</p>
+        <a class="btn btn-primary btn-sm" href="/collections/{{ collection.slug }}/" hx-boost="false">Открыть коллекцию</a>
+      </article>
+    {% empty %}
+      <div class="text-base-content/60">Коллекции пока не опубликованы.</div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

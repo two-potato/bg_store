@@ -1,5 +1,5 @@
 {# Render a responsive grid of products using product_card component #}
-<div id="product-grid" class="products-grid grid grid-cols-2 md:grid-cols-4 items-stretch gap-3">
+<div {% if grid_id %}id="{{ grid_id }}"{% endif %} class="products-grid grid grid-cols-2 md:grid-cols-4 items-stretch gap-3">
   {% if products %}
     {% include "shopfront/components/product_grid_items.html" with products=products %}
   {% else %}

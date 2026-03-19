@@ -1,0 +1,59 @@
+{% extends "account/layout.html" %}
+{% load math_extras %}
+{% block account_main %}
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero compact">
+    <div class="account-2026__hero-title">Approval inbox</div>
+    <div class="account-2026__hero-sub">Очередь B2B-заказов, ожидающих вашего согласования.</div>
+  </div>
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Ожидают решения</h2>
+      <a class="account-2026__panel-link" href="/account/orders/" hx-boost="false">Все заказы</a>
+    </div>
+    {% if orders %}
+      <div class="space-y-3">
+        {% for order in orders %}
+          <article class="rounded-2xl border border-base-300 p-4">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="font-semibold">Заказ #{{ order.id }}</div>
+                <div class="text-xs text-base-content/60">{{ order.legal_entity|default:"Без компании" }} · {{ order.total }} ₽</div>
+              </div>
+              <div class="text-sm">{{ progress_map|get_item:order.id|get_item:'approved'|default:0 }}/{{ progress_map|get_item:order.id|get_item:'required'|default:1 }}</div>
+            </div>
+            <div class="mt-2 text-sm text-base-content/70">Нужно согласований: {{ progress_map|get_item:order.id|get_item:'required'|default:1 }}. Уже получено: {{ progress_map|get_item:order.id|get_item:'approved'|default:0 }}.</div>
+            <div class="mt-3 flex gap-2">
+              <a class="btn btn-outline btn-sm" href="/account/orders/{{ order.id }}/" hx-boost="false">Открыть заказ</a>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="alert">Нет заказов, ожидающих согласования.</div>
+    {% endif %}
+  </section>
+
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">История approval</h2>
+      <span class="account-2026__panel-link">Последние 50 записей</span>
+    </div>
+    {% if recent_logs %}
+      <div class="space-y-2">
+        {% for item in recent_logs %}
+          <div class="rounded-2xl border border-base-200/80 p-3 text-sm">
+            <div class="font-medium">Заказ #{{ item.order_id }} · {{ item.order.legal_entity|default:"Без компании" }}</div>
+            <div class="text-xs text-base-content/60">{{ item.created_at|date:"d.m.Y H:i" }} · {{ item.actor }} · {{ item.get_decision_display }}</div>
+            {% if item.comment %}
+              <div class="mt-1">{{ item.comment }}</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="alert">История согласования пока пуста.</div>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

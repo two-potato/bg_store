@@ -1,0 +1,57 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<section class="page-2026">
+  <header class="brand-page-2026__hero">
+    <div class="brand-page-2026__hero-content">
+      <div class="brand-page-2026__hero-copy">
+        <div class="text-xs uppercase tracking-wide text-base-content/50 mb-2">Collection</div>
+        <h1>{{ collection.hero_title|default:collection.name }}</h1>
+        <p>{{ collection.hero_text|default:collection.description|default:"Кураторская подборка Servio под конкретный сценарий закупки." }}</p>
+      </div>
+      <div class="brand-page-2026__hero-actions">
+        <a class="btn btn-sm btn-primary" href="/catalog/" hx-boost="false">Открыть каталог</a>
+        <a class="btn btn-sm btn-outline" href="/collections/" hx-boost="false">Все коллекции</a>
+      </div>
+    </div>
+  </header>
+
+  <section class="page-2026__section">
+    <div class="page-2026__header">
+      <h2>Состав коллекции</h2>
+      <p>{{ products|length }} позиций</p>
+    </div>
+    {% include "shopfront/components/product_grid.html" with products=products %}
+  </section>
+
+  {% if collection.landing_body %}
+    <section class="page-2026__card">
+      <h2>О подборке</h2>
+      <div class="prose max-w-none">{{ collection.landing_body|linebreaks }}</div>
+    </section>
+  {% endif %}
+
+  {% if related_collections %}
+    <section class="page-2026__section">
+      <div class="page-2026__header">
+        <h2>Другие подборки</h2>
+        <p>Соседние кампании и merchandising surfaces, которые можно использовать в growth-сценариях.</p>
+      </div>
+      <div class="grid gap-3 md:grid-cols-3">
+        {% for item in related_collections %}
+          <a href="/collections/{{ item.slug }}/" class="rounded-3xl border border-base-300 bg-base-100 p-5" hx-boost="false">
+            <div class="font-semibold mb-2">{{ item.name }}</div>
+            <p class="text-sm text-base-content/70">{{ item.hero_text|default:item.description|truncatechars:120 }}</p>
+          </a>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  {% if collection.faq_body %}
+    <section class="page-2026__card">
+      <h2>{{ collection.faq_title|default:"FAQ по подборке" }}</h2>
+      <div class="prose max-w-none">{{ collection.faq_body|linebreaks }}</div>
+    </section>
+  {% endif %}
+</section>
+{% endblock %}

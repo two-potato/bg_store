@@ -1,17 +1,51 @@
 {% extends "account/layout.html" %}
-{% load tz %}
+{% load tz static seo_extras %}
 {% block account_main %}
-<section id="account-main-content" class="cabinet-dark-main">
-  <div class="cabinet-dark-hero compact">
-    <div class="cabinet-dark-hero-title">Заказ #{{ order.id }}</div>
-    <div class="cabinet-dark-hero-sub">Детали заказа, состав и итоговые суммы.</div>
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero compact">
+    <div class="account-2026__hero-title">Заказ #{{ order.id }}</div>
+    <div class="account-2026__hero-sub">Детали заказа, состав и итоговые суммы.</div>
   </div>
 
+  <section class="account-2026__panel">
+    <div class="account-2026__metrics account-2026__metrics--three">
+      <article class="account-2026__metric">
+        <div class="account-2026__metric-label">Статус</div>
+        <div class="account-2026__metric-value">{{ order.get_status_display }}</div>
+      </article>
+      <article class="account-2026__metric">
+        <div class="account-2026__metric-label">Согласование</div>
+        <div class="account-2026__metric-value">{{ order.get_approval_status_display }}</div>
+      </article>
+      <article class="account-2026__metric">
+        <div class="account-2026__metric-label">Итого</div>
+        <div class="account-2026__metric-value">{{ order.total }} ₽</div>
+      </article>
+    </div>
+  </section>
+
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Повторить прошлую закупку</h2>
+      <span class="account-2026__panel-note">Альтернативы и смежные позиции для быстрого повторного заказа</span>
+    </div>
+    {% include "shopfront/components/recommendation_section.html" with products=order_repeat_products title="Повторить прошлую закупку" subtitle="Подборка на основе состава этого заказа и вашей общей истории." recommendation_source="order_repeat" %}
+  </section>
+
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
-    <section class="cabinet-dark-panel lg:col-span-2">
-      <h2 class="cabinet-dark-panel-title">Состав заказа</h2>
+    <section class="account-2026__panel lg:col-span-2">
+      <div class="account-2026__panel-head">
+        <h2 class="account-2026__panel-title">Состав заказа</h2>
+        <a class="account-2026__panel-link"
+           href="/account/orders/"
+           hx-get="/account/orders/"
+           hx-target="#account-main-content"
+           hx-select="#account-main-content"
+           hx-swap="outerHTML"
+           hx-push-url="true">К списку заказов</a>
+      </div>
       <div class="overflow-x-auto">
-        <table class="table table-sm">
+        <table class="table table-sm account-2026__table">
           <thead>
             <tr>
               <th>Товар</th>
@@ -25,11 +59,11 @@
               <tr>
                 <td>
                   <div class="flex items-center gap-2">
-                    {% with img=item.product.images.first %}
+                    {% with img=item.product.prefetched_images.0 %}
                       {% if img %}
-                        <img src="{{ img.url }}" alt="{{ img.alt|default:item.name }}" class="w-12 h-12 object-cover rounded-lg border border-white/10">
+                        <img src="{{ img.public_url }}" alt="{{ img|product_image_alt:item.name }}" class="w-12 h-12 object-cover rounded-lg border border-[var(--b2b-border)]" data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}">
                       {% else %}
-                        <div class="w-12 h-12 rounded-lg border border-white/10 bg-[#17243d] grid place-items-center text-base-content/50">
+                        <div class="w-12 h-12 rounded-lg border border-[var(--b2b-border)] bg-[#EEF2FF] grid place-items-center text-base-content/50">
                           {% include "shopfront/icons/photo.svg" %}
                         </div>
                       {% endif %}
@@ -47,30 +81,177 @@
       </div>
     </section>
 
-    <aside class="cabinet-dark-panel text-sm">
+    <aside class="account-2026__panel account-2026__panel--stack text-sm">
       <div><span class="text-base-content/60">Статус:</span> <b>{{ order.get_status_display }}</b></div>
       <div><span class="text-base-content/60">Дата:</span> {{ order.created_at|timezone:"Europe/Moscow"|date:"d.m.Y H:i" }} (МСК)</div>
       <div><span class="text-base-content/60">Тип клиента:</span> {{ order.get_customer_type_display }}</div>
       <div><span class="text-base-content/60">Оплата:</span> {{ order.get_payment_method_display }}</div>
+      <div><span class="text-base-content/60">Доставка:</span> {{ order.get_delivery_method_display }}</div>
+      {% if order.delivery_slot %}
+        <div><span class="text-base-content/60">Таймслот:</span> {{ order.delivery_slot }}</div>
+      {% endif %}
+      {% if order.pickup_point %}
+        <div><span class="text-base-content/60">Точка самовывоза:</span> {{ order.pickup_point }}</div>
+      {% endif %}
+      <div><span class="text-base-content/60">Канал:</span> {{ order.get_source_channel_display }}</div>
+      <div><span class="text-base-content/60">Split readiness:</span> {{ order.get_split_status_display }}</div>
+      <div><span class="text-base-content/60">Согласование:</span> {{ order.get_approval_status_display }}</div>
+      {% if order.approval_status == 'pending' %}
+        <div><span class="text-base-content/60">Approval progress:</span> {{ approval_approved_count }}/{{ approval_required_count }}</div>
+      {% endif %}
+      {% if order.approved_by %}
+        <div><span class="text-base-content/60">Кем согласован:</span> {{ order.approved_by }}</div>
+      {% endif %}
       {% if fake_payment %}
         <div><span class="text-base-content/60">Платеж:</span> {{ fake_payment.get_status_display }}</div>
-        <a class="btn btn-outline btn-sm mt-2" href="/payments/fake/{{ order.id }}/" hx-boost="false">Симулятор эквайринга</a>
+        {% if demo_payments_enabled %}
+          <a class="btn btn-outline btn-sm mt-2" href="/payments/fake/{{ order.id }}/" hx-boost="false">Симулятор эквайринга</a>
+          {% if order.payment_method == 'mir_card' and order.status != 'delivered' and order.status != 'canceled' and fake_payment.status != 'paid' %}
+            <a class="btn btn-primary btn-sm mt-2" href="/account/orders/{{ order.id }}/retry-payment/" hx-boost="false">Повторить оплату</a>
+          {% endif %}
+          {% if order.payment_method == 'online_card' and order.status != 'delivered' and order.status != 'canceled' and fake_payment.status != 'paid' %}
+            <a class="btn btn-primary btn-sm mt-2" href="/account/orders/{{ order.id }}/retry-payment/" hx-boost="false">Открыть online payment</a>
+          {% endif %}
+        {% endif %}
       {% endif %}
       <div><span class="text-base-content/60">Юрлицо:</span> {{ order.legal_entity|default:"-" }}</div>
-      <div><span class="text-base-content/60">Адрес:</span> {{ order.delivery_address|default:"-" }}</div>
+      <div><span class="text-base-content/60">Адрес:</span> {{ order.delivery_address|default:order.address_text|default:"-" }}</div>
+      {% if order.coupon_code %}
+        <div><span class="text-base-content/60">Промокод / контракт:</span> {{ order.coupon_code }}</div>
+      {% endif %}
+      {% if order.customer_comment %}
+        <div><span class="text-base-content/60">Комментарий:</span> {{ order.customer_comment }}</div>
+      {% endif %}
+      {% if can_approve_order and order.approval_status == 'pending' %}
+        <div class="divider my-1"></div>
+        <div class="font-semibold">Решение по заказу</div>
+        <form method="post" action="/account/orders/{{ order.id }}/approval/" class="grid gap-2 mt-2">
+          {% csrf_token %}
+          <textarea class="textarea textarea-bordered w-full" name="comment" rows="3" placeholder="Комментарий для команды закупки"></textarea>
+          <div class="flex gap-2">
+            <button class="btn btn-primary btn-sm" type="submit" name="action" value="approve">Согласовать</button>
+            <button class="btn btn-outline btn-sm" type="submit" name="action" value="reject">Отклонить</button>
+          </div>
+        </form>
+      {% endif %}
+      {% if order.seller_splits.all %}
+        <div class="divider my-1"></div>
+        <div class="font-semibold">Поставщики в заказе</div>
+        {% for split in order.seller_splits.all %}
+          <div class="text-xs text-base-content/70">
+            {{ split.seller_store_name|default:split.seller.username }} · {{ split.items_count }} шт. · {{ split.subtotal }} ₽
+          </div>
+        {% endfor %}
+      {% endif %}
+      {% if order.seller_orders.all %}
+        <div class="divider my-1"></div>
+        <div class="font-semibold">Fulfillment по продавцам</div>
+        {% for seller_order in order.seller_orders.all %}
+          <div class="rounded-2xl border border-base-200/80 p-3 mb-2">
+            <div class="font-medium">{{ seller_order.seller_store_name|default:seller_order.seller.username }}</div>
+            <div class="text-xs text-base-content/70">{{ seller_order.get_status_display }} · {{ seller_order.total }} ₽</div>
+            {% for shipment in seller_order.shipments.all %}
+              <div class="mt-2 text-xs text-base-content/70">
+                Отгрузка: {{ shipment.get_status_display }}{% if shipment.tracking_number %} · трек {{ shipment.tracking_number }}{% endif %}{% if shipment.delivery_method %} · {{ shipment.delivery_method }}{% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      {% endif %}
       <div class="divider my-1"></div>
       <div><span class="text-base-content/60">Подытог:</span> {{ order.subtotal }} ₽</div>
       {% if order.discount_amount > 0 %}
         <div><span class="text-base-content/60">Скидка:</span> -{{ order.discount_amount }} ₽</div>
       {% endif %}
       <div><span class="text-base-content/60">Итого:</span> <b>{{ order.total }} ₽</b></div>
-      <a class="btn btn-outline btn-sm mt-3"
+      <a class="account-2026__panel-link"
          href="/account/orders/"
          hx-get="/account/orders/"
          hx-target="#account-main-content"
          hx-select="#account-main-content"
          hx-swap="outerHTML"
          hx-push-url="true">← К списку заказов</a>
+      <form method="post" action="/account/orders/{{ order.id }}/reorder/" class="mt-2">
+        {% csrf_token %}
+        <button class="btn btn-primary btn-sm w-full" type="submit">Повторить заказ</button>
+      </form>
+      <a class="btn btn-outline btn-sm w-full mt-2" href="/account/orders/{{ order.id }}/invoice/" hx-boost="false">Скачать invoice PDF</a>
+      <a class="btn btn-outline btn-sm w-full mt-2" href="/account/orders/{{ order.id }}/tracking/" hx-boost="false">Tracking page</a>
+      {% if order.placed_by_id == request.user.id and order.status != 'canceled' and order.status != 'delivered' %}
+        <form method="post" action="/account/orders/{{ order.id }}/cancel/" class="mt-2">
+          {% csrf_token %}
+          <button class="btn btn-outline btn-sm w-full" type="submit">Отменить заказ</button>
+        </form>
+      {% endif %}
+      <form method="post" action="/lists/from-order/{{ order.id }}/" class="mt-2">
+        {% csrf_token %}
+        <button class="btn btn-primary btn-sm w-full" type="submit">Сохранить как список закупок</button>
+      </form>
+      {% if order.approval_logs.all %}
+        <div class="divider my-1"></div>
+        <div class="font-semibold">История согласования</div>
+        {% for item in order.approval_logs.all %}
+          <div class="text-xs text-base-content/70">{{ item.created_at|timezone:"Europe/Moscow"|date:"d.m.Y H:i" }} · {{ item.actor }} · {{ item.get_decision_display }}{% if item.comment %} · {{ item.comment }}{% endif %}</div>
+        {% endfor %}
+      {% endif %}
+      <div class="divider my-1"></div>
+      <div class="font-semibold">Обращения по заказу</div>
+      <form method="post" action="/account/orders/{{ order.id }}/claims/" class="grid gap-2 mt-2">
+        {% csrf_token %}
+        <select class="select select-bordered w-full" name="claim_type">
+          <option value="return">Возврат</option>
+          <option value="damage">Повреждение</option>
+          <option value="shortage">Недовложение</option>
+          <option value="delivery">Проблема доставки</option>
+          <option value="other">Другое</option>
+        </select>
+        <textarea class="textarea textarea-bordered w-full" name="message" rows="3" placeholder="Опишите проблему по заказу"></textarea>
+        <button class="btn btn-outline btn-sm" type="submit">Создать обращение</button>
+      </form>
+      {% if order.claims.all %}
+        <div class="mt-3 space-y-2">
+          {% for claim in order.claims.all %}
+            <div class="rounded-2xl border border-base-200/80 p-3">
+              <div class="text-xs text-base-content/60">{{ claim.created_at|timezone:"Europe/Moscow"|date:"d.m.Y H:i" }} · {{ claim.created_by }} · {{ claim.get_claim_type_display }} · {{ claim.get_status_display }}</div>
+              <div class="mt-1 text-sm">{{ claim.message }}</div>
+              {% if claim.seller_response %}
+                <div class="mt-2 text-xs text-base-content/60">Ответ продавца: {{ claim.seller_response }}</div>
+              {% endif %}
+              {% if claim.resolution_comment %}
+                <div class="mt-2 text-xs text-base-content/60">Решение: {{ claim.resolution_comment }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+      <div class="divider my-1"></div>
+      <div class="font-semibold">Поддержка по заказу</div>
+      <form method="post" action="/account/orders/{{ order.id }}/support/" class="grid gap-2 mt-2">
+        {% csrf_token %}
+        <select class="select select-bordered w-full" name="topic">
+          <option value="support">Поддержка</option>
+          <option value="payment">Платёж</option>
+          <option value="delivery">Доставка</option>
+          <option value="documents">Документы</option>
+        </select>
+        <input class="input input-bordered w-full" type="text" name="subject" placeholder="Тема обращения">
+        <textarea class="textarea textarea-bordered w-full" name="message" rows="3" placeholder="Опишите вопрос для поддержки"></textarea>
+        <button class="btn btn-outline btn-sm" type="submit">Отправить в поддержку</button>
+      </form>
+      {% if order.support_tickets.all %}
+        <div class="mt-3 space-y-2">
+          {% for ticket in order.support_tickets.all %}
+            <div class="rounded-2xl border border-base-200/80 p-3">
+              <div class="text-xs text-base-content/60">{{ ticket.created_at|timezone:"Europe/Moscow"|date:"d.m.Y H:i" }} · {{ ticket.created_by }} · {{ ticket.get_topic_display }} · {{ ticket.get_status_display }}</div>
+              <div class="mt-1 font-medium">{{ ticket.subject }}</div>
+              <div class="mt-1 text-sm">{{ ticket.message }}</div>
+              {% if ticket.resolution_comment %}
+                <div class="mt-2 text-xs text-base-content/60">Решение: {{ ticket.resolution_comment }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
     </aside>
   </div>
 </section>

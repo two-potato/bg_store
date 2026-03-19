@@ -1,0 +1,29 @@
+{% extends "account/layout.html" %}
+{% block account_main %}
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero compact">
+    <div class="account-2026__hero-title">Seller invoices</div>
+    <div class="account-2026__hero-sub">Заказы продавца, оформленные по счёту.</div>
+  </div>
+  <section class="account-2026__panel">
+    <div class="overflow-x-auto">
+      <table class="table table-sm account-2026__table">
+        <thead><tr><th>Seller order</th><th>Buyer order</th><th>Юрлицо</th><th>Сумма</th><th></th></tr></thead>
+        <tbody>
+          {% for seller_order in invoice_orders %}
+            <tr>
+              <td>#{{ seller_order.id }}</td>
+              <td>#{{ seller_order.order_id }}</td>
+              <td>{{ seller_order.order.legal_entity|default:"-" }}</td>
+              <td>{{ seller_order.total }} ₽</td>
+              <td><a class="btn btn-xs btn-outline" href="/account/orders/{{ seller_order.order_id }}/invoice/" hx-boost="false">Invoice PDF</a></td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5">Заказов по счёту пока нет.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</section>
+{% endblock %}

@@ -25,14 +25,25 @@ jobs:
         env:
           SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
           SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          SSH_PORT: ${{ secrets.PROD_SSH_PORT }}
         run: |
           set -eu
           test -n "$SSH_PRIVATE_KEY"
           test -n "$SSH_HOST"
+          : "${SSH_PORT:=22}"
           install -m 700 -d ~/.ssh
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+          for attempt in 1 2 3; do
+            if ssh-keyscan -T 10 -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "SSH keyscan did not return a host key, continuing with StrictHostKeyChecking=accept-new"
+            else
+              sleep 3
+            fi
+          done
 
       - name: Run remote deploy
         env:
@@ -45,13 +56,22 @@ jobs:
           set -eu
           : "${SSH_PORT:=22}"
           : "${SSH_USER:=root}"
-          : "${APP_DIR:=/opt/bg_shop_full}"
-          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "APP_DIR='$APP_DIR' DEPLOY_REF='$DEPLOY_REF' bash -s" <<'EOSSH'
+          : "${APP_DIR:=/opt/servio}"
+          timeout --foreground 1800 ssh \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=20 \
+            -o TCPKeepAlive=yes \
+            -o StrictHostKeyChecking=accept-new \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "APP_DIR='$APP_DIR' DEPLOY_REF='$DEPLOY_REF' ALLOWED_SSH_PORT='$SSH_PORT' bash -s" <<'EOSSH'
           set -euo pipefail
           cd "$APP_DIR"
           git fetch --all --prune
-          git checkout main
+          git reset --hard
+          git clean -fd
+          git checkout -f main
           git reset --hard "$DEPLOY_REF"
+          git clean -fd
           bash ./scripts/deploy_prod.sh
           EOSSH
-

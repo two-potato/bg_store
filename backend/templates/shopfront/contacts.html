@@ -1,29 +1,27 @@
 {% extends "shopfront/base.html" %}
 {% block content %}
-<section class="info-page reveal" data-anim="animate__fadeInUp">
-  <h1 class="info-page__title">Контакты</h1>
-  <p class="info-page__lead">
-    Если нужна помощь с заказом, подбором ассортимента или доставкой - оставьте заявку.
-    Мы отвечаем в рабочее время и связываемся по указанному телефону.
-  </p>
-
-  <div class="info-page__grid">
-    <article class="info-page__card">
-      <h3>Общие контакты</h3>
-      <p>Email: support@badguys.shop</p>
-      <p>Телефон: +7 (800) 000-00-00</p>
-      <p>График: пн-пт, 09:00-20:00 (МСК)</p>
+<section class="servio-info-page">
+  <header class="servio-info-page__hero">
+    <span class="servio-info-page__eyebrow">Контакты</span>
+    <h1>Связаться с командой Servio</h1>
+    <p>Если нужно согласовать закупку, подключить поставщика или уточнить статус заказа, напишите нам. Мы отвечаем в рабочем ритме HoReCa, а не отправляем в длинную цепочку пересылок.</p>
+  </header>
+  <div class="servio-info-page__grid">
+    <article class="servio-info-card">
+      <h2>Клиентская поддержка</h2>
+      <p><strong>Email:</strong> hello@servio.market</p>
+      <p><strong>Телефон:</strong> +7 (495) 120-42-20</p>
+      <p><strong>График:</strong> пн–пт, 09:00–19:00 (МСК)</p>
     </article>
-    <article class="info-page__card">
-      <h3>Адрес офиса</h3>
-      <p>Москва, ул. Примерная, д. 15, офис 402</p>
-      <p>Склад: Химки, Логистический проезд, 3</p>
+    <article class="servio-info-card">
+      <h2>Работа с поставщиками</h2>
+      <p>Подключение ассортимента, согласование карточек и витрин поставщиков происходит через отдельный b2b-поток. Укажите это в сообщении, и мы маршрутизируем запрос сразу правильно.</p>
     </article>
   </div>
 
-  <form method="post" action="/contacts/" class="contact-form">
+  <form method="post" action="/contacts/" class="contact-form servio-contact-form">
     {% csrf_token %}
-    <h2 class="text-base font-semibold mb-2">Обратная связь</h2>
+    <h2 class="text-base font-semibold mb-2">Оставить сообщение</h2>
     <div class="contact-form__row">
       <label class="form-control">
         <span class="label"><span class="label-text">Имя</span></span>
@@ -42,9 +40,8 @@
       {% if form.message.errors %}<span class="text-error text-xs mt-1">{{ form.message.errors|join:", " }}</span>{% endif %}
     </label>
     <div class="mt-3">
-      <button class="btn btn-primary" type="submit">Отправить</button>
+      <button class="btn btn-primary" type="submit">Отправить запрос</button>
     </div>
   </form>
 </section>
 {% endblock %}
-

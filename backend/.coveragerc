@@ -1,4 +1,5 @@
 [run]
+data_file = logs/.coverage
 omit =
     */migrations/*
     */tests/*

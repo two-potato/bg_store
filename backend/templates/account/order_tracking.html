@@ -1,0 +1,31 @@
+{% extends "account/layout.html" %}
+{% load tz %}
+{% block account_main %}
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero compact">
+    <div class="account-2026__hero-title">Tracking заказа #{{ order.id }}</div>
+    <div class="account-2026__hero-sub">Отдельная страница отслеживания доставки и shipment статусов.</div>
+  </div>
+  <section class="account-2026__panel">
+    <div class="space-y-3">
+      {% for seller_order in order.seller_orders.all %}
+        <article class="rounded-2xl border border-base-300 p-4">
+          <div class="font-semibold">{{ seller_order.seller_store_name|default:seller_order.seller.username }}</div>
+          <div class="text-sm text-base-content/70">{{ seller_order.get_status_display }} · {{ seller_order.total }} ₽</div>
+          {% for shipment in seller_order.shipments.all %}
+            <div class="mt-3 rounded-xl border border-base-200 p-3">
+              <div class="text-sm">{{ shipment.get_status_display }}{% if shipment.tracking_number %} · трек {{ shipment.tracking_number }}{% endif %}</div>
+              <div class="text-xs text-base-content/60">{{ shipment.delivery_method|default:"Способ не указан" }} · {{ shipment.warehouse_name|default:"Склад не указан" }}</div>
+              <div class="text-xs text-base-content/60 mt-1">Обновлено {{ shipment.updated_at|timezone:"Europe/Moscow"|date:"d.m.Y H:i" }}</div>
+            </div>
+          {% empty %}
+            <div class="text-sm text-base-content/60 mt-2">Shipment ещё не создан.</div>
+          {% endfor %}
+        </article>
+      {% empty %}
+        <div class="alert">Для этого заказа пока нет отгрузок.</div>
+      {% endfor %}
+    </div>
+  </section>
+</section>
+{% endblock %}

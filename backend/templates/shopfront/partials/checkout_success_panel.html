@@ -3,8 +3,18 @@
     <div class="card-body">
       <h2 class="text-lg font-semibold">Заказ оформлен</h2>
       <p class="text-sm text-base-content/70">Заказ #{{ order.id }} успешно создан.</p>
+      {% if order.approval_status == "pending" %}
+        <div class="alert alert-warning text-sm mt-3">
+          Заказ отправлен на согласование внутри компании. После подтверждения его можно будет обработать по стандартному B2B-процессу.
+        </div>
+      {% endif %}
+      {% if order.is_guest %}
+        <div class="alert alert-info text-sm mt-3">
+          Сохраните ссылку на заказ. Она позволяет вернуться к подтверждению и оплате без аккаунта.
+        </div>
+      {% endif %}
       <div class="grid gap-2 mt-2">
-        <a class="btn btn-neutral" href="/account/orders/">К моим заказам</a>
+        <a class="btn btn-neutral" href="{{ order_detail_url }}">Открыть заказ</a>
         <a class="btn btn-outline" href="/catalog/">Вернуться в каталог</a>
       </div>
     </div>

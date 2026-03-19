@@ -1,7 +1,8 @@
 from django.contrib import admin
 from django.urls import path, include
 from django.http import JsonResponse
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from django.conf import settings
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 def health(_): return JsonResponse({"ok": True})
 
@@ -9,8 +10,6 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("health/", health),
     path("metrics", include("core.metrics_urls")),
-    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
-    path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema")),
     path("api/users/", include("users.urls")),
     path("account/", include("users.urls_html")),
     path("api/commerce/", include("commerce.urls_public")),
@@ -19,3 +18,10 @@ urlpatterns = [
     path("api/orders/", include("orders.urls")),
     path("", include("shopfront.urls")),
 ]
+
+if settings.ENABLE_API_DOCS:
+    urlpatterns += [
+        path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+        path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+        path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
+    ]

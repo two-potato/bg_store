@@ -1,5 +1,5 @@
 from django.urls import path
-from .views_admin import (
+from .api.admin import (
     ApproveMembershipView, RejectMembershipView,
     ApproveEntityCreationView, RejectEntityCreationView
 )

@@ -1,0 +1,28 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<section class="servio-info-page">
+  <header class="servio-info-page__hero">
+    <span class="servio-info-page__eyebrow">FAQ</span>
+    <h1>Частые вопросы о работе Servio</h1>
+    <p>Собрали короткие ответы на базовые вопросы о регистрации, доставке, оплате и работе с каталогом.</p>
+  </header>
+  <div class="servio-faq">
+    <details class="servio-faq__item" open>
+      <summary>Кто может закупать через Servio?</summary>
+      <p>Платформа рассчитана на рестораны, кафе, бары, отели, кейтеринг, dark kitchen и другие команды, которым нужен рабочий b2b-каталог товаров для HoReCa.</p>
+    </details>
+    <details class="servio-faq__item">
+      <summary>Можно ли работать с несколькими адресами доставки?</summary>
+      <p>Да. В личном кабинете можно хранить несколько адресов и переключать их при оформлении заказа.</p>
+    </details>
+    <details class="servio-faq__item">
+      <summary>Как поставщик попадает на платформу?</summary>
+      <p>После заявки команда Servio согласует ассортимент, документы и условия работы, затем подключает магазин в рабочем формате.</p>
+    </details>
+    <details class="servio-faq__item">
+      <summary>Есть ли повторный заказ?</summary>
+      <p>Да. История заказов и сохранённые подборки упрощают повторные закупки регулярного ассортимента.</p>
+    </details>
+  </div>
+</section>
+{% endblock %}

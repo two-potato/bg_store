@@ -1,7 +1,17 @@
+"""Logging helpers used across Django views, Celery tasks, and integrations.
+
+The module solves three related problems:
+
+1. Keep request-scoped context in async-safe `contextvars`.
+2. Provide lightweight decorators/mixins for timing and dispatch logs.
+3. Offer a dependency-free JSON formatter for structured logs.
+"""
+
 import logging
 import time
 import uuid
 import contextvars
+import os
 from typing import Optional
 import json
 
@@ -10,6 +20,7 @@ request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("request_id
 user_var: contextvars.ContextVar[str] = contextvars.ContextVar("user", default="anon")
 path_var: contextvars.ContextVar[str] = contextvars.ContextVar("path", default="-")
 method_var: contextvars.ContextVar[str] = contextvars.ContextVar("method", default="-")
+LOG_CALLS_ENABLED = os.getenv("LOG_CALLS_ENABLED", "1") == "1"
 
 
 class RequestContextFilter(logging.Filter):
@@ -24,6 +35,7 @@ class RequestContextFilter(logging.Filter):
 
 
 def set_request_context(request, request_id_header: str = "X-Request-ID") -> str:
+    """Populate request-scoped contextvars from the current HTTP request."""
     rid: Optional[str] = request.headers.get(request_id_header) or request.META.get(
         request_id_header.replace("-", "_")
     )
@@ -38,21 +50,24 @@ def set_request_context(request, request_id_header: str = "X-Request-ID") -> str
 
 
 def clear_request_context():
-    for var in (request_id_var, user_var, path_var, method_var):
-        try:
-            var.set(var._default)  # type: ignore[attr-defined]
-        except Exception:
-            pass
+    """Clear request-scoped contextvars after the response is finished."""
+    request_id_var.set("-")
+    user_var.set("anon")
+    path_var.set("-")
+    method_var.set("-")
 
 
 def log_timing(logger: logging.Logger, label: str, start_ns: int, **fields):
+    """Emit a structured completion log using a monotonic start timestamp."""
     dur_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
     logger.info("%s done", label, extra={"duration_ms": round(dur_ms, 2), **fields})
 
 
 def log_calls(logger: Optional[logging.Logger] = None, label: Optional[str] = None):
-    """Decorator to log start/end/exception with duration for sync functions."""
+    """Decorate a sync function with start/success/failure timing logs."""
     def _wrap(fn):
+        if not LOG_CALLS_ENABLED:
+            return fn
         log = logger or logging.getLogger(fn.__module__)
         name = label or fn.__name__
 
@@ -92,6 +107,7 @@ class LoggedAPIViewMixin:
 
 
 class LoggedViewSetMixin(LoggedAPIViewMixin):
+    """Alias mixin for DRF viewsets to share the APIView dispatch logging."""
     pass
 
 

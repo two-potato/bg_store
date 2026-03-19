@@ -3,11 +3,16 @@ from django.db import transaction
 import logging
 
 from .models import (
+    ApprovalPolicy,
+    Company,
+    CompanyMembership,
     LegalEntity,
     LegalEntityMembership,
     DeliveryAddress,
     MembershipRequest,
     LegalEntityCreationRequest,
+    SellerStore,
+    StoreReview,
 )
 
 log = logging.getLogger("commerce")
@@ -18,6 +23,27 @@ class LegalEntityAdmin(admin.ModelAdmin):
     list_display = ("id", "name", "inn", "bik", "bank_name", "created_at")
     search_fields = ("name", "inn")
     list_filter = ("created_at",)
+
+
+@admin.register(Company)
+class CompanyAdmin(admin.ModelAdmin):
+    list_display = ("id", "display_name", "legal_entity", "procurement_email", "is_active", "created_at")
+    search_fields = ("display_name", "legal_entity__name", "legal_entity__inn", "procurement_email")
+    list_filter = ("is_active",)
+
+
+@admin.register(CompanyMembership)
+class CompanyMembershipAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "company", "role", "approval_limit", "is_default_approver", "created_at")
+    search_fields = ("user__username", "company__display_name", "company__legal_entity__name")
+    list_filter = ("role", "is_default_approver")
+
+
+@admin.register(ApprovalPolicy)
+class ApprovalPolicyAdmin(admin.ModelAdmin):
+    list_display = ("id", "company", "is_enabled", "auto_approve_below", "require_approver_role", "max_pending_hours")
+    search_fields = ("company__display_name", "company__legal_entity__name")
+    list_filter = ("is_enabled", "require_approver_role", "require_comment")
 
 
 @admin.register(LegalEntityMembership)
@@ -140,3 +166,28 @@ class LegalEntityCreationRequestAdmin(admin.ModelAdmin):
         updated = queryset.filter(status__code='pending').update(status=RequestStatus.objects.get(code='rejected'))
         messages.success(request, f"Отклонено заявок: {updated}")
         log.info("entity_creations_rejected_admin_action", extra={"updated": updated, "admin_user_id": request.user.id})
+
+
+@admin.register(SellerStore)
+class SellerStoreAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "owner", "legal_entity", "moderation_status", "sla_target_hours", "is_featured", "created_at")
+    search_fields = ("name", "owner__username", "legal_entity__name", "legal_entity__inn")
+    list_filter = ("moderation_status", "is_featured")
+    actions = ("approve_stores", "suspend_stores")
+
+    @admin.action(description="Одобрить магазины")
+    def approve_stores(self, request, queryset):
+        updated = queryset.update(moderation_status=SellerStore.ModerationStatus.APPROVED)
+        messages.success(request, f"Одобрено магазинов: {updated}")
+
+    @admin.action(description="Приостановить магазины")
+    def suspend_stores(self, request, queryset):
+        updated = queryset.update(moderation_status=SellerStore.ModerationStatus.SUSPENDED)
+        messages.warning(request, f"Приостановлено магазинов: {updated}")
+
+
+@admin.register(StoreReview)
+class StoreReviewAdmin(admin.ModelAdmin):
+    list_display = ("id", "store", "user", "rating", "is_verified_buyer", "created_at")
+    search_fields = ("store__name", "user__username", "user__email", "text")
+    list_filter = ("rating", "is_verified_buyer", "created_at")

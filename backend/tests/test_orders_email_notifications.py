@@ -110,9 +110,11 @@ def test_celery_task_sends_email_on_created_event(user):
     order = Order.objects.create(placed_by=user)
     notify_admin_order_status_email(order.id, event="created", previous_status=None)
 
-    assert len(mail.outbox) == 1
+    assert len(mail.outbox) == 2
     assert f"Новый заказ #{order.id}" in mail.outbox[0].subject
     assert "admin@example.com" in mail.outbox[0].to
+    assert mail.outbox[1].subject == f"Servio: заказ #{order.id}"
+    assert user.email in mail.outbox[1].to
 
 
 @override_settings(
@@ -128,10 +130,11 @@ def test_celery_task_sends_email_on_status_change_event(user):
     mail.outbox = []
     notify_admin_order_status_email(order.id, event="status_changed", previous_status=Order.Status.NEW)
 
-    assert len(mail.outbox) == 1
+    assert len(mail.outbox) == 2
     assert f"Заказ #{order.id}: статус изменен" in mail.outbox[0].subject
     assert "Было: new" in mail.outbox[0].body
     assert "Стало: Выполнен" in mail.outbox[0].body
+    assert mail.outbox[1].subject == f"Servio: заказ #{order.id}"
 
 
 @override_settings(

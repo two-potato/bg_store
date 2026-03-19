@@ -1,0 +1,48 @@
+{% extends "account/layout.html" %}
+{% block account_main %}
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero compact">
+    <div class="account-2026__hero-title">Вопросы по товарам</div>
+    <div class="account-2026__hero-sub">Очередь buyer questions по вашим товарам с возможностью дать публичный ответ.</div>
+  </div>
+
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Все вопросы</h2>
+      <a class="account-2026__panel-link" href="/account/seller/" hx-boost="false">К seller dashboard</a>
+    </div>
+    {% if questions %}
+      <div class="space-y-3">
+        {% for question in questions %}
+          <article class="rounded-2xl border border-base-300 p-4">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="font-semibold">{{ question.product.name }}</div>
+                <div class="text-xs text-base-content/60">{{ question.user.username }} · {{ question.created_at|date:"d.m.Y H:i" }}</div>
+              </div>
+              <div class="text-xs {% if question.answer_text %}text-success{% else %}text-warning{% endif %}">
+                {% if question.answer_text %}Отвечено{% else %}Ждёт ответа{% endif %}
+              </div>
+            </div>
+            <p class="text-sm mt-3">{{ question.question_text }}</p>
+            <form method="post" action="/account/seller/questions/{{ question.id }}/answer/" class="grid gap-2 mt-3">
+              {% csrf_token %}
+              <textarea class="textarea textarea-bordered w-full" rows="3" name="answer_text" placeholder="Ответ продавца">{{ question.answer_text }}</textarea>
+              <label class="label cursor-pointer gap-2 justify-start"><input type="checkbox" class="checkbox" name="is_public" {% if question.is_public %}checked{% endif %}><span class="label-text">Показывать публично на карточке товара</span></label>
+              <div class="flex items-center justify-between gap-2">
+                <a class="account-2026__panel-link" href="/products/{{ question.product.slug }}/" hx-boost="false">Открыть товар</a>
+                <button class="btn btn-primary btn-sm" type="submit">Сохранить ответ</button>
+              </div>
+              {% if question.answered_by %}
+                <div class="text-xs text-base-content/50">Последний ответ: {{ question.answered_by.username }} · {{ question.answered_at|date:"d.m.Y H:i" }}</div>
+              {% endif %}
+            </form>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="alert">Вопросов по вашим товарам пока нет.</div>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

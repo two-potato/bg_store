@@ -1,17 +1,27 @@
 {% extends "account/layout.html" %}
 {% block account_main %}
-<section id="account-main-content" class="cabinet-dark-main">
-  <div class="cabinet-dark-hero compact">
-    <div class="cabinet-dark-hero-title">Мои заказы</div>
-    <div class="cabinet-dark-hero-sub">История заказов с быстрым просмотром без перезагрузки.</div>
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero compact">
+    <div class="account-2026__hero-title">Мои заказы</div>
+    <div class="account-2026__hero-sub">История заказов, согласование и быстрый переход к деталям без полной перезагрузки страницы.</div>
   </div>
-  <section class="cabinet-dark-panel">
-    <h2 class="cabinet-dark-panel-title">Список заказов</h2>
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Лента заказов</h2>
+      <a class="account-2026__panel-link" href="/catalog/" hx-boost="false">Перейти в каталог</a>
+    </div>
     {% if orders %}
       {% include 'account/components/order_table.html' with orders=orders %}
     {% else %}
       <div class="alert">У вас пока нет заказов.</div>
     {% endif %}
+  </section>
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Повторить прошлую закупку</h2>
+      <span class="account-2026__panel-note">Самые устойчивые reorder-кандидаты по истории заказов</span>
+    </div>
+    {% include "shopfront/components/recommendation_section.html" with products=order_reorder_products title="Повторить прошлую закупку" subtitle="Блок для быстрого возврата к ходовым позициям без ручного поиска." recommendation_source="orders_reorder" %}
   </section>
 </section>
 {% endblock %}

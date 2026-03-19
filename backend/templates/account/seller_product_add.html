@@ -1,0 +1,303 @@
+{% extends "account/layout.html" %}
+{% block account_main %}
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero compact">
+    <div class="account-2026__hero-title">{% if page_mode == "edit" %}Редактирование карточки товара{% else %}Управление товарами{% endif %}</div>
+    <div class="account-2026__hero-sub">{{ store.name }}: публикуйте, редактируйте и дополняйте карточки товара фото и характеристиками.</div>
+  </div>
+
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">{% if page_mode == "edit" %}Карточка {{ product_obj.name }}{% else %}Новый товар{% endif %}</h2>
+      {% if page_mode == "edit" %}
+        <a class="account-2026__panel-link" href="/products/{{ product_obj.slug }}/" hx-boost="false">Открыть карточку</a>
+        <a class="account-2026__panel-link" href="/account/seller/offers/" hx-boost="false">Offers и склады</a>
+      {% else %}
+        <a class="account-2026__panel-link" href="/account/seller/products/export/" hx-boost="false">Экспорт CSV</a>
+      {% endif %}
+    </div>
+    <form method="post" enctype="multipart/form-data" class="account-2026__form">
+      {% csrf_token %}
+      <input type="hidden" name="workflow" value="create_product">
+      <div class="grid md:grid-cols-3 gap-3">
+        <div>
+          <label class="label" for="id_sku"><span class="label-text">SKU</span></label>
+          <input id="id_sku" type="text" name="sku" class="input input-bordered w-full" value="{{ form.sku.value|default_if_none:'' }}" required>
+        </div>
+        <div>
+          <label class="label" for="id_manufacturer_sku"><span class="label-text">Артикул производителя</span></label>
+          <input id="id_manufacturer_sku" type="text" name="manufacturer_sku" class="input input-bordered w-full" value="{{ form.manufacturer_sku.value|default_if_none:'' }}">
+        </div>
+        <div>
+          <label class="label" for="id_name"><span class="label-text">Название</span></label>
+          <input id="id_name" type="text" name="name" class="input input-bordered w-full" value="{{ form.name.value|default_if_none:'' }}" required>
+        </div>
+        <div>
+          <label class="label" for="id_brand"><span class="label-text">Бренд</span></label>
+          <select id="id_brand" name="brand" class="select select-bordered w-full" required>
+            <option value="">Выберите бренд</option>
+            {% for b in form.fields.brand.queryset %}
+              <option value="{{ b.id }}" {% if form.brand.value|stringformat:"s" == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="id_series"><span class="label-text">Серия</span></label>
+          <select id="id_series" name="series" class="select select-bordered w-full">
+            <option value="">Без серии</option>
+            {% for s in form.fields.series.queryset %}
+              <option value="{{ s.id }}" {% if form.series.value|stringformat:"s" == s.id|stringformat:"s" %}selected{% endif %}>{{ s.brand.name }} / {{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="id_category"><span class="label-text">Категория</span></label>
+          <select id="id_category" name="category" class="select select-bordered w-full" required>
+            <option value="">Выберите категорию</option>
+            {% for c in form.fields.category.queryset %}
+              <option value="{{ c.id }}" {% if form.category.value|stringformat:"s" == c.id|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="id_material"><span class="label-text">Материал</span></label>
+          <input id="id_material" type="text" name="material" class="input input-bordered w-full" value="{{ form.material.value|default_if_none:'' }}">
+        </div>
+        <div>
+          <label class="label" for="id_purpose"><span class="label-text">Назначение</span></label>
+          <input id="id_purpose" type="text" name="purpose" class="input input-bordered w-full" value="{{ form.purpose.value|default_if_none:'' }}">
+        </div>
+        <div>
+          <label class="label" for="id_price"><span class="label-text">Цена</span></label>
+          <input id="id_price" type="number" step="0.01" min="0" name="price" class="input input-bordered w-full" value="{{ form.price.value|default_if_none:'' }}" required>
+        </div>
+        <div>
+          <label class="label" for="id_stock_qty"><span class="label-text">Остаток</span></label>
+          <input id="id_stock_qty" type="number" min="0" name="stock_qty" class="input input-bordered w-full" value="{{ form.stock_qty.value|default_if_none:'0' }}" required>
+        </div>
+        <div>
+          <label class="label" for="id_min_order_qty"><span class="label-text">Минимальный заказ</span></label>
+          <input id="id_min_order_qty" type="number" min="1" name="min_order_qty" class="input input-bordered w-full" value="{{ form.min_order_qty.value|default_if_none:'1' }}" required>
+        </div>
+        <div>
+          <label class="label" for="id_pack_qty"><span class="label-text">Количество в упаковке</span></label>
+          <input id="id_pack_qty" type="number" min="1" name="pack_qty" class="input input-bordered w-full" value="{{ form.pack_qty.value|default_if_none:'1' }}" required>
+        </div>
+        <div>
+          <label class="label" for="id_lead_time_days"><span class="label-text">Срок поставки, дней</span></label>
+          <input id="id_lead_time_days" type="number" min="0" name="lead_time_days" class="input input-bordered w-full" value="{{ form.lead_time_days.value|default_if_none:'0' }}" required>
+        </div>
+        <div>
+          <label class="label" for="id_publication_status"><span class="label-text">Статус публикации</span></label>
+          <select id="id_publication_status" name="publication_status" class="select select-bordered w-full">
+            {% for value, label in form.fields.publication_status.choices %}
+              <option value="{{ value }}" {% if form.publication_status.value|stringformat:"s" == value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="id_unit"><span class="label-text">Единица</span></label>
+          <input id="id_unit" type="text" name="unit" class="input input-bordered w-full" value="{{ form.unit.value|default_if_none:'шт' }}" required>
+        </div>
+        <div>
+          <label class="label" for="id_barcode"><span class="label-text">Штрихкод</span></label>
+          <input id="id_barcode" type="text" name="barcode" class="input input-bordered w-full" value="{{ form.barcode.value|default_if_none:'' }}">
+        </div>
+      </div>
+      <div>
+        <label class="label" for="id_description"><span class="label-text">Описание</span></label>
+        <textarea id="id_description" name="description" rows="4" class="textarea textarea-bordered w-full">{{ form.description.value|default_if_none:'' }}</textarea>
+      </div>
+      <div>
+        <label class="label" for="id_attributes_json"><span class="label-text">JSON-характеристики</span></label>
+        <textarea id="id_attributes_json" name="attributes_json" rows="5" class="textarea textarea-bordered w-full">{{ form.attributes_json.value|default_if_none:'' }}</textarea>
+      </div>
+      <div class="grid md:grid-cols-2 gap-3">
+        <div>
+          <label class="label" for="id_image_urls"><span class="label-text">Ссылки на фото</span></label>
+          <textarea id="id_image_urls" name="image_urls" rows="4" class="textarea textarea-bordered w-full" placeholder="https://...&#10;https://...">{{ form.image_urls.value|default_if_none:'' }}</textarea>
+        </div>
+        <div>
+          <label class="label" for="id_image_files"><span class="label-text">Загрузить фото</span></label>
+          <input id="id_image_files" type="file" name="image_files" class="file-input file-input-bordered w-full" accept="image/*" multiple>
+        </div>
+      </div>
+      {% if page_mode == "edit" and product_obj.images.all %}
+        <div>
+          <div class="label"><span class="label-text">Текущие фото</span></div>
+          <div class="grid gap-3 md:grid-cols-3">
+            {% for image in product_obj.images.all %}
+              <label class="rounded-2xl border border-base-300 p-3 space-y-2">
+                <img src="{{ image.public_url }}" alt="{{ product_obj.name }}" class="w-full h-32 object-cover rounded-xl" loading="lazy">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs text-base-content/60 truncate">{{ image.url }}</span>
+                    <span class="label cursor-pointer gap-2">
+                      <input type="checkbox" class="checkbox checkbox-sm" name="remove_image_ids" value="{{ image.id }}">
+                      <span class="text-xs">Удалить</span>
+                    </span>
+                  </div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <input type="number" min="0" class="input input-bordered input-sm w-full" name="image_order_{{ image.id }}" value="{{ image.ordering }}">
+                    <label class="label cursor-pointer justify-start gap-2"><input type="radio" class="radio radio-xs" name="primary_image_id" value="{{ image.id }}" {% if image.is_primary %}checked{% endif %}><span class="text-xs">Primary</span></label>
+                  </div>
+                </label>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+      <div class="flex flex-wrap gap-4">
+        <label class="label cursor-pointer gap-2"><input type="checkbox" class="checkbox" name="is_new" {% if form.is_new.value %}checked{% endif %}><span class="label-text">Новинка</span></label>
+        <label class="label cursor-pointer gap-2"><input type="checkbox" class="checkbox" name="is_promo" {% if form.is_promo.value %}checked{% endif %}><span class="label-text">Акция</span></label>
+      </div>
+      {% if form.errors %}
+        <div class="alert alert-error text-sm"><span>Не удалось сохранить товар. Проверьте введённые данные.</span></div>
+      {% endif %}
+      <div class="flex flex-wrap gap-2">
+        <button class="btn btn-primary">{% if page_mode == "edit" %}Сохранить изменения{% else %}Добавить товар{% endif %}</button>
+        {% if page_mode == "edit" %}
+          <a class="btn btn-outline" href="/products/{{ product_obj.slug }}/" hx-boost="false">Открыть карточку</a>
+          <a class="btn btn-ghost" href="/account/seller/products/add/" hx-boost="false">Новый товар</a>
+        {% endif %}
+      </div>
+    </form>
+  </section>
+
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">CSV импорт каталога</h2>
+      <a class="account-2026__panel-link" href="/account/seller/products/template/" hx-boost="false">Скачать шаблон</a>
+      <a class="account-2026__panel-link" href="/account/seller/products/export/" hx-boost="false">Экспортировать каталог</a>
+    </div>
+    <form method="post" enctype="multipart/form-data" class="account-2026__form">
+      {% csrf_token %}
+      <input type="hidden" name="workflow" value="import_catalog">
+      <div class="grid md:grid-cols-[1fr_auto] gap-3 items-end">
+        <div>
+          <label class="label" for="id_csv_file"><span class="label-text">CSV файл каталога</span></label>
+          <input id="id_csv_file" type="file" name="csv_file" class="file-input file-input-bordered w-full" accept=".csv,text/csv">
+          <div class="text-xs text-base-content/60 mt-2">Шаблон поддерживает create/update по `sku` внутри каталога продавца.</div>
+        </div>
+        <button class="btn btn-primary" type="submit">Импортировать</button>
+      </div>
+    </form>
+    {% if import_result %}
+      <div class="mt-4 rounded-2xl border border-base-300 p-4 space-y-2">
+        <div class="text-sm">Строк: {{ import_result.rows }}. Создано: {{ import_result.created }}. Обновлено: {{ import_result.updated }}.</div>
+        {% if import_result.errors %}
+          <div class="alert alert-error text-sm"><span>Ошибки импорта:</span></div>
+          <ul class="list-disc ml-5 text-sm space-y-1">
+            {% for error in import_result.errors %}
+              <li>{{ error }}</li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="alert alert-success text-sm"><span>Файл прошёл валидацию и импортирован без ошибок.</span></div>
+        {% endif %}
+      </div>
+    {% endif %}
+  </section>
+
+  {% if page_mode == "edit" %}
+    <section class="account-2026__panel">
+      <div class="account-2026__panel-head">
+        <h2 class="account-2026__panel-title">Документы товара</h2>
+      </div>
+      <form method="post" class="grid md:grid-cols-[1fr_200px_1fr_auto] gap-3 items-end">
+        {% csrf_token %}
+        <input type="hidden" name="workflow" value="add_document">
+        <input type="text" name="doc-title" class="input input-bordered w-full" placeholder="Название документа">
+        <select name="doc-kind" class="select select-bordered w-full">
+          {% for value, label in document_form.fields.kind.choices %}
+            <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+        <input type="url" name="doc-file_url" class="input input-bordered w-full" placeholder="https://...">
+        <button class="btn btn-outline" type="submit">Добавить</button>
+      </form>
+      <div class="space-y-2 mt-3">
+        {% for document in product_obj.documents.all %}
+          <article class="rounded-2xl border border-base-300 p-3 flex items-center justify-between gap-3">
+            <div>
+              <div class="font-medium">{{ document.title }}</div>
+              <div class="text-xs text-base-content/60">{{ document.get_kind_display }} · {{ document.file_url }}</div>
+            </div>
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="workflow" value="delete_document">
+              <input type="hidden" name="document_id" value="{{ document.id }}">
+              <button class="btn btn-outline btn-sm" type="submit">Удалить</button>
+            </form>
+          </article>
+        {% empty %}
+          <div class="text-sm text-base-content/60 mt-3">Документов пока нет.</div>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Последние товары продавца</h2>
+      <a class="account-2026__panel-link" href="/account/seller/" hx-boost="false">Вернуться в seller workspace</a>
+    </div>
+    {% if my_products %}
+      <form method="post" class="space-y-3">
+        {% csrf_token %}
+        <input type="hidden" name="workflow" value="bulk_update">
+        <div class="grid md:grid-cols-[minmax(0,1fr)_220px_180px_180px_auto] gap-3 items-end">
+          <div class="text-sm text-base-content/70">Выбери товары ниже и примени массовое действие.</div>
+          <div>
+            <label class="label" for="id_bulk_action"><span class="label-text">Действие</span></label>
+            <select id="id_bulk_action" name="action" class="select select-bordered w-full">
+              {% for value, label in bulk_form.fields.action.choices %}
+                <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="label" for="id_stock_delta"><span class="label-text">Delta остатка</span></label>
+            <input id="id_stock_delta" type="number" name="stock_delta" class="input input-bordered w-full" placeholder="+/-">
+          </div>
+          <div>
+            <label class="label" for="id_lead_time_days"><span class="label-text">ETA, дней</span></label>
+            <input id="id_lead_time_days" type="number" min="0" name="lead_time_days" class="input input-bordered w-full" placeholder="0">
+          </div>
+          <button class="btn btn-outline" type="submit">Применить</button>
+        </div>
+        <div class="overflow-x-auto">
+        <table class="table table-sm account-2026__table">
+          <thead>
+            <tr><th></th><th>SKU</th><th>Название</th><th>Статус</th><th>Бренд</th><th>Категория</th><th>Цена</th><th>Остаток</th><th>Фото</th><th>Документы</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for p in my_products %}
+              <tr>
+                <td><input type="checkbox" class="checkbox checkbox-sm" name="product_ids" value="{{ p.id }}"></td>
+                <td>{{ p.sku }}</td>
+                <td>{{ p.name }}</td>
+                <td>{{ p.get_publication_status_display }}</td>
+                <td>{{ p.brand.name|default:"—" }}</td>
+                <td>{{ p.category.name|default:"—" }}</td>
+                <td>{{ p.price }} ₽</td>
+                <td>{{ p.stock_qty }}</td>
+                <td>{{ p.images.count }}</td>
+                <td>{{ p.documents.count }}</td>
+                <td class="text-right">
+                  <div class="flex justify-end gap-2">
+                    <a class="btn btn-xs btn-outline" href="/products/{{ p.slug }}/" hx-boost="false">Карточка</a>
+                    <a class="btn btn-xs btn-outline" href="/account/seller/offers/" hx-boost="false">Оффер</a>
+                    <a class="btn btn-xs btn-primary" href="/account/seller/products/{{ p.id }}/edit/" hx-boost="false">Редактировать</a>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      </form>
+    {% else %}
+      <div class="alert">Пока нет товаров, добавьте первый.</div>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

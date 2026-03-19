@@ -1,18 +1,18 @@
-<div class="card bg-base-100">
+<div class="card bg-base-100 catalog-filters-card">
   <div class="card-body p-4">
-    <form>
+    <form class="catalog-filters-form">
       <div class="mb-2">
         <label class="text-xs mb-1 block">Категория</label>
-        <select class="select select-bordered select-sm w-full" name="category">
+        <select class="select select-bordered select-sm w-full catalog-select-2026" name="category">
           <option value="">Любая</option>
-          {% for c in cats %}
-            <option value="{{ c.id }}" {% if request.GET.category|default:'' == c.id|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+          {% for c in category_rows %}
+            <option value="{{ c.slug }}" {% if request.GET.category|default:'' == c.slug or request.GET.category|default:'' == c.id|stringformat:"s" %}selected{% endif %}>{{ c.label }}</option>
           {% endfor %}
         </select>
       </div>
       <div class="mb-2">
         <label class="text-xs mb-1 block">Бренд</label>
-        <select class="select select-bordered select-sm w-full" name="brand">
+        <select class="select select-bordered select-sm w-full catalog-select-2026" name="brand">
           <option value="">Любой</option>
           {% for b in brands %}
             <option value="{{ b.id }}" {% if request.GET.brand|default:'' == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
@@ -25,7 +25,7 @@
       </div>
       <div class="mb-2">
         <label class="text-xs mb-1 block">Тег</label>
-        <select class="select select-bordered select-sm w-full" name="tag">
+        <select class="select select-bordered select-sm w-full catalog-select-2026" name="tag">
           <option value="">Любой</option>
           {% for t in tags %}
             <option value="{{ t.id }}" {% if request.GET.tag|default:'' == t.id|stringformat:"s" %}selected{% endif %}>{{ t.name }}</option>

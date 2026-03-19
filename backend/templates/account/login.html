@@ -2,27 +2,43 @@
 {% load socialaccount %}
 {% block content %}
 <div class="max-w-md mx-auto">
-  <div class="card bg-base-100">
+  <div id="auth-card" class="card bg-base-100">
     <div class="card-body p-4">
       <h1 class="text-lg font-semibold mb-3">Вход</h1>
       <form method="post" class="grid gap-3">
         {% csrf_token %}
         <div>
           <label class="text-xs mb-1 block">Email или телефон</label>
-          <input type="text" name="identifier" class="input input-bordered w-full" required>
+          <input type="text" name="identifier" class="input input-bordered w-full" required
+                 hx-post="{% url 'login_validate' %}" hx-trigger="input changed delay:350ms, blur"
+                 hx-target="#auth-form-errors" hx-swap="innerHTML" hx-include="closest form">
         </div>
         <div>
           <label class="text-xs mb-1 block">Пароль</label>
-          <input type="password" name="password" class="input input-bordered w-full" required>
+          <div class="relative">
+            <input type="password" name="password" class="input input-bordered w-full pr-20" required
+                   data-password-input
+                   hx-post="{% url 'login_validate' %}" hx-trigger="input changed delay:350ms, blur"
+                   hx-target="#auth-form-errors" hx-swap="innerHTML" hx-include="closest form">
+            <button type="button" class="btn btn-ghost btn-xs absolute right-2 top-1/2 -translate-y-1/2"
+                    data-password-toggle>Показать</button>
+          </div>
         </div>
-        {% if form.non_field_errors %}
-          <div class="alert alert-error text-sm">{{ form.non_field_errors }}</div>
+        {% if captcha_required %}
+          <div class="grid gap-1">
+            <label class="text-xs">Проверка безопасности</label>
+            <div class="cf-turnstile" data-sitekey="{{ turnstile_site_key }}"></div>
+          </div>
+          <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
         {% endif %}
+        <div id="auth-form-errors">
+          {% include "account/partials/form_errors.html" with form=form %}
+        </div>
         <button class="btn btn-primary w-full">Войти</button>
       </form>
       <div class="divider my-3"></div>
       {% if google_oauth_enabled %}
-      <a class="btn btn-outline w-full mb-2"
+      <a class="btn btn-primary w-full mb-2"
          href="{% provider_login_url 'google' process='login' %}"
          hx-boost="false">Войти через Google</a>
       {% else %}

@@ -46,3 +46,24 @@ def test_order_create_list_and_internal_actions(api_client, user, db):
 
     r4 = api_client.post(f"/api/orders/{order_id}/reject/", **headers)
     assert r4.status_code in (200, 403)
+
+
+def test_order_create_accepts_duplicate_product_ids(api_client, user, db):
+    p = _make_product()
+    le = LegalEntity.objects.create(name="LE Dup", inn="7707083894", bik="044525225", checking_account="40702810900000000004")
+    LegalEntityMembership.objects.create(user=user, legal_entity=le)
+    addr = DeliveryAddress.objects.create(legal_entity=le, label="Office", country="RU", city="Msk", street="Lenina", postcode="101000")
+
+    payload = {
+        "legal_entity_id": le.id,
+        "delivery_address_id": addr.id,
+        "items": [
+            {"product_id": p.id, "qty": 1},
+            {"product_id": p.id, "qty": 3},
+        ],
+    }
+    r = api_client.post("/api/orders/", data=payload, content_type="application/json")
+    assert r.status_code == 201
+    body = r.json()
+    assert len(body["items"]) == 2
+    assert body["subtotal"] == "400.00"

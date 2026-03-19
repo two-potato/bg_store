@@ -18,6 +18,11 @@
   {% include "shopfront/partials/cart_panel.html" %}
 
   {% if items %}
+    {% if seller_count > 1 %}
+      <div class="alert alert-info text-sm mt-3">
+        В корзине товары от {{ seller_count }} поставщиков. Это хорошая база для split-order логики, но сейчас заказ всё ещё оформляется единым потоком.
+      </div>
+    {% endif %}
     <div class="mt-3 grid gap-2">
       <a href="/checkout/" class="btn btn-primary w-full">Оформить заказ</a>
     </div>

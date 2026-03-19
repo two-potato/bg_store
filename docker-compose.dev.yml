@@ -6,22 +6,26 @@ services:
         INSTALL_DEV: 1
     environment:
       DEBUG: "1"
+      OPENSEARCH_ENABLED: "1"
+      SENTRY_DSN: ""
+      PUBLIC_SENTRY_DSN: ""
+      SENTRY_BROWSER_SDK_URL: ""
     command:
       [
         "sh",
         "-lc",
-        "until /app/.venv/bin/python manage.py migrate --noinput; do echo 'Waiting for DB...'; sleep 2; done; /app/.venv/bin/python manage.py collectstatic --noinput; exec /app/.venv/bin/python -m uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --reload",
+        "until /app/.venv/bin/python manage.py migrate --noinput; do echo 'Waiting for DB...'; sleep 2; done; /app/.venv/bin/python manage.py collectstatic --noinput --ignore admin/js/cancel.js --ignore admin/js/popup_response.js; exec /app/.venv/bin/python -m uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --reload",
       ]
   celery-worker:
-    build:
-      context: ./backend
-      args:
-        INSTALL_DEV: 1
+    environment:
+      DEBUG: "1"
+      OPENSEARCH_ENABLED: "1"
+      SENTRY_DSN: ""
   celery-beat:
-    build:
-      context: ./backend
-      args:
-        INSTALL_DEV: 1
+    environment:
+      DEBUG: "1"
+      OPENSEARCH_ENABLED: "1"
+      SENTRY_DSN: ""
   nginx:
     build:
       context: ./deploy/nginx

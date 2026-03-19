@@ -1,5 +1,14 @@
 services:
   backend:
+    env_file:
+      - path: ./backend/.env.example
+        required: true
+      - path: ./backend/.env.prod.example
+        required: true
+      - path: ./backend/.env
+        required: false
+      - path: ./backend/.env.prod
+        required: false
     environment:
       DEBUG: "0"
       DJANGO_SETTINGS_MODULE: config.settings.prod
@@ -9,7 +18,7 @@ services:
       LOG_CALLS_ENABLED: "0"
       REQUEST_LOG_LEVEL: WARNING
       ENABLE_CATALOG_RATING: "0"
-      GUNICORN_WORKERS: "4"
+      GUNICORN_WORKERS: "8"
       GUNICORN_TIMEOUT: "180"
     depends_on:
       - db
@@ -26,12 +35,44 @@ services:
       - python:config.gunicorn
       - config.asgi:application
 
+  celery-worker:
+    env_file:
+      - path: ./backend/.env.example
+        required: true
+      - path: ./backend/.env.prod.example
+        required: true
+      - path: ./backend/.env
+        required: false
+      - path: ./backend/.env.prod
+        required: false
+
+  celery-beat:
+    env_file:
+      - path: ./backend/.env.example
+        required: true
+      - path: ./backend/.env.prod.example
+        required: true
+      - path: ./backend/.env
+        required: false
+      - path: ./backend/.env.prod
+        required: false
+
+  db:
+    env_file:
+      - path: ./backend/.env.example
+        required: true
+      - path: ./backend/.env.prod.example
+        required: true
+      - path: ./backend/.env
+        required: false
+      - path: ./backend/.env.prod
+        required: false
+
   nginx:
     build:
       context: ./deploy/nginx
       dockerfile: Dockerfile
     ports:
-      - "80:80"
       - "443:443"
     volumes:
       - ./deploy/letsencrypt:/etc/letsencrypt:ro
@@ -43,3 +84,8 @@ services:
   mailpit:
     profiles: ["dev-only"]
     ports: []
+
+volumes:
+  pgdata:
+    external: true
+    name: servio_pgdata

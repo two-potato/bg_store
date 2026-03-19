@@ -1,0 +1,21 @@
+{% extends "account/layout.html" %}
+{% block account_main %}
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero compact">
+    <div class="account-2026__hero-title">Мультискладской dashboard</div>
+    <div class="account-2026__hero-sub">Остатки, резервы и incoming по всем складам продавца.</div>
+  </div>
+  <section class="account-2026__panel">
+    <div class="overflow-x-auto">
+      <table class="table table-sm account-2026__table">
+        <thead><tr><th>Склад</th><th>Офферов</th><th>Остаток</th><th>Резерв</th><th>Incoming</th><th>Max ETA</th></tr></thead>
+        <tbody>
+          {% for warehouse_name, row in warehouse_rows.items %}
+            <tr><td>{{ warehouse_name }}</td><td>{{ row.offers }}</td><td>{{ row.stock_qty }}</td><td>{{ row.reserved_qty }}</td><td>{{ row.incoming_qty }}</td><td>{{ row.eta_max }} дн.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</section>
+{% endblock %}

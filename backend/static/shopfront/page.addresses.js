@@ -1,4 +1,28 @@
 (function(){
+  function monitoring(){
+    return window.ServioMonitoring || null;
+  }
+
+  function isActive(){
+    return window.ServioRuntime && window.ServioRuntime.isPageType('account_addresses');
+  }
+
+  function runtime() {
+    return window.ServioRuntime || null;
+  }
+
+  function captureAddressIssue(message, extra, error) {
+    var monitor = monitoring();
+    if (!monitor) return;
+    if (error && typeof monitor.captureException === 'function') {
+      monitor.captureException(error, Object.assign({ kind: 'address_lookup' }, extra || {}));
+      return;
+    }
+    if (typeof monitor.captureMessage === 'function') {
+      monitor.captureMessage(message, 'warning', Object.assign({ kind: 'address_lookup' }, extra || {}));
+    }
+  }
+
   function setAddrField(form, name, value) {
     var el = form.querySelector('[name="' + name + '"]');
     if (el && value) el.value = value;
@@ -31,14 +55,31 @@
           setAddrField(form, 'street', addr.street);
           setAddrField(form, 'postcode', addr.postcode);
         } else {
+          captureAddressIssue('address_geocoder_empty', { provider: 'google_maps', status: status || '' });
           window.ShopToast?.show({ message: 'Адрес не найден, заполните поля вручную', variant: 'danger' });
         }
       });
       return;
     }
 
-    fetch('/api/commerce/lookup/revgeo/?lat=' + encodeURIComponent(lat) + '&lon=' + encodeURIComponent(lon))
-      .then(function(resp){ if (!resp.ok) throw new Error('bad response'); return resp.json(); })
+    fetch('/api/commerce/lookup/revgeo/?lat=' + encodeURIComponent(lat) + '&lon=' + encodeURIComponent(lon), {
+      credentials: 'same-origin',
+      headers: {
+        'Accept': 'application/json',
+      },
+    })
+      .then(function(resp){
+        var contentType = String(resp.headers.get('content-type') || '').toLowerCase();
+        if (resp.status === 401 || resp.status === 403) {
+          var authError = new Error('revgeo_auth_required');
+          authError.code = 'auth_required';
+          authError.loginUrl = '/account/login/?next=' + encodeURIComponent(window.location.pathname + window.location.search);
+          throw authError;
+        }
+        if (!resp.ok) throw new Error('revgeo_http_' + resp.status);
+        if (contentType.indexOf('application/json') < 0) throw new Error('revgeo_unexpected_content_type');
+        return resp.json();
+      })
       .then(function(data){
         if (data && (data.city || data.street)) {
           setAddrField(form, 'country', data.country || '');
@@ -49,7 +90,15 @@
         }
         throw new Error('empty address');
       })
-      .catch(function(){
+      .catch(function(error){
+        captureAddressIssue('address_revgeo_failed', { provider: 'servio_revgeo' }, error);
+        if (error && error.code === 'auth_required') {
+          runtime()?.showToast('Нужно войти в аккаунт, чтобы определить адрес', 'warning');
+          window.setTimeout(function () {
+            window.location.href = error.loginUrl;
+          }, 180);
+          return;
+        }
         window.ShopToast?.show({ message: 'Адрес не найден, заполните поля вручную', variant: 'danger' });
       });
   }
@@ -67,12 +116,16 @@
       resolveAddress(form, pos.coords.latitude, pos.coords.longitude);
       btn.disabled = false;
     }, function(err){
+      captureAddressIssue('address_geolocation_failed', {
+        code: err && typeof err.code === 'number' ? err.code : 0,
+      }, err);
       window.ShopToast?.show({ message: 'Не удалось получить геопозицию: ' + err.message, variant: 'danger' });
       btn.disabled = false;
     }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
   }
 
   document.body.addEventListener('click', function(e){
+    if (!isActive()) return;
     var btn = e.target.closest('[data-geolocate-btn]');
     if (!btn) return;
     e.preventDefault();

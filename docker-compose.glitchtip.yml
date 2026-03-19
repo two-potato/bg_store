@@ -1,0 +1,42 @@
+services:
+  glitchtip-postgres:
+    image: public.ecr.aws/docker/library/postgres:16
+    container_name: servio-glitchtip-postgres
+    environment:
+      POSTGRES_DB: glitchtip
+      POSTGRES_USER: glitchtip
+      POSTGRES_PASSWORD: glitchtip
+    volumes:
+      - glitchtip_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  glitchtip-redis:
+    image: valkey/valkey:8
+    container_name: servio-glitchtip-redis
+    restart: unless-stopped
+
+  glitchtip:
+    image: glitchtip/glitchtip:6
+    container_name: servio-glitchtip
+    env_file:
+      - path: ./deploy/glitchtip/.env.example
+        required: true
+      - path: ./deploy/glitchtip/.env
+        required: false
+    environment:
+      DATABASE_URL: postgres://glitchtip:glitchtip@glitchtip-postgres:5432/glitchtip
+      VALKEY_URL: redis://glitchtip-redis:6379
+      PORT: 8000
+      SERVER_ROLE: all_in_one
+    depends_on:
+      - glitchtip-postgres
+      - glitchtip-redis
+    ports:
+      - "${GLITCHTIP_PORT:-18000}:8000"
+    volumes:
+      - glitchtip_uploads:/code/uploads
+    restart: unless-stopped
+
+volumes:
+  glitchtip_pgdata:
+  glitchtip_uploads:

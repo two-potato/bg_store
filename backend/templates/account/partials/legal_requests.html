@@ -1,31 +1,32 @@
 {% if requests %}
-  <ul class="divide-y" id="legal-requests">
+  <div class="account-grid-cards" id="legal-requests">
     {% for r in requests %}
-      <li class="p-3 flex items-center justify-between">
-        <div>
-          <div class="text-xs text-base-content/60">ИНН: {{ r.inn }}</div>
-          <div id="req-prev-{{ r.id }}"
-               hx-get="/api/commerce/lookup/party_preview?inn={{ r.inn }}"
-               hx-trigger="load"
-               hx-swap="innerHTML">
-            <div class="text-xs text-base-content/60">Загружаю данные…</div>
+      <article class="account-entity-card">
+        <div class="account-entity-card__head">
+          <div>
+            <div class="account-entity-card__title">Заявка по ИНН {{ r.inn }}</div>
+            <div id="req-prev-{{ r.id }}"
+                 class="account-entity-card__meta"
+                 hx-get="/api/commerce/lookup/party_preview?inn={{ r.inn }}"
+                 hx-trigger="load"
+                 hx-swap="innerHTML">
+              <div class="text-xs text-base-content/60">Загружаю данные…</div>
+            </div>
+          </div>
+          <div class="account-entity-card__tag">
+            {% if r.status == 'pending' %}на согласовании{% elif r.status == 'approved' %}одобрено{% else %}отклонено{% endif %}
           </div>
         </div>
-        <div class="flex items-center gap-2">
-        {% if r.status == 'pending' %}
-          <span class="badge">на согласовании</span>
-          <form hx-post="/account/legal/request/{{ r.id }}/cancel/" hx-target="#legal-requests" hx-swap="outerHTML">
-            <button class="btn btn-sm btn-outline" type="submit">Отменить</button>
-          </form>
-        {% elif r.status == 'approved' %}
-          <span class="badge badge-success">одобрено</span>
-        {% else %}
-          <span class="badge badge-error">отклонено</span>
-        {% endif %}
+        <div class="account-entity-card__actions">
+          {% if r.status == 'pending' %}
+            <form hx-post="/account/legal/request/{{ r.id }}/cancel/" hx-target="#legal-requests" hx-swap="outerHTML">
+              <button class="account-2026__panel-link" type="submit">Отменить заявку</button>
+            </form>
+          {% endif %}
         </div>
-      </li>
+      </article>
     {% endfor %}
-  </ul>
+  </div>
 {% else %}
   <div class="text-xs text-base-content/60" id="legal-requests">Заявок пока нет.</div>
 {% endif %}

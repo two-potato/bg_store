@@ -1,0 +1,69 @@
+{% extends "shopfront/base.html" %}
+{% block content %}
+<section class="page-2026">
+  <header class="page-2026__header">
+    <h1>Списки закупок</h1>
+    <p>Многоразовые списки для repeat purchase, шаринга и быстрого возврата в корзину.</p>
+  </header>
+
+  <div class="grid gap-4 lg:grid-cols-[340px,1fr]">
+    <aside class="page-2026__card space-y-4">
+      <form method="post" action="/lists/" class="space-y-3">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create">
+        <div>
+          <label class="label" for="saved-list-name"><span class="label-text">Название списка</span></label>
+          <input id="saved-list-name" class="input input-bordered w-full" name="name" placeholder="Например, Барная витрина">
+        </div>
+        <div>
+          <label class="label" for="saved-list-description"><span class="label-text">Описание</span></label>
+          <input id="saved-list-description" class="input input-bordered w-full" name="description" placeholder="Сезонная подборка или набор для repeat purchase">
+        </div>
+        <button class="btn btn-primary w-full">Создать список</button>
+      </form>
+
+      <div class="space-y-2">
+        <form method="post" action="/lists/">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="create_from_favorites">
+          <button class="btn btn-outline w-full" {% if not favorites_count %}disabled{% endif %}>Собрать из избранного</button>
+        </form>
+        <form method="post" action="/lists/">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="create_from_cart">
+          <button class="btn btn-outline w-full" {% if not cart_items_count %}disabled{% endif %}>Сохранить текущую корзину</button>
+        </form>
+      </div>
+    </aside>
+
+    <div class="space-y-4">
+      {% for saved_list in saved_lists %}
+        <article class="page-2026__card">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 class="text-lg font-semibold">{{ saved_list.name }}</h2>
+              <p class="text-sm text-base-content/70">{{ saved_list.description|default:"Без описания" }}</p>
+              <div class="text-xs text-base-content/50 mt-2">
+                {{ saved_list.items.count }} товаров · {{ saved_list.get_source_display }} · {% if saved_list.is_public %}public{% else %}private{% endif %}
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <a class="btn btn-primary btn-sm" href="/lists/{{ saved_list.id }}/" hx-boost="false">Открыть</a>
+              <form method="post" action="/lists/">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="list_id" value="{{ saved_list.id }}">
+                <button class="btn btn-outline btn-sm" type="submit">Удалить</button>
+              </form>
+            </div>
+          </div>
+        </article>
+      {% empty %}
+        <div class="page-2026__card border-dashed p-6 text-base-content/60">
+          Пока нет ни одного списка. Создайте первый manual list или соберите его из избранного/корзины.
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endblock %}

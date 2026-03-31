@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from uuid import uuid4
+from collections.abc import Callable
 
 from django.template.loader import render_to_string
 
@@ -29,6 +30,7 @@ log = logging.getLogger("shopfront")
 
 
 def truncate_text(value: str, limit: int = 160) -> str:
+    """Handle truncate text."""
     text = (value or "").strip().replace("\n", " ")
     if len(text) <= limit:
         return text
@@ -36,6 +38,7 @@ def truncate_text(value: str, limit: int = 160) -> str:
 
 
 def default_og_image(request) -> str:
+    """Handle default og image."""
     return request.build_absolute_uri("/static/shopfront/big_logo.png")
 
 
@@ -49,6 +52,7 @@ def seo_context(
     og_type: str = "website",
     og_image: str | None = None,
 ):
+    """Handle seo context."""
     canonical_url = canonical or request.build_absolute_uri(request.path)
     return {
         "seo_title": title,
@@ -60,7 +64,15 @@ def seo_context(
     }
 
 
-def build_checkout_context(req, form_data=None, checkout_error=None):
+def build_checkout_context(
+    req,
+    form_data=None,
+    checkout_error=None,
+    *,
+    idempotency_key_factory: Callable[[], str] | None = None,
+    tracking_item_from_product: Callable = _tracking_item_from_product,
+):
+    """Build checkout context for both checkout and cart-adjacent flows."""
     cart_ctx = _cart_summary(req)
     memberships = LegalEntityMembership.objects.none()
     addresses = DeliveryAddress.objects.none()
@@ -71,7 +83,10 @@ def build_checkout_context(req, form_data=None, checkout_error=None):
         addresses = checkout_addresses_queryset(req)
         individual_default_name, individual_default_email = checkout_identity_defaults(req)
     company_snapshots = checkout_company_snapshots(req, memberships)
-    checkout_idem_key = ensure_checkout_idempotency_key(req, lambda: uuid4().hex)
+    checkout_idem_key = ensure_checkout_idempotency_key(
+        req,
+        idempotency_key_factory or (lambda: uuid4().hex),
+    )
     return _build_checkout_context(
         request=req,
         cart_ctx=cart_ctx,
@@ -97,12 +112,13 @@ def build_checkout_context(req, form_data=None, checkout_error=None):
             total=cart_ctx["total"],
             seller_count=cart_ctx["seller_count"],
         ),
-        checkout_cart_tracking_payload=checkout_cart_tracking_payload(cart_ctx, _tracking_item_from_product),
+        checkout_cart_tracking_payload=checkout_cart_tracking_payload(cart_ctx, tracking_item_from_product),
         demo_payments_enabled=_demo_payments_enabled(),
     )
 
 
 def attach_cart_badge_oob(request, response):
+    """Handle attach cart badge oob."""
     badge_html = render_to_string("shopfront/partials/cart_badge_oob.html", _cart_badge_context(request), request=request)
     content = response.content.decode(response.charset or "utf-8")
     response.content = (content + badge_html).encode(response.charset or "utf-8")

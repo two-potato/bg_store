@@ -65,19 +65,32 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
 
       - name: Install backend deps (dev)
         working-directory: backend
         run: |
           uv sync --no-cache
 
-      - name: Install frontend deps
+      - name: Install legacy storefront deps
         run: npm ci
 
-      - name: Build frontend assets
+      - name: Install Next storefront deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build legacy storefront assets
         run: |
           npm run tw:build
           test -s backend/static/css/app.css
+
+      - name: Typecheck and build Next storefront foundation
+        working-directory: frontend
+        run: |
+          npm run typecheck
+          npm run build
 
       - name: Install Chromium for browser smoke
         run: npx playwright install --with-deps chromium

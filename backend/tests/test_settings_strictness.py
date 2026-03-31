@@ -81,3 +81,12 @@ def test_base_settings_prefers_redis_cache_when_redis_url_present(monkeypatch: p
 
     assert module.CACHES["default"]["BACKEND"] == "django.core.cache.backends.redis.RedisCache"
     assert module.CACHES["default"]["LOCATION"] == "redis://redis:6379/1"
+
+
+def test_base_settings_falls_back_to_console_when_log_file_unwritable(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("LOG_FILE_PATH", "/proc/1/forbidden/app.log")
+
+    module = _load_base_settings_module()
+
+    assert module.LOGGING["root"]["handlers"] == ["console"]
+    assert "file" not in module.LOGGING["handlers"]

@@ -154,6 +154,20 @@ Usage:
         {{ p.seller.seller_store.name }}
       </a>
     {% endif %}
+    <div class="product-card__ops-grid">
+      <div class="product-card__ops-item">
+        <span>ETA</span>
+        <strong>{% if p.display_lead_time_days %}{{ p.display_lead_time_days }} дн.{% else %}1-2 дн.{% endif %}</strong>
+      </div>
+      <div class="product-card__ops-item">
+        <span>MOQ</span>
+        <strong>от {{ p.display_min_order_qty|default:1 }}</strong>
+      </div>
+      <div class="product-card__ops-item">
+        <span>Контент</span>
+        <strong>{% if p.documents.all %}Docs{% else %}Base{% endif %}</strong>
+      </div>
+    </div>
     <div class="product-card__subline">
       <a class="product-card__rating"
          href="/products/{{ p.slug }}/#product-reviews"
@@ -170,6 +184,17 @@ Usage:
       <div class="product-card__stock {% if p.display_stock_qty > 0 %}is-ok{% else %}is-empty{% endif %}">
         {% if p.display_stock_qty > 0 %}{{ p.display_stock_qty }} шт.{% else %}Нет в наличии{% endif %}
       </div>
+    </div>
+    <div class="product-card__trust-strip">
+      {% if p.active_offer and p.active_offer.seller_store and p.active_offer.seller_store.moderation_status == "approved" %}
+        <span class="product-card__trust-pill">Проверенный магазин</span>
+      {% endif %}
+      {% if p.display_lead_time_days and p.display_lead_time_days <= 2 %}
+        <span class="product-card__trust-pill">Fast ship</span>
+      {% endif %}
+      {% if p.documents.all %}
+        <span class="product-card__trust-pill">Есть документы</span>
+      {% endif %}
     </div>
   </div>
 

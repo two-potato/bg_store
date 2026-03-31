@@ -4,7 +4,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from shopfront.recommendation_ml import activate_model, available_trainers, build_training_dataset, train_recommendation_model
+from shopfront.recommendation.ml import activate_model, available_trainers, build_training_dataset, train_recommendation_model
 
 
 class Command(BaseCommand):

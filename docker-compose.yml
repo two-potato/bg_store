@@ -7,6 +7,112 @@ x-default-logging: &default-logging
     compress: "true"
 
 services:
+  frontend:
+    image: servio-frontend:dev
+    container_name: servio-frontend
+    build: ./frontend
+    environment:
+      PORT: "3000"
+      SITE_URL: "${SITE_URL:-https://potatofarm.ru}"
+      BACKEND_API_URL: "${BACKEND_API_URL:-http://backend:8000/api}"
+    expose:
+      - "3000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    logging: *default-logging
+    restart: unless-stopped
+
+  search-api:
+    image: servio-search-api:dev
+    container_name: servio-search-api
+    profiles: ["platform-services", "platform-shadow", "platform-canary"]
+    build: ./services/search-api
+    environment:
+      SERVICE_NAME: search-api
+      SERVICE_PORT: "8010"
+      SERVICE_VERSION: "0.2.0"
+      BACKEND_BASE_URL: "${BACKEND_INTERNAL_URL:-http://backend:8000}"
+      BACKEND_HEALTH_URL: "${BACKEND_HEALTH_URL:-http://backend:8000/health/}"
+      BACKEND_INTERNAL_TOKEN: "${INTERNAL_TOKEN:-internal-token}"
+      BACKEND_TIMEOUT_SECONDS: "${SEARCH_SERVICE_TIMEOUT_SECONDS:-0.8}"
+      PLATFORM_SERVICE_LOG_LEVEL: "${PLATFORM_SERVICE_LOG_LEVEL:-INFO}"
+      ENABLE_BACKEND_READY_CHECK: "${ENABLE_PLATFORM_BACKEND_READY_CHECK:-1}"
+      PLATFORM_UPSTREAM_MODE: "${SEARCH_SERVICE_MODE:-django-inline}"
+      PLATFORM_SHADOW_ENABLED: "${SEARCH_SERVICE_SHADOW_ENABLED:-0}"
+      PLATFORM_SHADOW_SURFACES: "${SEARCH_SERVICE_SHADOW_SURFACES:-search-page,live-search}"
+      PLATFORM_CANARY_ENABLED: "${SEARCH_SERVICE_CANARY_ENABLED:-0}"
+      PLATFORM_CANARY_SURFACES: "${SEARCH_SERVICE_CANARY_SURFACES:-search-page}"
+      PLATFORM_CANARY_PERCENT: "${SEARCH_SERVICE_CANARY_PERCENT:-0}"
+      PLATFORM_ROLLOUT_LABEL: "${SEARCH_SERVICE_ROLLOUT_LABEL:-search-service}"
+      PLATFORM_OBSERVABILITY_LABEL: "${SEARCH_SERVICE_OBSERVABILITY_LABEL:-search-service}"
+    expose:
+      - "8010"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8010/ready', timeout=2).status == 200 else 1)\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    logging: *default-logging
+    restart: unless-stopped
+
+  recommendation-api:
+    image: servio-recommendation-api:dev
+    container_name: servio-recommendation-api
+    profiles: ["platform-services", "platform-shadow", "platform-canary"]
+    build: ./services/recommendation-api
+    environment:
+      SERVICE_NAME: recommendation-api
+      SERVICE_PORT: "8011"
+      SERVICE_VERSION: "0.2.0"
+      BACKEND_API_URL: "${BACKEND_API_URL_INTERNAL:-http://backend:8000/api}"
+      BACKEND_BASE_URL: "${BACKEND_INTERNAL_URL:-http://backend:8000}"
+      BACKEND_HEALTH_URL: "${BACKEND_HEALTH_URL:-http://backend:8000/health/}"
+      BACKEND_INTERNAL_TOKEN: "${INTERNAL_TOKEN:-internal-token}"
+      BACKEND_TIMEOUT_SECONDS: "${RECOMMENDATION_SERVICE_TIMEOUT_SECONDS:-0.8}"
+      PLATFORM_SERVICE_LOG_LEVEL: "${PLATFORM_SERVICE_LOG_LEVEL:-INFO}"
+      ENABLE_BACKEND_READY_CHECK: "${ENABLE_PLATFORM_BACKEND_READY_CHECK:-1}"
+      PLATFORM_UPSTREAM_MODE: "${RECOMMENDATION_SERVICE_MODE:-django-inline}"
+      PLATFORM_SHADOW_ENABLED: "${RECOMMENDATION_SERVICE_SHADOW_ENABLED:-0}"
+      PLATFORM_SHADOW_SURFACES: "${RECOMMENDATION_SERVICE_SHADOW_SURFACES:-home,pdp,cart,checkout,reorder}"
+      PLATFORM_CANARY_ENABLED: "${RECOMMENDATION_SERVICE_CANARY_ENABLED:-0}"
+      PLATFORM_CANARY_SURFACES: "${RECOMMENDATION_SERVICE_CANARY_SURFACES:-home,pdp}"
+      PLATFORM_CANARY_PERCENT: "${RECOMMENDATION_SERVICE_CANARY_PERCENT:-0}"
+      PLATFORM_ROLLOUT_LABEL: "${RECOMMENDATION_SERVICE_ROLLOUT_LABEL:-recommendation-service}"
+      PLATFORM_OBSERVABILITY_LABEL: "${RECOMMENDATION_SERVICE_OBSERVABILITY_LABEL:-recommendation-service}"
+    expose:
+      - "8011"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8011/ready', timeout=2).status == 200 else 1)\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    logging: *default-logging
+    restart: unless-stopped
+
   backend:
     image: servio-backend:dev
     container_name: servio-backend
@@ -24,6 +130,26 @@ services:
       LOG_CALLS_ENABLED: "0"
       REQUEST_LOG_LEVEL: WARNING
       ENABLE_CATALOG_RATING: "0"
+      SEARCH_SERVICE_MODE: "${SEARCH_SERVICE_MODE:-django-inline}"
+      SEARCH_SERVICE_URL: "${SEARCH_SERVICE_URL:-http://search-api:8010}"
+      SEARCH_SERVICE_TIMEOUT_SECONDS: "${SEARCH_SERVICE_TIMEOUT_SECONDS:-0.8}"
+      SEARCH_SERVICE_SHADOW_ENABLED: "${SEARCH_SERVICE_SHADOW_ENABLED:-0}"
+      SEARCH_SERVICE_SHADOW_SURFACES: "${SEARCH_SERVICE_SHADOW_SURFACES:-search-page,live-search}"
+      SEARCH_SERVICE_CANARY_ENABLED: "${SEARCH_SERVICE_CANARY_ENABLED:-0}"
+      SEARCH_SERVICE_CANARY_SURFACES: "${SEARCH_SERVICE_CANARY_SURFACES:-search-page}"
+      SEARCH_SERVICE_CANARY_PERCENT: "${SEARCH_SERVICE_CANARY_PERCENT:-0}"
+      SEARCH_SERVICE_ROLLOUT_LABEL: "${SEARCH_SERVICE_ROLLOUT_LABEL:-search-service}"
+      SEARCH_SERVICE_OBSERVABILITY_LABEL: "${SEARCH_SERVICE_OBSERVABILITY_LABEL:-search-service}"
+      RECOMMENDATION_SERVICE_MODE: "${RECOMMENDATION_SERVICE_MODE:-django-inline}"
+      RECOMMENDATION_SERVICE_URL: "${RECOMMENDATION_SERVICE_URL:-http://recommendation-api:8011}"
+      RECOMMENDATION_SERVICE_TIMEOUT_SECONDS: "${RECOMMENDATION_SERVICE_TIMEOUT_SECONDS:-0.8}"
+      RECOMMENDATION_SERVICE_SHADOW_ENABLED: "${RECOMMENDATION_SERVICE_SHADOW_ENABLED:-0}"
+      RECOMMENDATION_SERVICE_SHADOW_SURFACES: "${RECOMMENDATION_SERVICE_SHADOW_SURFACES:-home,pdp,cart,checkout,reorder}"
+      RECOMMENDATION_SERVICE_CANARY_ENABLED: "${RECOMMENDATION_SERVICE_CANARY_ENABLED:-0}"
+      RECOMMENDATION_SERVICE_CANARY_SURFACES: "${RECOMMENDATION_SERVICE_CANARY_SURFACES:-home,pdp}"
+      RECOMMENDATION_SERVICE_CANARY_PERCENT: "${RECOMMENDATION_SERVICE_CANARY_PERCENT:-0}"
+      RECOMMENDATION_SERVICE_ROLLOUT_LABEL: "${RECOMMENDATION_SERVICE_ROLLOUT_LABEL:-recommendation-service}"
+      RECOMMENDATION_SERVICE_OBSERVABILITY_LABEL: "${RECOMMENDATION_SERVICE_OBSERVABILITY_LABEL:-recommendation-service}"
       GUNICORN_WORKERS: "${GUNICORN_WORKERS:-6}"
       GUNICORN_TIMEOUT: "${GUNICORN_TIMEOUT:-180}"
       GUNICORN_KEEPALIVE: "${GUNICORN_KEEPALIVE:-15}"
@@ -246,9 +372,13 @@ services:
       dockerfile: Dockerfile.dev
     image: servio-nginx:dev
     container_name: servio-nginx
+    environment:
+      BACKEND_UPSTREAM: http://backend:8000
+      FRONTEND_UPSTREAM: http://frontend:3000
+      STOREFRONT_NEXT_PUBLIC_ENABLED: "${STOREFRONT_NEXT_PUBLIC_ENABLED:-0}"
     # В dev не блокируем старт Nginx ожиданием health бэкенда,
     # чтобы /health/ открывался даже при проблемах миграций
-    depends_on: [backend]
+    depends_on: [backend, frontend]
     ports: ["${NGINX_HTTP_PORT:-8080}:80"]
     volumes:
       - staticfiles:/staticfiles:ro

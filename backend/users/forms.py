@@ -1,13 +1,37 @@
+import json
+import logging
+
 from django import forms
 from django.contrib.auth import get_user_model
-import logging
-from decimal import Decimal
-from .models import UserProfile
+
+from catalog.models import (
+    Product,
+    ProductDocument,
+    ProductQuestion,
+    ProductReviewComment,
+    SellerInventory,
+    SellerOffer,
+    Series,
+    StockMovement,
+)
+from commerce.models import (
+    Company,
+    CompanyContact,
+    CompanyMembership,
+    DeliveryAddress,
+    LegalEntityMembership,
+    SellerStore,
+)
 from commerce.validators import validate_inn
-from commerce.models import DeliveryAddress, LegalEntityMembership, SellerStore, CompanyMembership, Company, CompanyContact
-import json
-from catalog.models import Product, Series, SellerOffer, SellerInventory, ProductQuestion, ProductReview, ProductReviewComment, StockMovement, ProductDocument
 from orders.models import OrderClaim, OrderSupportTicket
+
+from .models import UserProfile
+from .upload_validation import (
+    validate_csv_upload,
+    validate_http_url,
+    validate_product_image_upload,
+    validate_product_image_urls,
+)
 
 User = get_user_model()
 log = logging.getLogger("users")
@@ -350,7 +374,14 @@ class SellerProductCreateForm(forms.ModelForm):
 
     def clean_image_urls(self):
         raw = self.cleaned_data.get("image_urls") or ""
-        return [line.strip() for line in raw.splitlines() if line.strip()]
+        return validate_product_image_urls([line.strip() for line in raw.splitlines() if line.strip()])
+
+    def clean(self):
+        cleaned = super().clean()
+        uploads = self.files.getlist("image_files")
+        for upload in uploads:
+            validate_product_image_upload(upload)
+        return cleaned
 
     def save(self, commit=True):
         product: Product = super().save(commit=False)
@@ -368,10 +399,7 @@ class SellerProductImportForm(forms.Form):
 
     def clean_csv_file(self):
         upload = self.cleaned_data["csv_file"]
-        filename = (upload.name or "").lower()
-        if not filename.endswith(".csv"):
-            raise forms.ValidationError("Поддерживается только CSV шаблон")
-        return upload
+        return validate_csv_upload(upload)
 
 
 class SellerProductBulkActionForm(forms.Form):
@@ -568,6 +596,9 @@ class ProductDocumentForm(forms.ModelForm):
             "kind": "Тип",
             "file_url": "Ссылка на файл",
         }
+
+    def clean_file_url(self):
+        return validate_http_url(self.cleaned_data.get("file_url") or "", field_label="Ссылка на файл")
 
 
 class OrderClaimForm(forms.ModelForm):

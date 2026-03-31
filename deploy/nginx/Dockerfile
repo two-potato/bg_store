@@ -1,2 +1,4 @@
 FROM public.ecr.aws/nginx/nginx:1.27-alpine
-COPY nginx.conf /etc/nginx/nginx.conf
+COPY nginx.conf.template /etc/nginx/templates/nginx.conf.template
+COPY 10-render-config.sh /docker-entrypoint.d/10-render-config.sh
+RUN chmod +x /docker-entrypoint.d/10-render-config.sh

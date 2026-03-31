@@ -26,6 +26,24 @@
 
   <section class="account-2026__panel">
     <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Procurement timeline</h2>
+      <span class="account-2026__panel-note">От создания до поставки и возможного claim-resolution</span>
+    </div>
+    <div class="account-2026__timeline">
+      <div class="account-2026__timeline-item is-done"><strong>Created</strong><span>{{ order.created_at|timezone:"Europe/Moscow"|date:"d.m.Y H:i" }}</span></div>
+      <div class="account-2026__timeline-item {% if order.approval_status == 'pending' or order.approval_status == 'approved' or order.approval_status == 'rejected' %}is-done{% endif %}"><strong>Sent for approval</strong><span>{{ order.get_approval_status_display }}</span></div>
+      <div class="account-2026__timeline-item {% if order.approval_status == 'approved' %}is-done{% elif order.approval_status == 'rejected' %}is-issue{% endif %}"><strong>Approved / rejected</strong><span>{% if order.approved_at %}{{ order.approved_at|timezone:"Europe/Moscow"|date:"d.m.Y H:i" }}{% else %}Ожидает решения{% endif %}</span></div>
+      <div class="account-2026__timeline-item {% if order.payment_method == 'invoice' %}is-done{% endif %}"><strong>Invoiced</strong><span>{% if order.payment_method == 'invoice' %}По счёту{% else %}Без invoice flow{% endif %}</span></div>
+      <div class="account-2026__timeline-item {% if order.status == 'paid' or order.status == 'delivering' or order.status == 'delivered' %}is-done{% endif %}"><strong>Paid</strong><span>{{ order.get_status_display }}</span></div>
+      <div class="account-2026__timeline-item {% if order.seller_orders.all %}is-done{% endif %}"><strong>Packed</strong><span>{% if order.seller_orders.all %}Поставщики приняли заказ{% else %}Ожидает распределения{% endif %}</span></div>
+      <div class="account-2026__timeline-item {% if order.status == 'delivering' or order.status == 'delivered' %}is-done{% endif %}"><strong>Shipped</strong><span>{% if order.status == 'delivering' or order.status == 'delivered' %}Выполняется{% else %}Ещё не отгружен{% endif %}</span></div>
+      <div class="account-2026__timeline-item {% if order.status == 'delivered' %}is-done{% endif %}"><strong>Delivered</strong><span>{% if order.status == 'delivered' %}Заказ завершён{% else %}В пути{% endif %}</span></div>
+      <div class="account-2026__timeline-item {% if order.claims.all %}is-issue{% endif %}"><strong>Claim opened / resolved</strong><span>{% if order.claims.all %}{{ order.claims.count }} обращений{% else %}Без претензий{% endif %}</span></div>
+    </div>
+  </section>
+
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
       <h2 class="account-2026__panel-title">Повторить прошлую закупку</h2>
       <span class="account-2026__panel-note">Альтернативы и смежные позиции для быстрого повторного заказа</span>
     </div>
@@ -98,6 +116,9 @@
       <div><span class="text-base-content/60">Согласование:</span> {{ order.get_approval_status_display }}</div>
       {% if order.approval_status == 'pending' %}
         <div><span class="text-base-content/60">Approval progress:</span> {{ approval_approved_count }}/{{ approval_required_count }}</div>
+      {% endif %}
+      {% if approval_policy %}
+        <div><span class="text-base-content/60">Policy:</span> auto-approve до {{ approval_policy.auto_approve_below }} ₽ · {{ approval_policy.required_approvals_count }} approval</div>
       {% endif %}
       {% if order.approved_by %}
         <div><span class="text-base-content/60">Кем согласован:</span> {{ order.approved_by }}</div>

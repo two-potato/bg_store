@@ -3,7 +3,7 @@ import requests
 from django.test import override_settings
 
 from catalog import opensearch_index
-from shopfront import search as sf_search
+from shopfront.searching import backend as sf_search
 
 pytestmark = pytest.mark.django_db
 

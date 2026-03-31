@@ -9,6 +9,7 @@ from django.http import JsonResponse
 
 
 def expects_json_response(request) -> bool:
+    """Handle expects json response."""
     accept = (request.headers.get("Accept") or "").lower()
     requested_with = (request.headers.get("X-Requested-With") or "").lower()
     fetch_mode = (request.headers.get("Sec-Fetch-Mode") or "").lower()

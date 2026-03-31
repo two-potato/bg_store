@@ -32,6 +32,23 @@
     <h2>Товары магазина</h2>
     <p>Всего позиций: {{ products|length }}</p>
   </div>
+  {% if trust_metrics %}
+    <section class="page-2026__card store-page-2026__trust">
+      <div class="page-2026__header">
+        <h2>Trust layer магазина</h2>
+        <p>Показываем explainable seller metrics до входа в checkout.</p>
+      </div>
+      <div class="store-page-2026__trust-grid">
+        {% for metric in trust_metrics %}
+          <article class="store-page-2026__trust-card">
+            <div class="store-page-2026__trust-label">{{ metric.label }}</div>
+            <strong>{{ metric.value }}</strong>
+            <span>{{ metric.detail }}</span>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
   {% include "shopfront/components/product_grid.html" with products=products %}
 
   <section id="store-reviews" class="page-2026__card mt-6">

@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 
-from shopfront.recommendation_feature_store import refresh_recommendation_feature_snapshots
+from shopfront.recommendation.feature_store import refresh_recommendation_feature_snapshots
 
 
 class Command(BaseCommand):

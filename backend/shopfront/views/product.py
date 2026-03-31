@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -16,16 +14,21 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.generic import TemplateView
-from django.db.models import Prefetch
 
-from catalog.models import Product, ProductImage, ProductReview, ProductReviewComment, ProductReviewVote
-from catalog.offer_service import active_offer_queryset, apply_offer_snapshot
-from commerce.models import LegalEntityMembership, SellerStore, StoreReview
+from catalog.models import (
+    Product,
+    ProductReview,
+    ProductReviewComment,
+    ProductReviewVote,
+)
+from commerce.models import SellerStore
 from core.logging_utils import log_calls
-from orders.models import Order, OrderItem
 
-from ..models import BrandSubscription, CategorySubscription, FavoriteProduct
-from ..recommendation_service import product_detail_recommendations, product_section_context
+from ..product_detail_service import (
+    ProductDetailPageService,
+    ProductRecommendationSectionService,
+)
+from ..store_detail_service import StoreDetailPageService, StoreReviewService
 from ..review_service import (
     apply_review_vote,
     build_reviews_context,
@@ -37,35 +40,35 @@ from ..review_service import (
     update_review_comment,
     upsert_product_review,
 )
-from . import (
-    _absolute_url,
-    _cached_home_product_ids,
-    _cached_id_list,
-    _category_breadcrumbs,
-    _compare_ids,
-    _default_og_image,
-    _ordered_products_with_related,
-    _product_json_ld,
-    _product_primary_image,
-    _product_recommendation_section,
-    _product_url,
-    _record_recently_viewed,
-    _recently_viewed_products,
+from .constants import log
+from .utils_catalog import _product_url, _seller_store_for_user
+from .utils_seo import _seo_context
+from .utils_state import (
     _seller_rating_summary,
-    _seo_context,
     _store_rating_summary,
     _store_reviews_context,
-    _tracking_item_from_product,
-    _truncate_text,
-    _vendor_url,
-    log,
+)
+from ..catalog_selectors import (
+    cached_home_product_ids as _cached_home_product_ids,
+    ordered_products_with_related as _ordered_products_with_related,
 )
 
 
-def _seller_store_for_user(user):
-    if user is None:
-        return None
-    return SellerStore.objects.select_related("owner", "owner__profile", "legal_entity").filter(owner=user).first()
+def _storefront_context(store: SellerStore, request_user) -> dict:
+    """Build storefront context reused by vendor and store detail pages."""
+    product_ids = list(
+        Product.objects.filter(seller=store.owner)
+        .order_by("-is_new", "name")
+        .values_list("id", flat=True)[:60]
+    )
+    products = _ordered_products_with_related(product_ids, include_rating=True)
+    context = {
+        "store": store,
+        "products": products,
+        "store_rating": _store_rating_summary(store),
+    }
+    context.update(_store_reviews_context(store, request_user))
+    return context
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
@@ -78,104 +81,62 @@ class ProductDetailView(TemplateView):
         return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
+        """Assemble product detail context with reviews, recommendations, and SEO."""
         ctx = super().get_context_data(**kwargs)
         slug = kwargs.get("slug")
-        product = get_object_or_404(
-            Product.objects.select_related(
-                "brand",
-                "series",
-                "category",
-                "category__parent",
-                "seller",
-                "seller__seller_store",
-            ).prefetch_related(
-                Prefetch(
-                    "images",
-                    queryset=ProductImage.objects.only("id", "product_id", "url", "alt", "ordering").order_by("ordering", "id"),
-                    to_attr="prefetched_images",
-                ),
-                "tags",
-                "documents",
-                "collections",
-                Prefetch("seller_offers", queryset=active_offer_queryset()),
-            ),
-            slug=slug,
-        )
-        apply_offer_snapshot([product])
-        _record_recently_viewed(self.request, product)
-        ctx.update(build_reviews_context(product, self.request.user, seller_rating_summary=_seller_rating_summary))
-        seller_store = getattr(getattr(product, "active_offer", None), "seller_store", None) or _seller_store_for_user(product.seller if product.seller_id else None)
-        seller_summary = _seller_rating_summary(getattr(product, "seller_id", None))
-        store_summary = _store_rating_summary(seller_store)
-        ctx["seller_store"] = seller_store
-        ctx["active_offer"] = getattr(product, "active_offer", None)
-        ctx["product_documents"] = list(product.documents.all())
-        ctx["product_collections"] = list(product.collections.all()[:6])
-        ctx["breadcrumbs"] = _category_breadcrumbs(getattr(product, "category", None))
-        ctx["compare_included"] = product.id in _compare_ids(self.request)
-        ctx["store_rating_avg"] = store_summary["rating_avg"]
-        ctx["store_rating_count"] = store_summary["rating_count"]
-        ctx["seller_rating_avg"] = seller_summary["rating_avg"]
-        ctx["seller_rating_count"] = seller_summary["rating_count"]
-        ctx["is_brand_subscribed"] = bool(
-            self.request.user.is_authenticated
-            and product.brand_id
-            and BrandSubscription.objects.filter(user=self.request.user, brand_id=product.brand_id).exists()
-        )
-        ctx["is_category_subscribed"] = bool(
-            self.request.user.is_authenticated
-            and product.category_id
-            and CategorySubscription.objects.filter(user=self.request.user, category_id=product.category_id).exists()
-        )
 
-        ctx.update(product_detail_recommendations(product, user=self.request.user, request=self.request, limit=12))
-        ctx["recently_viewed_products"] = _recently_viewed_products(self.request, exclude_product_id=product.id, limit=8)
-        ctx["product_tracking_payload"] = json.dumps(
-            {
-                "event": "product_view",
-                "ecommerce": {
-                    "currency": "RUB",
-                    "value": float(product.display_price),
-                    "items": [_tracking_item_from_product(product)],
-                },
-            },
-            ensure_ascii=False,
-        )
-        ctx["is_favorite"] = bool(
-            self.request.user.is_authenticated
-            and FavoriteProduct.objects.filter(user=self.request.user, product=product).exists()
-        )
-        ctx["can_edit_product"] = bool(
-            self.request.user.is_authenticated
-            and (
-                self.request.user.is_staff
-                or self.request.user.is_superuser
-                or product.seller_id == self.request.user.id
-            )
-        )
-        primary_image = _product_primary_image(product)
+        # Use service layer to build complete product detail context
+        service = ProductDetailPageService(self.request)
+        product_context = service.build_context(slug)
+
+        if product_context is None:
+            raise Http404("Product not found")
+
+        # Map dataclass fields back to template context
         ctx.update(
-            _seo_context(
-                self.request,
-                title=f"{product.name} — {getattr(product.brand, 'name', 'Servio')} | Servio",
-                description=_truncate_text(product.description or f"{product.name} в каталоге Servio: поставки для ресторанов, кафе, баров и гостиничных проектов.", 170),
-                canonical=_absolute_url(self.request, _product_url(product)),
-                og_type="product",
-                og_image=_absolute_url(self.request, primary_image.url) if primary_image else _default_og_image(self.request),
-                json_ld=_product_json_ld(self.request, product, seller_store=seller_store),
-            )
+            {
+                "product": product_context.product,
+                "seller_store": product_context.seller_store,
+                "active_offer": product_context.active_offer,
+                "product_documents": product_context.product_documents,
+                "product_collections": product_context.product_collections,
+                "breadcrumbs": product_context.breadcrumbs,
+                "compare_included": product_context.compare_included,
+                "store_rating_avg": product_context.store_rating_avg,
+                "store_rating_count": product_context.store_rating_count,
+                "seller_rating_avg": product_context.seller_rating_avg,
+                "seller_rating_count": product_context.seller_rating_count,
+                "is_brand_subscribed": product_context.is_brand_subscribed,
+                "is_category_subscribed": product_context.is_category_subscribed,
+                "recently_viewed_products": product_context.recently_viewed_products,
+                "product_tracking_payload": product_context.product_tracking_payload,
+                "is_favorite": product_context.is_favorite,
+                "can_edit_product": product_context.can_edit_product,
+                "offer_ladder": product_context.offer_ladder,
+                "trust_badges": product_context.trust_badges,
+                "product_quality": product_context.product_quality,
+            }
         )
+        ctx.update(product_context.reviews_context)
+        ctx.update(product_context.recommendations)
+        ctx.update(product_context.seo_context)
+
         return ctx
 
 
 class ProductRecommendationSectionView(View):
     def get(self, request, *args, **kwargs):
-        product = get_object_or_404(
-            Product.objects.only("id", "seller_id", "category_id", "brand_id", "name", "slug"),
-            slug=kwargs["slug"],
+        service = ProductRecommendationSectionService(request)
+        context = service.build_section_context(
+            kwargs.get("slug"), kwargs.get("section")
         )
-        context = product_section_context(product, kwargs["section"], user=request.user, request=request)
-        return render(request, "shopfront/components/recommendation_section.html", context)
+
+        if context is None:
+            raise Http404("Product not found")
+
+        return render(
+            request, "shopfront/components/recommendation_section.html", context
+        )
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
@@ -192,24 +153,33 @@ class SellerStoreDetailView(TemplateView):
         return redirect("vendor_detail", vendor_slug=store.slug, permanent=True)
 
     def get_context_data(self, **kwargs):
+        """Render canonical seller store detail page context."""
         ctx = super().get_context_data(**kwargs)
         store_slug = kwargs.get("store_slug")
-        store = SellerStore.objects.select_related("owner", "owner__profile", "legal_entity").filter(slug=store_slug).first()
+        store = (
+            SellerStore.objects.select_related(
+                "owner", "owner__profile", "legal_entity"
+            )
+            .filter(slug=store_slug)
+            .first()
+        )
         if store is None:
             raise Http404("Store not found")
-        product_ids = list(
-            Product.objects.filter(seller=store.owner).order_by("-is_new", "name").values_list("id", flat=True)[:60]
-        )
-        products = _ordered_products_with_related(product_ids, include_rating=True)
-        ctx.update({"store": store, "products": products, "store_rating": _store_rating_summary(store)})
-        ctx.update(_store_reviews_context(store, self.request.user))
+
+        service = StoreDetailPageService(self.request)
+        storefront_data = service.build_storefront_context(store)
+
         ctx.update(
-            _seo_context(
-                self.request,
-                title=f"{store.name} — витрина поставщика | Servio",
-                description=f"Ассортимент магазина {store.name} на Servio: поставщик товаров для HoReCa, актуальные позиции и профессиональный каталог.",
-            )
+            {
+                "store": storefront_data.store,
+                "products": storefront_data.products,
+                "store_rating": storefront_data.store_rating,
+                "trust_metrics": storefront_data.trust_metrics,
+            }
         )
+        ctx.update(storefront_data.store_reviews)
+        ctx.update(service.build_vendor_seo_context(store))
+
         return ctx
 
 
@@ -222,16 +192,32 @@ class VendorDetailView(TemplateView):
     def get(self, request, *args, **kwargs):
         get_token(request)
         vendor_slug = kwargs.get("vendor_slug")
-        self.store = SellerStore.objects.select_related("owner", "owner__profile", "legal_entity").filter(slug=vendor_slug).first()
+        self.store = (
+            SellerStore.objects.select_related(
+                "owner", "owner__profile", "legal_entity"
+            )
+            .filter(slug=vendor_slug)
+            .first()
+        )
         if self.store is not None:
             return super().get(request, *args, **kwargs)
         user_model = get_user_model()
-        self.seller_user = user_model.objects.select_related("profile").filter(profile__slug=vendor_slug).first()
+        self.seller_user = (
+            user_model.objects.select_related("profile")
+            .filter(profile__slug=vendor_slug)
+            .first()
+        )
         if self.seller_user is None:
             raise Http404("Vendor not found")
         seller_store = _seller_store_for_user(self.seller_user)
-        if seller_store is not None and seller_store.slug and seller_store.slug != vendor_slug:
-            return redirect("vendor_detail", vendor_slug=seller_store.slug, permanent=True)
+        if (
+            seller_store is not None
+            and seller_store.slug
+            and seller_store.slug != vendor_slug
+        ):
+            return redirect(
+                "vendor_detail", vendor_slug=seller_store.slug, permanent=True
+            )
         return super().get(request, *args, **kwargs)
 
     def get_template_names(self):
@@ -240,49 +226,31 @@ class VendorDetailView(TemplateView):
         return ["shopfront/seller_profile.html"]
 
     def get_context_data(self, **kwargs):
+        """Render store or seller profile context under a single vendor URL."""
         ctx = super().get_context_data(**kwargs)
+        service = StoreDetailPageService(self.request)
+
         if self.store is not None:
             store = self.store
-            product_ids = list(
-                Product.objects.filter(seller=store.owner).order_by("-is_new", "name").values_list("id", flat=True)[:60]
-            )
-            products = _ordered_products_with_related(product_ids, include_rating=True)
-            ctx.update({"store": store, "products": products, "store_rating": _store_rating_summary(store)})
-            ctx.update(_store_reviews_context(store, self.request.user))
+            storefront_data = service.build_storefront_context(store)
+
             ctx.update(
-                _seo_context(
-                    self.request,
-                    title=f"{store.name} — витрина поставщика | Servio",
-                    description=f"Ассортимент магазина {store.name} на Servio: поставщик товаров для HoReCa, актуальные позиции и профессиональный каталог.",
-                    canonical=_absolute_url(self.request, _vendor_url(store=store)),
-                )
+                {
+                    "store": storefront_data.store,
+                    "products": storefront_data.products,
+                    "store_rating": storefront_data.store_rating,
+                    "trust_metrics": storefront_data.trust_metrics,
+                }
             )
+            ctx.update(storefront_data.store_reviews)
+            ctx.update(service.build_vendor_seo_context(store))
             return ctx
 
         seller_user = self.seller_user
         if seller_user is None:
             raise Http404("Vendor not found")
-        memberships = LegalEntityMembership.objects.select_related("legal_entity", "role").filter(user=seller_user)
-        stores = SellerStore.objects.select_related("legal_entity").filter(owner=seller_user).order_by("name")
-        seller_rating = _seller_rating_summary(seller_user.id)
-        ctx.update(
-            {
-                "seller_user": seller_user,
-                "seller_profile": seller_user.profile,
-                "memberships": memberships,
-                "stores": stores,
-                "seller_rating": seller_rating,
-            }
-        )
-        display_name = seller_user.profile.full_name or seller_user.username
-        ctx.update(
-            _seo_context(
-                self.request,
-                title=f"{display_name} — профиль поставщика | Servio",
-                description=f"Профиль поставщика {display_name} на Servio: магазины, юридические данные и ассортимент для HoReCa.",
-                canonical=_absolute_url(self.request, _vendor_url(user=seller_user)),
-            )
-        )
+
+        ctx.update(service.build_seller_profile_context(seller_user))
         return ctx
 
 
@@ -296,13 +264,33 @@ class SellerProfileView(TemplateView):
         get_token(request)
         user_model = get_user_model()
         seller_slug = kwargs.get("seller_slug")
-        seller_user = user_model.objects.select_related("profile").filter(profile__slug=seller_slug).first()
+        seller_user = (
+            user_model.objects.select_related("profile")
+            .filter(profile__slug=seller_slug)
+            .first()
+        )
         if seller_user is None:
-            legacy_user = user_model.objects.select_related("profile").filter(username=seller_slug).first()
+            legacy_user = (
+                user_model.objects.select_related("profile")
+                .filter(username=seller_slug)
+                .first()
+            )
             if legacy_user is not None:
-                return redirect("vendor_detail", vendor_slug=getattr(_seller_store_for_user(legacy_user), "slug", None) or legacy_user.profile.slug, permanent=True)
+                return redirect(
+                    "vendor_detail",
+                    vendor_slug=getattr(
+                        _seller_store_for_user(legacy_user), "slug", None
+                    )
+                    or legacy_user.profile.slug,
+                    permanent=True,
+                )
             raise Http404("Seller not found")
-        return redirect("vendor_detail", vendor_slug=getattr(_seller_store_for_user(seller_user), "slug", None) or seller_user.profile.slug, permanent=True)
+        return redirect(
+            "vendor_detail",
+            vendor_slug=getattr(_seller_store_for_user(seller_user), "slug", None)
+            or seller_user.profile.slug,
+            permanent=True,
+        )
 
     def get_context_data(self, **kwargs):
         raise Http404("Seller not found")
@@ -319,10 +307,19 @@ class SellerProfileLegacyRedirectView(View):
     @log_calls(log)
     def get(self, request, username: str):
         user_model = get_user_model()
-        seller_user = user_model.objects.select_related("profile").filter(username=username).first()
+        seller_user = (
+            user_model.objects.select_related("profile")
+            .filter(username=username)
+            .first()
+        )
         if seller_user is None:
             raise Http404("Seller not found")
-        return redirect("vendor_detail", vendor_slug=getattr(_seller_store_for_user(seller_user), "slug", None) or seller_user.profile.slug, permanent=True)
+        return redirect(
+            "vendor_detail",
+            vendor_slug=getattr(_seller_store_for_user(seller_user), "slug", None)
+            or seller_user.profile.slug,
+            permanent=True,
+        )
 
 
 class StoreReviewUpsertView(LoginRequiredMixin, View):
@@ -336,22 +333,18 @@ class StoreReviewUpsertView(LoginRequiredMixin, View):
             rating = int(raw_rating)
         except (TypeError, ValueError):
             rating = 0
-        if rating < 1 or rating > 5:
-            messages.error(request, "Рейтинг магазина должен быть от 1 до 5")
+
+        service = StoreReviewService(request)
+        result = service.upsert_store_review(store, rating, text)
+
+        if not result.success:
+            messages.error(request, result.message)
             return redirect("vendor_detail", vendor_slug=store.slug)
 
-        has_verified_purchase = OrderItem.objects.filter(
-            order__placed_by=request.user,
-            order__status__in=[Order.Status.CONFIRMED, Order.Status.PAID, Order.Status.DELIVERING, Order.Status.DELIVERED, Order.Status.CHANGED],
-            product__seller=store.owner,
-        ).exists()
-        StoreReview.objects.update_or_create(
-            store=store,
-            user=request.user,
-            defaults={"rating": rating, "text": text, "is_verified_buyer": has_verified_purchase},
+        messages.success(request, result.message)
+        return redirect(
+            f"{reverse('vendor_detail', kwargs={'vendor_slug': store.slug})}#store-reviews"
         )
-        messages.success(request, "Отзыв о магазине сохранён")
-        return redirect(f"{reverse('vendor_detail', kwargs={'vendor_slug': store.slug})}#store-reviews")
 
 
 class StoreReviewDeleteView(LoginRequiredMixin, View):
@@ -359,10 +352,16 @@ class StoreReviewDeleteView(LoginRequiredMixin, View):
     def post(self, request, store_slug=None, vendor_slug=None):
         store_slug = store_slug or vendor_slug
         store = get_object_or_404(SellerStore, slug=store_slug)
-        deleted, _ = StoreReview.objects.filter(store=store, user=request.user).delete()
-        if deleted:
-            messages.success(request, "Отзыв о магазине удалён")
-        return redirect(f"{reverse('vendor_detail', kwargs={'vendor_slug': store.slug})}#store-reviews")
+
+        service = StoreReviewService(request)
+        result = service.delete_store_review(store)
+
+        if result.deleted:
+            messages.success(request, result.message)
+
+        return redirect(
+            f"{reverse('vendor_detail', kwargs={'vendor_slug': store.slug})}#store-reviews"
+        )
 
 
 class ProductPkRedirectView(View):
@@ -391,11 +390,20 @@ class ProductReviewUpsertView(LoginRequiredMixin, View):
             rating = 0
         if rating < 1 or rating > 5:
             if request.headers.get("HX-Request"):
-                return render_reviews_partial(request, product, seller_rating_summary=_seller_rating_summary, status=400)
+                return render_reviews_partial(
+                    request,
+                    product,
+                    seller_rating_summary=_seller_rating_summary,
+                    status=400,
+                )
             messages.error(request, "Рейтинг должен быть от 1 до 5")
             return redirect(f"{_product_url(product)}#reviews")
-        upsert_product_review(product=product, user=request.user, rating=rating, text=text)
-        context = build_reviews_context(product, request.user, seller_rating_summary=_seller_rating_summary)
+        upsert_product_review(
+            product=product, user=request.user, rating=rating, text=text
+        )
+        context = build_reviews_context(
+            product, request.user, seller_rating_summary=_seller_rating_summary
+        )
         if request.headers.get("HX-Request"):
             return render(request, "shopfront/partials/product_reviews.html", context)
         messages.success(request, "Отзыв сохранен")
@@ -409,7 +417,9 @@ class ProductReviewDeleteView(LoginRequiredMixin, View):
         deleted = delete_product_review(product=product, user=request.user)
         if deleted:
             messages.success(request, "Отзыв удален")
-        context = build_reviews_context(product, request.user, seller_rating_summary=_seller_rating_summary)
+        context = build_reviews_context(
+            product, request.user, seller_rating_summary=_seller_rating_summary
+        )
         if request.headers.get("HX-Request"):
             return render(request, "shopfront/partials/product_reviews.html", context)
         return redirect(f"{_product_url(product)}#reviews")
@@ -423,10 +433,17 @@ class ProductReviewCommentCreateView(LoginRequiredMixin, View):
         text = (request.POST.get("text") or "").strip()
         if not text:
             if request.headers.get("HX-Request"):
-                return render_reviews_partial(request, product, seller_rating_summary=_seller_rating_summary, status=400)
+                return render_reviews_partial(
+                    request,
+                    product,
+                    seller_rating_summary=_seller_rating_summary,
+                    status=400,
+                )
             return redirect(f"{_product_url(product)}#reviews")
         create_review_comment(review=review, user=request.user, text=text)
-        context = build_reviews_context(product, request.user, seller_rating_summary=_seller_rating_summary)
+        context = build_reviews_context(
+            product, request.user, seller_rating_summary=_seller_rating_summary
+        )
         if request.headers.get("HX-Request"):
             return render(request, "shopfront/partials/product_reviews.html", context)
         return redirect(f"{_product_url(product)}#reviews")
@@ -443,15 +460,27 @@ class ProductReviewCommentUpdateView(LoginRequiredMixin, View):
         )
         if comment.user_id != request.user.id:
             if request.headers.get("HX-Request"):
-                return render_reviews_partial(request, product, seller_rating_summary=_seller_rating_summary, status=403)
+                return render_reviews_partial(
+                    request,
+                    product,
+                    seller_rating_summary=_seller_rating_summary,
+                    status=403,
+                )
             return HttpResponse(status=403)
         text = (request.POST.get("text") or "").strip()
         if not text:
             if request.headers.get("HX-Request"):
-                return render_reviews_partial(request, product, seller_rating_summary=_seller_rating_summary, status=400)
+                return render_reviews_partial(
+                    request,
+                    product,
+                    seller_rating_summary=_seller_rating_summary,
+                    status=400,
+                )
             return redirect(f"{_product_url(product)}#reviews")
         update_review_comment(comment=comment, text=text)
-        context = build_reviews_context(product, request.user, seller_rating_summary=_seller_rating_summary)
+        context = build_reviews_context(
+            product, request.user, seller_rating_summary=_seller_rating_summary
+        )
         if request.headers.get("HX-Request"):
             return render(request, "shopfront/partials/product_reviews.html", context)
         return redirect(f"{_product_url(product)}#reviews")
@@ -468,10 +497,17 @@ class ProductReviewCommentDeleteView(LoginRequiredMixin, View):
         )
         if comment.user_id != request.user.id:
             if request.headers.get("HX-Request"):
-                return render_reviews_partial(request, product, seller_rating_summary=_seller_rating_summary, status=403)
+                return render_reviews_partial(
+                    request,
+                    product,
+                    seller_rating_summary=_seller_rating_summary,
+                    status=403,
+                )
             return HttpResponse(status=403)
         delete_review_comment(comment=comment)
-        context = build_reviews_context(product, request.user, seller_rating_summary=_seller_rating_summary)
+        context = build_reviews_context(
+            product, request.user, seller_rating_summary=_seller_rating_summary
+        )
         if request.headers.get("HX-Request"):
             return render(request, "shopfront/partials/product_reviews.html", context)
         return redirect(f"{_product_url(product)}#reviews")
@@ -483,12 +519,22 @@ class ProductReviewVoteView(LoginRequiredMixin, View):
         product = get_object_or_404(Product, slug=slug)
         review = get_object_or_404(ProductReview, pk=review_id, product=product)
         value = (request.POST.get("value") or "").strip()
-        if value not in {ProductReviewVote.Value.HELPFUL, ProductReviewVote.Value.UNHELPFUL}:
+        if value not in {
+            ProductReviewVote.Value.HELPFUL,
+            ProductReviewVote.Value.UNHELPFUL,
+        }:
             if request.headers.get("HX-Request"):
-                return render_reviews_partial(request, product, seller_rating_summary=_seller_rating_summary, status=400)
+                return render_reviews_partial(
+                    request,
+                    product,
+                    seller_rating_summary=_seller_rating_summary,
+                    status=400,
+                )
             return redirect(f"{_product_url(product)}#reviews")
         apply_review_vote(review=review, user=request.user, value=value)
-        context = build_reviews_context(product, request.user, seller_rating_summary=_seller_rating_summary)
+        context = build_reviews_context(
+            product, request.user, seller_rating_summary=_seller_rating_summary
+        )
         if request.headers.get("HX-Request"):
             return render(request, "shopfront/partials/product_reviews.html", context)
         return redirect(f"{_product_url(product)}#reviews")
@@ -501,10 +547,19 @@ class ProductQuestionCreateView(LoginRequiredMixin, View):
         question_text = (request.POST.get("question_text") or "").strip()
         if not question_text:
             if request.headers.get("HX-Request"):
-                return render_reviews_partial(request, product, seller_rating_summary=_seller_rating_summary, status=400)
+                return render_reviews_partial(
+                    request,
+                    product,
+                    seller_rating_summary=_seller_rating_summary,
+                    status=400,
+                )
             return redirect(f"{_product_url(product)}#questions")
-        create_product_question(product=product, user=request.user, question_text=question_text)
-        context = build_reviews_context(product, request.user, seller_rating_summary=_seller_rating_summary)
+        create_product_question(
+            product=product, user=request.user, question_text=question_text
+        )
+        context = build_reviews_context(
+            product, request.user, seller_rating_summary=_seller_rating_summary
+        )
         if request.headers.get("HX-Request"):
             return render(request, "shopfront/partials/product_reviews.html", context)
         messages.success(request, "Вопрос отправлен")

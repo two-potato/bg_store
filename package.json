@@ -10,6 +10,7 @@
   },
   "scripts": {
     "smoke:browser": "node scripts/browser_smoke.mjs",
+    "smoke:buyer": "node scripts/buyer_wave_smoke.mjs",
     "visual:update": "node scripts/browser_visual_update.mjs",
     "visual:check": "node scripts/browser_visual_check.mjs",
     "tw:build": "tailwindcss -i ./assets/tw.css -o ./backend/static/css/app.css --minify",

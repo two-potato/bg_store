@@ -71,6 +71,10 @@ class DeliveryAddress(TimeStampedModel):
 
     class Meta:
         unique_together = (("legal_entity", "label"),)
+        indexes = [
+            models.Index(fields=["legal_entity", "is_default"], name="delivery_addr_default_idx"),
+            models.Index(fields=["legal_entity", "-updated_at"], name="delivery_addr_upd_idx"),
+        ]
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         super().save(*args, **kwargs)

@@ -28,6 +28,15 @@
     return "/account/login/?next=" + encodeURIComponent(window.location.pathname + window.location.search);
   }
 
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
   function captureSocialError(message, extra, error) {
     var monitor = monitoring();
     if (!monitor) return;
@@ -222,6 +231,34 @@
         el.removeAttribute("aria-hidden");
       }
     });
+    document.querySelectorAll("[data-compare-tray]").forEach(function (el) {
+      el.classList.toggle("is-hidden", compareCount < 1);
+      if (compareCount < 1) {
+        el.setAttribute("hidden", "hidden");
+        el.setAttribute("aria-hidden", "true");
+      } else {
+        el.removeAttribute("hidden");
+        el.removeAttribute("aria-hidden");
+      }
+    });
+    document.querySelectorAll("[data-compare-tray-hint]").forEach(function (el) {
+      el.textContent = compareCount < 2
+        ? "Добавьте ещё товары, чтобы увидеть отличия по ETA, MOQ и документам."
+        : "Откройте tray или переходите в полный compare для decision check.";
+    });
+    if (Array.isArray(payload.compare_items)) {
+      document.querySelectorAll("[data-compare-tray-items]").forEach(function (container) {
+        container.innerHTML = payload.compare_items.map(function (item) {
+          var brand = item.brand_name ? "<span>" + escapeHtml(item.brand_name) + "</span>" : "";
+          return (
+            "<a class=\"compare-tray-2026__item\" href=\"/products/" + encodeURIComponent(item.slug) + "/\">" +
+            "<strong>" + escapeHtml(item.name) + "</strong>" +
+            brand +
+            "</a>"
+          );
+        }).join("");
+      });
+    }
     if (Array.isArray(payload.compare_ids)) {
       document.querySelectorAll("[data-compare-toggle]").forEach(function (btn) {
         var pid = parseInt(btn.getAttribute("data-product-id") || "0", 10);

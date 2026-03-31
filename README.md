@@ -8,13 +8,12 @@ This README is the repository entrypoint. For current architecture and operation
 ## Start Here
 
 - [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — current system architecture
-- [docs/BACKEND_GUIDE.md](./docs/BACKEND_GUIDE.md) — backend domain/layer structure
+- [docs/BACKEND_GUIDE.md](./docs/BACKEND_GUIDE.md) — backend layering and placement rules
 - [docs/FRONTEND_ARCHITECTURE.md](./docs/FRONTEND_ARCHITECTURE.md) — storefront frontend/runtime model
 - [docs/LOCAL_DEVELOPMENT.md](./docs/LOCAL_DEVELOPMENT.md) — local dev workflow
-- [docs/DOCKER_GUIDE.md](./docs/DOCKER_GUIDE.md) — Docker stacks, env files, and validation
-- [docs/PRODUCTION_ENV_RU_2026-03-13.md](./docs/PRODUCTION_ENV_RU_2026-03-13.md) — production env checklist in Russian
-- [docs/DOC_OWNERSHIP_2026-03-13.md](./docs/DOC_OWNERSHIP_2026-03-13.md) — which docs are current vs historical
-- [docs/FULL_AUDIT_2026-03-12.md](./docs/FULL_AUDIT_2026-03-12.md) — latest full audit and remediation status
+- [docs/DOCKER_GUIDE.md](./docs/DOCKER_GUIDE.md) — Docker stacks and compose layers
+- [docs/OPERATIONS_RUNBOOK_RU.md](./docs/OPERATIONS_RUNBOOK_RU.md) — deploy, rollback, backup, restore
+- [docs/FULL_PROJECT_AUDIT_RU_2026-03-20.md](./docs/FULL_PROJECT_AUDIT_RU_2026-03-20.md) — latest full audit and remediation status
 
 ## Repository Structure
 
@@ -66,6 +65,8 @@ Detailed reference:
 - [docs/FRONTEND_ARCHITECTURE.md](./docs/FRONTEND_ARCHITECTURE.md)
 - [docs/LOCAL_DEVELOPMENT.md](./docs/LOCAL_DEVELOPMENT.md)
 - [docs/DOCKER_GUIDE.md](./docs/DOCKER_GUIDE.md)
+- [docs/OPERATIONS_RUNBOOK_RU.md](./docs/OPERATIONS_RUNBOOK_RU.md)
+- [CONTRIBUTING.md](./CONTRIBUTING.md)
 
 Search:
 - OpenSearch runs locally as `opensearch:9200` inside compose

@@ -70,6 +70,7 @@ class Product(TimeStampedModel, SeoFieldsMixin):
             models.Index(fields=["category", "-is_new", "name", "id"], name="product_cat_new_idx"),
             models.Index(fields=["brand", "-is_new", "name", "id"], name="product_brand_new_idx"),
             models.Index(fields=["seller", "-is_new", "name", "id"], name="product_seller_new_idx"),
+            models.Index(fields=["seller", "publication_status", "-updated_at"], name="product_seller_pub_upd_idx"),
         ]
 
     def __str__(self):

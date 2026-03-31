@@ -7,6 +7,7 @@ import logging
 from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Prefetch
+from django.middleware.csrf import get_token
 from django.templatetags.static import static
 from django.urls import resolve, Resolver404
 
@@ -18,6 +19,7 @@ log = logging.getLogger("shopfront")
 
 
 def _cart_payload_signature(cart: dict) -> str:
+    """Internal helper for cart payload signature."""
     normalized = []
     for raw_pid, payload in sorted((cart or {}).items(), key=lambda item: str(item[0])):
         try:
@@ -30,10 +32,12 @@ def _cart_payload_signature(cart: dict) -> str:
 
 
 def invalidate_favorites_state(user_id: int) -> None:
+    """Handle invalidate favorites state."""
     cache.delete(favorites_cache_key(user_id))
 
 
 def _release() -> str:
+    """Internal helper for release."""
     for key in ("SENTRY_RELEASE", "APP_RELEASE", "GIT_SHA", "RELEASE_SHA"):
         value = (os.getenv(key) or "").strip()
         if value:
@@ -42,6 +46,7 @@ def _release() -> str:
 
 
 def _public_sentry_dsn() -> str:
+    """Internal helper for public sentry dsn."""
     explicit = (os.getenv("PUBLIC_SENTRY_DSN") or os.getenv("FRONTEND_SENTRY_DSN") or "").strip()
     dsn = explicit or (os.getenv("SENTRY_DSN") or "").strip()
     if not dsn:
@@ -50,6 +55,7 @@ def _public_sentry_dsn() -> str:
 
 
 def _sentry_browser_sdk_url() -> str:
+    """Internal helper for sentry browser sdk url."""
     configured = (os.getenv("SENTRY_BROWSER_SDK_URL") or "").strip()
     if configured:
         return configured
@@ -57,6 +63,7 @@ def _sentry_browser_sdk_url() -> str:
 
 
 def cart_badge(request):
+    """Handle cart badge."""
     cart = request.session.get("cart", {}) or {}
     count, qty_map, ids, malformed = session_cart_state(cart)
 
@@ -103,6 +110,7 @@ def cart_badge(request):
 
 
 def header_categories(request):
+    """Handle header categories."""
     cache_key = "shopfront:header_categories:v1"
     cats = cache.get(cache_key)
     if cats is None:
@@ -117,6 +125,9 @@ def header_categories(request):
 
 
 def site_settings(request):
+    """Handle site settings."""
+    # Ensure storefront pages always issue a CSRF cookie for JS-driven POST flows.
+    get_token(request)
     canonical = request.build_absolute_uri(getattr(request, "path", "/"))
     default_description = "Servio — маркетплейс товаров для HoReCa: единый каталог поставщиков, оптовые закупки и понятный b2b-сервис."
     default_image = request.build_absolute_uri(static("shopfront/big_logo.png"))
@@ -191,6 +202,7 @@ def site_settings(request):
 
 
 def favorites_state(request):
+    """Handle favorites state."""
     if not getattr(request, "user", None) or not request.user.is_authenticated:
         return {}
     favorite_product_ids_for_user(request.user, limit=2000)
@@ -198,13 +210,24 @@ def favorites_state(request):
 
 
 def compare_state(request):
+    """Handle compare state."""
     compare_ids = []
     for raw_id in request.session.get("compare_products", []) or []:
         try:
             compare_ids.append(int(raw_id))
         except (TypeError, ValueError):
             continue
+    compare_products = []
+    if compare_ids:
+        order_map = {pid: idx for idx, pid in enumerate(compare_ids)}
+        compare_products = sorted(
+            Product.objects.filter(id__in=compare_ids)
+            .select_related("brand")
+            .only("id", "name", "slug", "brand__name"),
+            key=lambda product: order_map.get(product.id, 999),
+        )
     return {
         "compare_product_ids": compare_ids,
         "compare_count": len(compare_ids),
+        "compare_items": compare_products[:4],
     }

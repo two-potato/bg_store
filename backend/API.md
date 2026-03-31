@@ -5,6 +5,15 @@
 - OpenAPI schema: `/api/schema/`
 - Swagger UI: `/api/docs/`
 - Redoc: `/api/redoc/`
+- Search contract API: `/api/search/*`
+- Recommendations contract API: `/api/recommendations/*`
+
+FastAPI service docs (platform services):
+
+- Search service OpenAPI: `http://localhost:18110/openapi.json`
+- Search service Swagger: `http://localhost:18110/docs`
+- Recommendation service OpenAPI: `http://localhost:18111/openapi.json`
+- Recommendation service Swagger: `http://localhost:18111/docs`
 
 Local dev URLs:
 
@@ -127,6 +136,94 @@ Example:
 GET /api/catalog/products/?category=12&is_promo=true
 ```
 
+## Search (Contract Layer)
+
+- `GET /api/search/query/?q=...&limit=...&country_limit=...`
+  Unified storefront search contract with:
+  - ranked product cards
+  - suggestions and corrections
+  - basic facets (`brands`, `categories`, `availability`, `price`)
+  - provider metadata (`provider`, `effective_query`, `rewritten_query`, `rewrite_kind`)
+  - source metadata (`django-inline`, `fastapi`, `django-inline-fallback`)
+
+- `GET /api/search/suggestions/?q=...&limit=...&country_limit=...`
+  Suggestions/corrections contract for live search UI.
+
+Service mode (env):
+
+- `SEARCH_SERVICE_MODE=django-inline|fastapi`
+- `SEARCH_SERVICE_URL=http://search-api:8010`
+- `SEARCH_SERVICE_TIMEOUT_SECONDS=0.8`
+
+Important:
+
+- `django-inline` is default and keeps existing domain search logic in Django.
+- `fastapi` mode calls external `search-api` and falls back to Django on transport/payload errors.
+
+## Recommendations (Contract Layer)
+
+- `GET /api/recommendations/home/?limit=...`
+- `GET /api/recommendations/products/{product_id}/?limit=...`
+- `GET /api/recommendations/products/{product_id}/sections/{section}/`
+- `POST /api/recommendations/cart/`
+- `POST /api/recommendations/checkout/`
+- `GET /api/recommendations/reorder/?limit=...` (auth required)
+- `GET /api/recommendations/search-recovery/?q=...&limit=...`
+
+All endpoints return a unified sections envelope:
+
+- `recommendation_id`
+- `surface`
+- `variant`
+- `latency_ms`
+- `fallback_source`
+- `empty_reason`
+- `sections[]` with `key/title/products/source/strategy/tracking_payload/impression_id/fallback_source/empty_reason`
+- `source` (`django-inline`, `fastapi`, `django-inline-fallback`)
+- optional markers:
+  - `service_source` (например, `search-api` / `recommendation-api`)
+  - `engine_source` (фактический backend engine source, обычно `django-inline`)
+
+Stage 1 contract freeze:
+
+- `recommendation_id` — идентификатор конкретного recommendation decision/envelope
+- `impression_id` — идентификатор секции/экспозиции для event linkage
+- `engine_source` — кто фактически собрал payload (`django-inline` и т.п.)
+- `service_source` — какой service обслужил запрос (`recommendation-api` и т.п.)
+- `fallback_source` — причина/тип fallback, если он был применён
+- `empty_reason` — почему payload/section пустые
+- `latency_ms` — server-side latency формирования контракта
+
+Service mode (env):
+
+- `RECOMMENDATION_SERVICE_MODE=django-inline|fastapi`
+- `RECOMMENDATION_SERVICE_URL=http://recommendation-api:8011`
+- `RECOMMENDATION_SERVICE_TIMEOUT_SECONDS=0.8`
+
+Important:
+
+- Default mode keeps recommendation orchestration in Django (`shopfront/recommendation/service.py`).
+- FastAPI mode is additive and falls back to Django if remote service is unavailable.
+
+## Internal Service Contracts (Service-to-Service)
+
+These endpoints are service-only and require `X-Internal-Token`:
+
+- `GET /api/internal/search/query/`
+- `GET /api/internal/search/suggestions/`
+- `GET /api/internal/recommendations/home/`
+- `GET /api/internal/recommendations/products/{product_id}/`
+- `GET /api/internal/recommendations/products/{product_id}/sections/{section}/`
+- `POST /api/internal/recommendations/cart/`
+- `POST /api/internal/recommendations/checkout/`
+- `GET /api/internal/recommendations/reorder/`
+- `GET /api/internal/recommendations/search-recovery/`
+
+Notes:
+
+- Internal endpoints force `django-inline` mode to avoid recursion when public API runs in `fastapi` mode.
+- Internal endpoints are excluded from public OpenAPI (`/api/schema/`).
+
 ## Orders
 
 - `GET /api/orders/`
@@ -183,3 +280,4 @@ Possible responses:
 - Schema and UI docs are generated from DRF + drf-spectacular annotations in code.
 - If you add a new API endpoint, document it with `extend_schema` or `extend_schema_view`.
 - For public-facing changes, re-check `/api/schema/`, `/api/docs/` and `/api/redoc/`.
+- Search/recommendations contract endpoints are source of truth for Next storefront migration.

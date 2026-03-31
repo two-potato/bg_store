@@ -7,8 +7,19 @@
   </header>
 
   {% if products %}
+    <section class="page-2026__card compare-2026__summary">
+      <div class="compare-2026__hero-copy">
+        <strong>{{ products|length }} товара в tray</strong>
+        <span>Быстрый decision layer по цене, ETA, MOQ, документам и trust-сигналам.</span>
+      </div>
+      <div class="compare-2026__chip-row">
+        {% for product in products %}
+          <a class="compare-2026__product-chip" href="/products/{{ product.slug }}/" hx-boost="false">{{ product.name }}</a>
+        {% endfor %}
+      </div>
+    </section>
     <div class="overflow-x-auto page-2026__card">
-      <table class="table table-zebra">
+      <table class="table table-zebra compare-2026__table">
         <thead>
           <tr>
             <th>Параметр</th>
@@ -39,7 +50,7 @@
         </thead>
         <tbody>
           {% for row in compare_rows %}
-            <tr>
+            <tr class="{% if row.is_diff %}compare-2026__row-diff{% endif %}">
               <th>{{ row.label }}</th>
               {% for value in row.values %}
                 <td>{{ value }}</td>

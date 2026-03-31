@@ -6,10 +6,12 @@ from .models import FavoriteProduct
 
 
 def favorites_cache_key(user_id: int) -> str:
+    """Handle favorites cache key."""
     return f"shopfront:favorite_product_ids:v1:{int(user_id)}"
 
 
 def session_cart_state(cart: dict) -> tuple[int, dict[int, int], list[int], int]:
+    """Handle session cart state."""
     count = 0
     qty_map: dict[int, int] = {}
     ids: list[int] = []
@@ -29,6 +31,7 @@ def session_cart_state(cart: dict) -> tuple[int, dict[int, int], list[int], int]
 
 
 def favorite_product_ids_for_user(user, *, limit: int = 2000) -> list[int]:
+    """Handle favorite product ids for user."""
     if not getattr(user, "is_authenticated", False):
         return []
     cache_key = favorites_cache_key(user.id)

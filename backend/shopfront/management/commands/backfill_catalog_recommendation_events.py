@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from datetime import timedelta
 from random import Random
 
@@ -12,7 +11,7 @@ from django.utils import timezone
 from catalog.models import Product
 from orders.models import OrderItem
 from shopfront.models import FavoriteProduct, RecommendationEvent, RecentlyViewedProduct
-from shopfront.recommendation_selectors import search_recovery_candidate_ids
+from shopfront.recommendation.selectors import search_recovery_candidate_ids
 
 
 class Command(BaseCommand):

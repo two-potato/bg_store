@@ -135,3 +135,21 @@ groups:
         annotations:
           summary: "Search clicks are not converting into attributed orders"
           description: "There were more than 20 search_result_click events in the last 6 hours, but zero attributed orders were recorded"
+
+      - alert: BackupTooOld
+        expr: servio_backup_age_hours > 26
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL backup is stale"
+          description: "Latest backup is older than 26h (current age: {{ printf \"%.1f\" $value }}h)"
+
+      - alert: BackupMetricMissing
+        expr: absent(servio_backup_age_hours)
+        for: 2h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backup freshness metric is missing"
+          description: "servio_backup_age_hours is absent for over 2h. Check backup cron and textfile exporter path."

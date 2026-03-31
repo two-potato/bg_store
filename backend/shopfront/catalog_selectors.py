@@ -1,4 +1,5 @@
 import logging
+from collections import deque
 
 from django.conf import settings
 from django.core.cache import cache
@@ -12,6 +13,7 @@ log = logging.getLogger("shopfront")
 
 
 def category_slug_path(category: Category | None, by_id: dict[int, Category] | None = None) -> str:
+    """Build a slash-separated slug path for a category and its parents."""
     if category is None:
         return ""
     parts: list[str] = []
@@ -27,6 +29,7 @@ def category_slug_path(category: Category | None, by_id: dict[int, Category] | N
 
 
 def _cache_get(key, default=None):
+    """Read from cache with fail-safe logging."""
     try:
         return cache.get(key, default)
     except Exception:
@@ -35,40 +38,52 @@ def _cache_get(key, default=None):
 
 
 def _cache_set(key, value, timeout):
+    """Write to cache with fail-safe logging."""
     try:
         cache.set(key, value, timeout=timeout)
     except Exception:
         log.warning("cache_set_failed", extra={"cache_key": key}, exc_info=True)
 
 
-def category_breadcrumbs(category: Category | None) -> list[Category]:
+def category_breadcrumbs(category: Category | None, by_id: dict[int, Category] | None = None) -> list[Category]:
+    """Return ordered ancestors from root to current category."""
     trail: list[Category] = []
     current = category
     safety = 0
     while current is not None and safety < 12:
         trail.append(current)
-        current = getattr(current, "parent", None)
+        parent_id = getattr(current, "parent_id", None)
+        current = by_id.get(parent_id) if by_id is not None and parent_id else getattr(current, "parent", None)
         safety += 1
     return list(reversed(trail))
 
 
 def category_descendant_ids(category: Category | None) -> list[int]:
+    """Return category id plus all descendants using one categories scan."""
     if category is None:
         return []
-    ids: list[int] = [category.id]
-    frontier = [category.id]
-    safety = 0
-    while frontier and safety < 20:
-        children = list(Category.objects.filter(parent_id__in=frontier).values_list("id", flat=True))
-        if not children:
-            break
-        ids.extend(children)
-        frontier = children
-        safety += 1
+    rows = list(Category.objects.only("id", "parent_id").order_by("parent_id", "id").values_list("id", "parent_id"))
+    children_by_parent: dict[int, list[int]] = {}
+    for row_id, parent_id in rows:
+        if parent_id is None:
+            continue
+        children_by_parent.setdefault(parent_id, []).append(row_id)
+
+    ids: list[int] = []
+    queue = deque([category.id])
+    seen: set[int] = set()
+    while queue:
+        current_id = queue.popleft()
+        if current_id in seen:
+            continue
+        seen.add(current_id)
+        ids.append(current_id)
+        queue.extend(children_by_parent.get(current_id, []))
     return ids
 
 
 def category_option_rows(categories: list[Category], max_depth: int | None = None) -> list[dict]:
+    """Convert category tree into UI-friendly flat rows with depth labels."""
     by_parent: dict[int | None, list[Category]] = {}
     by_id = {category.id: category for category in categories}
     for category in categories:
@@ -98,6 +113,7 @@ def category_option_rows(categories: list[Category], max_depth: int | None = Non
 
 
 def facet_option_counts(qs, field_name: str, *, label_field: str = "name", limit: int = 12) -> list[dict]:
+    """Aggregate facet counts for relation-backed filters like brand/series."""
     values = (
         qs.exclude(**{f"{field_name}__isnull": True})
         .values(f"{field_name}_id", f"{field_name}__{label_field}")
@@ -115,6 +131,7 @@ def facet_option_counts(qs, field_name: str, *, label_field: str = "name", limit
 
 
 def seller_facet_counts(qs, limit: int = 10) -> list[dict]:
+    """Aggregate seller filter options with seller-store display metadata."""
     values = (
         qs.exclude(seller__seller_store__isnull=True)
         .values("seller_id", "seller__seller_store__name", "seller__seller_store__slug")
@@ -137,6 +154,7 @@ def seller_facet_counts(qs, limit: int = 10) -> list[dict]:
 
 
 def with_rating(qs):
+    """Annotate queryset with average rating and ratings count."""
     return qs.annotate(
         rating_avg=Coalesce(Avg("reviews__rating"), Value(0.0), output_field=FloatField()),
         rating_count=Count("reviews", distinct=True),
@@ -144,6 +162,7 @@ def with_rating(qs):
 
 
 def ordered_products_with_related(product_ids, include_rating: bool = True):
+    """Load products in fixed order with all data needed by storefront cards."""
     if not product_ids:
         return []
     order_case = Case(
@@ -186,6 +205,7 @@ def ordered_products_with_related(product_ids, include_rating: bool = True):
                 "collections",
                 queryset=Collection.objects.only("id", "name", "slug").order_by("-is_featured", "name"),
             ),
+            "documents",
             Prefetch("seller_offers", queryset=active_offer_queryset()),
         )
     )
@@ -195,6 +215,7 @@ def ordered_products_with_related(product_ids, include_rating: bool = True):
 
 
 def cached_home_product_ids(limit: int = 12):
+    """Return cached ids for home catalog strips."""
     latest_id = Product.objects.order_by("-id").values_list("id", flat=True).first() or 0
     key = f"shopfront:home:product_ids:v5:{limit}:{latest_id}"
     ids = _cache_get(key)
@@ -205,6 +226,7 @@ def cached_home_product_ids(limit: int = 12):
 
 
 def cached_home_category_ids(limit: int = 8):
+    """Return cached top-level category ids for home sections."""
     key = f"shopfront:home:category_ids:v1:{limit}"
     ids = _cache_get(key)
     if ids is None:
@@ -219,6 +241,7 @@ def cached_home_category_ids(limit: int = 8):
 
 
 def cached_catalog_default_page_ids(page: int, page_size: int):
+    """Return cached product ids for anonymous default catalog pages."""
     key = f"shopfront:catalog:default_page_ids:v3:{page}:{page_size}"
     ids = _cache_get(key)
     if ids is None:
@@ -231,6 +254,7 @@ def cached_catalog_default_page_ids(page: int, page_size: int):
 
 
 def cached_catalog_default_total_count():
+    """Return cached total catalog products count."""
     key = "shopfront:catalog:default_total_count:v3"
     count = _cache_get(key)
     if count is None:
@@ -240,4 +264,44 @@ def cached_catalog_default_total_count():
 
 
 def catalog_price_stats(qs):
+    """Compute min/max price for filter sidebar ranges."""
     return qs.aggregate(min_price=Min("price"), max_price=Max("price"))
+
+
+def resolve_category_filter(category_value: str, *, categories: list[Category] | None = None) -> Category | None:
+    """Resolve category filter by id, slug path, or single slug from cached rows."""
+    raw_value = (category_value or "").strip()
+    if not raw_value:
+        return None
+    if raw_value.isdigit():
+        return Category.objects.filter(id=int(raw_value)).first()
+
+    category_rows = categories if categories is not None else list(
+        Category.objects.only("id", "name", "slug", "parent_id").order_by("parent_id", "name", "id")
+    )
+    by_id = {category.id: category for category in category_rows}
+
+    if "/" in raw_value:
+        parts = [part.strip() for part in raw_value.split("/") if part.strip()]
+        if not parts:
+            return None
+        cursor = None
+        for part in parts:
+            cursor = next(
+                (
+                    candidate
+                    for candidate in category_rows
+                    if candidate.parent_id == (cursor.id if cursor else None) and candidate.slug == part
+                ),
+                None,
+            )
+            if cursor is None:
+                return None
+        return cursor
+
+    for candidate in category_rows:
+        if candidate.slug == raw_value:
+            return candidate
+        if category_slug_path(candidate, by_id) == raw_value:
+            return candidate
+    return None

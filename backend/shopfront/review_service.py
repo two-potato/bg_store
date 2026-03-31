@@ -1,4 +1,4 @@
-from django.db.models import Avg, Count, Prefetch
+from django.db.models import Avg, Count, Prefetch, Q
 from django.core.cache import cache
 from django.conf import settings
 from django.shortcuts import render
@@ -24,6 +24,7 @@ PAID_OR_CONFIRMED_ORDER_STATUSES = [
 
 
 def _product_rating_summary(product_id: int) -> dict:
+    """Return cached aggregate rating for one product."""
     cache_key = f"shopfront:product_rating:v1:{product_id}"
     cached = cache.get(cache_key)
     if cached is not None:
@@ -38,6 +39,7 @@ def _product_rating_summary(product_id: int) -> dict:
 
 
 def build_reviews_context(product: Product, user, *, seller_rating_summary) -> dict:
+    """Build PDP reviews/questions context with prefetches for comments/photos."""
     reviews_qs = (
         product.reviews.select_related("user", "user__profile")
         .prefetch_related(
@@ -70,6 +72,7 @@ def build_reviews_context(product: Product, user, *, seller_rating_summary) -> d
 
 
 def render_reviews_partial(request, product: Product, *, seller_rating_summary, status: int = 200):
+    """Render HTMX-friendly reviews partial with complete review context."""
     return render(
         request,
         "shopfront/partials/product_reviews.html",
@@ -79,6 +82,7 @@ def render_reviews_partial(request, product: Product, *, seller_rating_summary, 
 
 
 def has_verified_product_purchase(*, user, product: Product) -> bool:
+    """Check whether user bought the product in eligible order states."""
     return OrderItem.objects.filter(
         order__placed_by=user,
         order__status__in=PAID_OR_CONFIRMED_ORDER_STATUSES,
@@ -87,6 +91,7 @@ def has_verified_product_purchase(*, user, product: Product) -> bool:
 
 
 def upsert_product_review(*, product: Product, user, rating: int, text: str):
+    """Create or update user review with verified-purchase flag."""
     verified = has_verified_product_purchase(user=user, product=product)
     return ProductReview.objects.update_or_create(
         product=product,
@@ -96,39 +101,45 @@ def upsert_product_review(*, product: Product, user, rating: int, text: str):
 
 
 def delete_product_review(*, product: Product, user) -> int:
+    """Delete user review and return number of removed rows."""
     deleted, _ = ProductReview.objects.filter(product=product, user=user).delete()
     return deleted
 
 
 def create_review_comment(*, review: ProductReview, user, text: str):
+    """Create comment under an existing product review."""
     return ProductReviewComment.objects.create(review=review, user=user, text=text)
 
 
 def update_review_comment(*, comment: ProductReviewComment, text: str):
+    """Update review comment text and touch timestamp."""
     comment.text = text
     comment.save(update_fields=["text", "updated_at"])
     return comment
 
 
 def delete_review_comment(*, comment: ProductReviewComment):
+    """Delete review comment."""
     comment.delete()
 
 
 def apply_review_vote(*, review: ProductReview, user, value: str):
+    """Upsert vote value and refresh helpful/unhelpful counters in one query."""
     ProductReviewVote.objects.update_or_create(
         review=review,
         user=user,
         defaults={"value": value},
     )
-    review.helpful_count = ProductReviewVote.objects.filter(
-        review=review, value=ProductReviewVote.Value.HELPFUL
-    ).count()
-    review.unhelpful_count = ProductReviewVote.objects.filter(
-        review=review, value=ProductReviewVote.Value.UNHELPFUL
-    ).count()
+    aggregates = ProductReviewVote.objects.filter(review=review).aggregate(
+        helpful_count=Count("id", filter=Q(value=ProductReviewVote.Value.HELPFUL)),
+        unhelpful_count=Count("id", filter=Q(value=ProductReviewVote.Value.UNHELPFUL)),
+    )
+    review.helpful_count = int(aggregates.get("helpful_count") or 0)
+    review.unhelpful_count = int(aggregates.get("unhelpful_count") or 0)
     review.save(update_fields=["helpful_count", "unhelpful_count", "updated_at"])
     return review
 
 
 def create_product_question(*, product: Product, user, question_text: str):
+    """Create product question from authenticated user."""
     return ProductQuestion.objects.create(product=product, user=user, question_text=question_text)

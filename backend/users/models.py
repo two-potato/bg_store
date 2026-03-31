@@ -1,4 +1,5 @@
 from django.contrib.auth.models import AbstractUser
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
 from core.models import TimeStampedModel
@@ -17,6 +18,38 @@ class Friendship(TimeStampedModel):
 
     def __str__(self):
         return f"{self.from_user} -> {self.to_user} ({'accepted' if self.accepted else 'pending'})"
+
+    def clean(self):
+        super().clean()
+        if self.from_user_id and self.to_user_id and self.from_user_id == self.to_user_id:
+            raise ValidationError({"to_user": "Cannot create friendship with yourself."})
+
+    def save(self, *args, **kwargs):
+        if (
+            self.from_user_id
+            and self.to_user_id
+            and self.from_user_id == self.to_user_id
+        ):
+            raise ValidationError({"to_user": "Cannot create friendship with yourself."})
+        if self.pk is None and self.from_user_id and self.to_user_id:
+            existing = Friendship.objects.filter(
+                from_user_id=self.from_user_id,
+                to_user_id=self.to_user_id,
+            ).first()
+            if existing is not None:
+                self.pk = existing.pk
+                self.created_at = existing.created_at
+                self.updated_at = existing.updated_at
+                if self.accepted and not existing.accepted:
+                    Friendship.objects.filter(pk=existing.pk).update(accepted=True)
+                    existing.refresh_from_db(fields=["updated_at", "accepted"])
+                    self.accepted = existing.accepted
+                    self.updated_at = existing.updated_at
+                else:
+                    self.accepted = existing.accepted
+                return
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")

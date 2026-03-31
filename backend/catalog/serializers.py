@@ -1,15 +1,40 @@
 from rest_framework import serializers
 from drf_spectacular.utils import OpenApiExample, extend_schema_serializer
-from .models import Brand, Series, Category, Product, ProductImage, Tag, Color, Country
+from .models import Brand, Series, Category, Collection, Product, ProductImage, Tag, Color, Country, normalize_public_media_url
 
 
 @extend_schema_serializer(
-    examples=[OpenApiExample("Brand", value={"id": 1, "name": "Complaex Signature"}, response_only=True)]
+    examples=[OpenApiExample("Brand", value={"id": 1, "name": "Complaex Signature", "slug": "complaex-signature"}, response_only=True)]
 )
 class BrandSerializer(serializers.ModelSerializer):
+    photo = serializers.SerializerMethodField()
+    products_count = serializers.IntegerField(read_only=True)
+    categories_count = serializers.IntegerField(read_only=True)
+    collections_count = serializers.IntegerField(read_only=True)
+
+    def get_photo(self, obj):
+        photo = getattr(obj, "photo", None)
+        if not photo:
+            return ""
+        return normalize_public_media_url(getattr(photo, "url", ""))
+
     class Meta:
         model = Brand
-        fields = ["id", "name"]
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "description",
+            "landing_body",
+            "faq_title",
+            "faq_body",
+            "meta_title",
+            "meta_description",
+            "photo",
+            "products_count",
+            "categories_count",
+            "collections_count",
+        ]
 
 @extend_schema_serializer(
     examples=[OpenApiExample("Series", value={"id": 1, "name": "Night Shift", "brand": {"id": 1, "name": "Complaex Signature"}}, response_only=True)]
@@ -25,9 +50,91 @@ class SeriesSerializer(serializers.ModelSerializer):
     examples=[OpenApiExample("Category", value={"id": 1, "name": "Посуда для подачи", "slug": "category-1", "parent": None}, response_only=True)]
 )
 class CategorySerializer(serializers.ModelSerializer):
+    photo = serializers.SerializerMethodField()
+    full_slug_path = serializers.CharField(read_only=True)
+    product_count = serializers.IntegerField(read_only=True)
+
+    def get_photo(self, obj):
+        photo = getattr(obj, "photo", None)
+        if not photo:
+            return ""
+        return normalize_public_media_url(getattr(photo, "url", ""))
+
     class Meta:
         model = Category
-        fields = ["id", "name", "slug", "parent"]
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "parent",
+            "description",
+            "hero_title",
+            "hero_text",
+            "landing_body",
+            "faq_title",
+            "faq_body",
+            "meta_title",
+            "meta_description",
+            "photo",
+            "full_slug_path",
+            "product_count",
+        ]
+
+
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            "Collection",
+            value={
+                "id": 1,
+                "name": "Открытие бара",
+                "slug": "bar-launch-kit",
+                "description": "Кураторская подборка для запуска барного направления.",
+                "hero_title": "Открытие бара",
+                "hero_text": "Сценарная подборка под запуск и repeat purchase.",
+                "landing_body": "Подборка собрана под базовые закупочные сценарии.",
+                "faq_title": "FAQ по подборке",
+                "faq_body": "Ответы на частые вопросы по составу коллекции.",
+                "meta_title": "Коллекция Открытие бара — Servio",
+                "meta_description": "Кураторская подборка товаров Servio.",
+                "photo": "/media/collection_photos/bar-launch.jpg",
+                "is_active": True,
+                "is_featured": True,
+                "products_count": 18,
+            },
+            response_only=True,
+        )
+    ]
+)
+class CollectionSerializer(serializers.ModelSerializer):
+    photo = serializers.SerializerMethodField()
+    products_count = serializers.IntegerField(read_only=True)
+
+    def get_photo(self, obj):
+        photo = getattr(obj, "photo", None)
+        if not photo:
+            return ""
+        return normalize_public_media_url(getattr(photo, "url", ""))
+
+    class Meta:
+        model = Collection
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "description",
+            "hero_title",
+            "hero_text",
+            "landing_body",
+            "faq_title",
+            "faq_body",
+            "meta_title",
+            "meta_description",
+            "photo",
+            "is_active",
+            "is_featured",
+            "products_count",
+        ]
 
 class ColorSerializer(serializers.ModelSerializer):
     class Meta:
@@ -100,6 +207,7 @@ class TagSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     brand = BrandSerializer(read_only=True)
     series = SeriesSerializer(read_only=True)
+    category_detail = CategorySerializer(source="category", read_only=True)
     images = ProductImageSerializer(many=True, read_only=True)
     tags = TagSerializer(many=True, read_only=True)
     # Keep backward-compatible representation: expose names for FKs
@@ -108,8 +216,9 @@ class ProductSerializer(serializers.ModelSerializer):
     seller = serializers.SlugRelatedField(read_only=True, slug_field="username", help_text="Username продавца")
     class Meta:
         model = Product
-        fields = ["id","sku","slug","manufacturer_sku","name","brand","series","category",
+        fields = ["id","sku","slug","manufacturer_sku","name","brand","series","category","category_detail",
                   "country_of_origin","material","purpose","color",
                   "diameter_mm","height_mm","length_mm","width_mm","volume_ml","weight_g",
-                  "pack_qty","unit","barcode","price","stock_qty","is_new","is_promo",
-                  "flavor","composition","shelf_life","attributes","images","tags","seller"]
+                  "pack_qty","unit","barcode","price","stock_qty","min_order_qty","lead_time_days",
+                  "is_new","is_promo","flavor","composition","shelf_life","description",
+                  "attributes","images","tags","seller"]

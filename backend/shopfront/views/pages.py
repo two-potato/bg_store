@@ -2,133 +2,38 @@
 
 from __future__ import annotations
 
-import json
 import logging
 
 from django.contrib import messages
-from django.core.paginator import EmptyPage
 from django.db.models import Count
 from django.middleware.csrf import get_token
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse
-from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.generic import TemplateView
 
-from catalog.models import Brand, Category, Collection, Product, normalize_public_media_url
-from commerce.models import SellerStore
+from catalog.models import Brand, Category, Collection, Product
 from core.logging_utils import log_calls
 from shopfront.forms import ContactFeedbackForm
-from users.models import UserProfile
 
 from ..catalog_selectors import (
     cached_home_category_ids as _cached_home_category_ids,
     cached_home_product_ids as _cached_home_product_ids,
-    category_breadcrumbs as _category_breadcrumbs,
-    category_descendant_ids as _category_descendant_ids,
     category_slug_path as _category_slug_path,
     ordered_products_with_related as _ordered_products_with_related,
 )
-from ..models import BrandSubscription
-from ..recommendation_service import home_recommendations_context
+from ..pages_service import BrandDetailService, CategoryDetailService, CollectionDetailService
+from ..recommendation.service import home_recommendations_context
 from ..tasks import notify_contact_feedback
+from .utils_seo import (
+    _organization_json_ld,
+    _seo_context,
+    _website_json_ld,
+)
 
 log = logging.getLogger("shopfront")
-
-
-def _absolute_url(request, path: str) -> str:
-    return request.build_absolute_uri(normalize_public_media_url(path))
-
-
-def _truncate_text(value: str, limit: int = 160) -> str:
-    text = (value or "").strip().replace("\n", " ")
-    if len(text) <= limit:
-        return text
-    return text[: limit - 1].rstrip() + "…"
-
-
-def _default_og_image(request) -> str:
-    return _absolute_url(request, "/static/shopfront/big_logo.png")
-
-
-def _seo_context(
-    request,
-    *,
-    title: str,
-    description: str,
-    canonical: str | None = None,
-    robots: str = "index,follow",
-    og_type: str = "website",
-    og_image: str | None = None,
-    json_ld: dict | list | None = None,
-):
-    canonical_url = canonical or _absolute_url(request, request.path)
-    context = {
-        "seo_title": title,
-        "seo_description": _truncate_text(description, 170),
-        "seo_canonical": canonical_url,
-        "seo_robots": robots,
-        "seo_og_type": og_type,
-        "seo_og_image": og_image or _default_og_image(request),
-    }
-    if json_ld is not None:
-        context["seo_json_ld"] = json.dumps(json_ld, ensure_ascii=False)
-    return context
-
-
-def _website_json_ld(request):
-    base = _absolute_url(request, "/")
-    return {
-        "@context": "https://schema.org",
-        "@type": "WebSite",
-        "name": "Servio",
-        "url": base,
-        "potentialAction": {
-            "@type": "SearchAction",
-            "target": f"{base}search/?q={{search_term_string}}",
-            "query-input": "required name=search_term_string",
-        },
-    }
-
-
-def _resolve_category_by_path(raw_path: str) -> Category:
-    parts = [part.strip() for part in str(raw_path or "").split("/") if part.strip()]
-    if not parts:
-        raise Http404("Category not found")
-    parent = None
-    category = None
-    for part in parts:
-        category = (
-            Category.objects.select_related("parent")
-            .filter(parent=parent, slug=part)
-            .first()
-        )
-        if category is None:
-            raise Http404("Category not found")
-        parent = category
-    return category
-
-
-def _organization_json_ld(request):
-    return {
-        "@context": "https://schema.org",
-        "@type": "Organization",
-        "name": "Servio",
-        "url": _absolute_url(request, "/"),
-        "logo": _absolute_url(request, "/static/shopfront/favicon.svg"),
-        "contactPoint": [
-            {
-                "@type": "ContactPoint",
-                "contactType": "customer support",
-                "email": "hello@servio.market",
-                "telephone": "+7-495-120-42-20",
-                "availableLanguage": ["ru"],
-            }
-        ],
-    }
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
@@ -313,36 +218,15 @@ class BrandDetailPageView(TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        brand = get_object_or_404(
-            Brand.objects.annotate(
-                products_count=Count("products", distinct=True),
-                categories_count=Count("products__category", distinct=True),
-                collections_count=Count("products__collections", distinct=True),
-            ),
-            slug=kwargs["brand_slug"],
-        )
-        product_ids = list(Product.objects.filter(brand=brand).order_by("-is_new", "name").values_list("id", flat=True)[:60])
-        ctx["brand"] = brand
-        ctx["products"] = _ordered_products_with_related(product_ids, include_rating=True)
-        ctx["child_categories"] = list(Category.objects.filter(products__brand=brand).distinct().order_by("name")[:8])
-        ctx["featured_collections"] = list(
-            Collection.objects.filter(is_active=True, items__product__brand=brand).distinct().order_by("-is_featured", "name")[:4]
-        )
-        ctx["is_brand_subscribed"] = bool(
-            self.request.user.is_authenticated
-            and BrandSubscription.objects.filter(user=self.request.user, brand=brand).exists()
-        )
-        ctx.update(
-            _seo_context(
-                self.request,
-                title=f"{brand.name} — каталог бренда | Servio",
-                description=_truncate_text(
-                    brand.description or f"Ассортимент бренда {brand.name} в каталоге Servio для профессиональных закупок HoReCa.",
-                    160,
-                ),
-                canonical=_absolute_url(self.request, reverse("brand_detail", kwargs={"brand_slug": brand.slug})),
-            )
-        )
+        context_data = BrandDetailService(self.request).build_context(kwargs["brand_slug"])
+        if context_data is None:
+            raise Http404("Brand not found")
+        ctx["brand"] = context_data.brand
+        ctx["products"] = context_data.products
+        ctx["child_categories"] = context_data.child_categories
+        ctx["featured_collections"] = context_data.featured_collections
+        ctx["is_brand_subscribed"] = context_data.is_brand_subscribed
+        ctx.update(context_data.seo_context)
         return ctx
 
 
@@ -357,25 +241,15 @@ class CategoryDetailPageView(TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        category = _resolve_category_by_path(kwargs["category_slug"])
-        category_ids = _category_descendant_ids(category)
-        product_ids = list(Product.objects.filter(category_id__in=category_ids).order_by("-is_new", "name").values_list("id", flat=True)[:80])
-        ctx["category"] = category
-        ctx["products"] = _ordered_products_with_related(product_ids, include_rating=True)
-        ctx["breadcrumbs"] = _category_breadcrumbs(category)
-        ctx["child_categories"] = list(category.children.order_by("name")[:12])
-        ctx["featured_brands"] = list(Brand.objects.filter(products__category_id__in=category_ids).distinct().order_by("name")[:8])
-        ctx.update(
-            _seo_context(
-                self.request,
-                title=f"{category.meta_title or category.name} — категория Servio",
-                description=_truncate_text(
-                    category.meta_description or category.description or category.hero_text or f"Категория {category.name} в каталоге Servio.",
-                    160,
-                ),
-                canonical=_absolute_url(self.request, reverse("category_detail", kwargs={"category_slug": _category_slug_path(category)})),
-            )
-        )
+        context_data = CategoryDetailService(self.request).build_context(kwargs["category_slug"])
+        if context_data is None:
+            raise Http404("Category not found")
+        ctx["category"] = context_data.category
+        ctx["products"] = context_data.products
+        ctx["breadcrumbs"] = context_data.breadcrumbs
+        ctx["child_categories"] = context_data.child_categories
+        ctx["featured_brands"] = context_data.featured_brands
+        ctx.update(context_data.seo_context)
         return ctx
 
 
@@ -402,21 +276,13 @@ class CollectionDetailPageView(TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        collection = get_object_or_404(Collection.objects.filter(is_active=True), slug=kwargs["collection_slug"])
-        product_ids = list(collection.items.order_by("ordering", "id").values_list("product_id", flat=True)[:80])
-        ctx["collection"] = collection
-        ctx["products"] = _ordered_products_with_related(product_ids, include_rating=True)
-        ctx["related_collections"] = list(
-            Collection.objects.filter(is_active=True, is_featured=True).exclude(id=collection.id).order_by("-updated_at", "name")[:3]
-        )
-        ctx.update(
-            _seo_context(
-                self.request,
-                title=f"{collection.name} — коллекция Servio",
-                description=_truncate_text(collection.description or collection.hero_text or f"Коллекция {collection.name} в Servio.", 160),
-                canonical=_absolute_url(self.request, reverse("collection_detail", kwargs={"collection_slug": collection.slug})),
-            )
-        )
+        context_data = CollectionDetailService(self.request).build_context(kwargs["collection_slug"])
+        if context_data is None:
+            raise Http404("Collection not found")
+        ctx["collection"] = context_data.collection
+        ctx["products"] = context_data.products
+        ctx["related_collections"] = context_data.related_collections
+        ctx.update(context_data.seo_context)
         return ctx
 
 

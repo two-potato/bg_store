@@ -135,6 +135,35 @@ def _captcha_required(request, identifier: str | None = None) -> bool:
     return any(int(cache.get(key, 0) or 0) >= threshold for key in _login_fail_keys(request, identifier))
 
 
+def _auth_rate_limit_key(request, scope: str) -> str:
+    return f"auth:{scope}:post:{_client_ip(request)}"
+
+
+def _auth_post_rate_limited(request, *, scope: str, limit: int, window_seconds: int) -> bool:
+    if limit <= 0 or window_seconds <= 0:
+        return False
+    key = _auth_rate_limit_key(request, scope)
+    current = int(cache.get(key, 0) or 0)
+    if current >= limit:
+        return True
+    cache.set(key, current + 1, timeout=window_seconds)
+    return False
+
+
+def _login_page_context(*, form, captcha_required: bool, include_google: bool = True) -> dict:
+    context = {
+        "form": form,
+        "seo_title": "Вход в аккаунт — Servio",
+        "seo_description": "Авторизация в личном кабинете Servio.",
+        "seo_robots": "noindex,nofollow",
+        "captcha_required": captcha_required,
+        "turnstile_site_key": getattr(settings, "TURNSTILE_SITE_KEY", ""),
+    }
+    if include_google:
+        context["google_oauth_enabled"] = _google_oauth_enabled()
+    return context
+
+
 def _verify_turnstile(token: str, remoteip: str) -> tuple[bool, str]:
     secret = (getattr(settings, "TURNSTILE_SECRET_KEY", "") or "").strip()
     if not secret:
@@ -172,6 +201,26 @@ def login_view(request):
     form = LoginForm(request.POST or None)
     raw_identifier = (request.POST.get("identifier") or "").strip()
     captcha_required = _captcha_required(request, raw_identifier)
+    if request.method == "POST":
+        rate_limit = int(getattr(settings, "AUTH_LOGIN_RATE_LIMIT_ATTEMPTS", 30))
+        rate_window = int(getattr(settings, "AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS", 3600))
+        if _auth_post_rate_limited(
+            request,
+            scope="login",
+            limit=rate_limit,
+            window_seconds=rate_window,
+        ):
+            log.warning(
+                "auth_login_rate_limited",
+                extra={"client_ip": _client_ip(request), "limit": rate_limit, "window_seconds": rate_window},
+            )
+            messages.error(request, "Слишком много попыток входа. Попробуйте позже.")
+            return render(
+                request,
+                "account/login.html",
+                _login_page_context(form=form, captcha_required=True),
+                status=429,
+            )
     if request.method == "POST" and form.is_valid():
         ident = form.cleaned_data["identifier"].strip()
         password = form.cleaned_data["password"]
@@ -184,15 +233,7 @@ def login_view(request):
                 return render(
                     request,
                     "account/login.html",
-                    {
-                        "form": form,
-                        "seo_title": "Вход в аккаунт — Servio",
-                        "seo_description": "Авторизация в личном кабинете Servio.",
-                        "seo_robots": "noindex,nofollow",
-                        "captcha_required": True,
-                        "turnstile_site_key": getattr(settings, "TURNSTILE_SITE_KEY", ""),
-                        "google_oauth_enabled": _google_oauth_enabled(),
-                    },
+                    _login_page_context(form=form, captcha_required=True),
                 )
         user = None
         for field in ("username", "email"):
@@ -222,15 +263,7 @@ def login_view(request):
     return render(
         request,
         "account/login.html",
-        {
-            "form": form,
-            "seo_title": "Вход в аккаунт — Servio",
-            "seo_description": "Авторизация в личном кабинете Servio.",
-            "seo_robots": "noindex,nofollow",
-            "google_oauth_enabled": _google_oauth_enabled(),
-            "captcha_required": captcha_required,
-            "turnstile_site_key": getattr(settings, "TURNSTILE_SITE_KEY", ""),
-        },
+        _login_page_context(form=form, captcha_required=captcha_required),
     )
 
 
@@ -240,6 +273,32 @@ def register_view(request):
     if request.user.is_authenticated:
         return redirect("account_home")
     form = RegisterForm(request.POST or None)
+    if request.method == "POST":
+        rate_limit = int(getattr(settings, "AUTH_REGISTER_RATE_LIMIT_ATTEMPTS", 20))
+        rate_window = int(getattr(settings, "AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS", 3600))
+        if _auth_post_rate_limited(
+            request,
+            scope="register",
+            limit=rate_limit,
+            window_seconds=rate_window,
+        ):
+            log.warning(
+                "auth_register_rate_limited",
+                extra={"client_ip": _client_ip(request), "limit": rate_limit, "window_seconds": rate_window},
+            )
+            messages.error(request, "Слишком много попыток регистрации. Попробуйте позже.")
+            return render(
+                request,
+                "account/register.html",
+                {
+                    "form": form,
+                    "seo_title": "Регистрация — Servio",
+                    "seo_description": "Создание аккаунта на Servio.",
+                    "seo_robots": "noindex,nofollow",
+                    "google_oauth_enabled": _google_oauth_enabled(),
+                },
+                status=429,
+            )
     if request.method == "POST" and form.is_valid():
         user = form.save()
         if not _send_email_confirmation(request, user):

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal
 from random import Random

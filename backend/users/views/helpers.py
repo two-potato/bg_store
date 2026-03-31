@@ -1,63 +1,22 @@
-from django.contrib.auth import authenticate, login, logout
-from django.shortcuts import render, redirect
-from django.conf import settings
-from django.views.decorators.http import require_http_methods
-from django.contrib import messages
-from django.contrib.auth import get_user_model
-from django.core.cache import cache
-from django.http import Http404, FileResponse
-from django.views.decorators.http import require_POST
-from django.urls import reverse
-from django.utils.http import url_has_allowed_host_and_scheme
-from django.core.signing import TimestampSigner, BadSignature, SignatureExpired
-from django.db.models import Q, Prefetch, Count, Sum, Avg
-from django.db import transaction
-from django.utils.text import slugify
-from django.utils import timezone
-from django.core.files.storage import default_storage
-from django.core.exceptions import ValidationError
-from django.http import HttpResponse
-from io import StringIO, TextIOWrapper
+"""Shared helpers for buyer and seller HTML account flows."""
+
 import csv
-import hashlib
-import secrets
-import requests
-from ..forms import (
-    LoginForm,
-    RegisterForm,
-    ProfileForm,
-    NotificationPreferencesForm,
-    LegalEntityRequestForm,
-    AddressForm,
-    SellerStoreForm,
-    SellerProductCreateForm,
-    SellerProductImportForm,
-    SellerProductBulkActionForm,
-    SellerOfferForm,
-    SellerInventoryForm,
-    InventoryAdjustmentForm,
-    SellerQuestionAnswerForm,
-    SellerReviewReplyForm,
-    CompanyMemberInviteForm,
-    CompanyMemberUpdateForm,
-    ApprovalPolicyForm,
-    CompanySettingsForm,
-    CompanyContactForm,
-    ProductDocumentForm,
-    OrderClaimForm,
-    OrderClaimUpdateForm,
-    ShipmentCreateForm,
-    SellerOrderItemCancelForm,
-    OrderSupportTicketForm,
-    OrderSupportTicketUpdateForm,
-)
-from ..api.views import verify_init_data
-from core.logging_utils import log_calls
-from core.notifications import send_mail_message
 import logging
+from io import TextIOWrapper
+
+from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.core.files.storage import default_storage
+from django.db.models import Prefetch, Q
+from django.urls import reverse
+from django.utils import timezone
+from django.utils.text import slugify
+
+from commerce.company_service import ensure_approval_policy, ensure_company_workspace
+
+from ..forms import ProductDocumentForm
 from ..models import UserProfile
-from shopfront.cart_store import merge_session_cart_with_persistent
-from commerce.company_service import ensure_company_workspace, approver_memberships_for_company, ensure_approval_policy
+from ..upload_validation import validate_product_image_upload
 
 log = logging.getLogger("users")
 
@@ -84,9 +43,15 @@ SELLER_PRODUCT_IMPORT_HEADERS = [
 ]
 
 
+def approver_memberships_for_company(company):
+    from commerce.company_service import approver_memberships_for_company as _approver_memberships_for_company
+
+    return _approver_memberships_for_company(company)
+
+
 def _approver_company_ids(user):
     from commerce.company_service import sync_company_membership_from_legal_entity
-    from commerce.models import CompanyMembership, LegalEntityMembership, MembershipRole
+    from commerce.models import CompanyMembership, LegalEntityMembership
 
     company_ids = set(
         CompanyMembership.objects.filter(
@@ -130,7 +95,7 @@ def _visible_orders_queryset(user):
 
 
 def _notification_feed(user, limit: int = 80):
-    from orders.models import Order, OrderClaim, OrderSupportTicket
+    from orders.models import OrderClaim, OrderSupportTicket
 
     events = []
     orders = (
@@ -343,7 +308,6 @@ def _approval_required_count(order) -> int:
     company = ensure_company_workspace(order.legal_entity) if getattr(order, "legal_entity_id", None) else None
     if not company:
         return 1
-    from commerce.company_service import ensure_approval_policy
 
     policy = ensure_approval_policy(company)
     required = int(getattr(policy, "required_approvals_count", 1) or 1)
@@ -451,9 +415,7 @@ def _save_uploaded_product_images(product, uploaded_files):
     for index, upload in enumerate(uploaded_files, start=1):
         if existing_count + created >= 10:
             break
-        extension = ""
-        if "." in (upload.name or ""):
-            extension = "." + upload.name.rsplit(".", 1)[-1].lower()
+        extension = "." + validate_product_image_upload(upload)
         filename = slugify(upload.name.rsplit(".", 1)[0] or f"product-{product.id}") or f"product-{product.id}"
         path = default_storage.save(
             f"product_gallery/{product.id}/{timezone.now().strftime('%Y%m%d%H%M%S')}-{filename}-{index}{extension}",
@@ -463,7 +425,7 @@ def _save_uploaded_product_images(product, uploaded_files):
             product=product,
             url=f"/media/{path}",
             alt=product.name,
-            ordering=product.images.count() + 1,
+            ordering=existing_count + created + 1,
         )
         created += 1
     return created
@@ -586,7 +548,7 @@ def _save_linked_product_images(product, image_urls):
             product=product,
             url=url,
             alt=product.name,
-            ordering=product.images.count() + 1,
+            ordering=existing_count + created + 1,
         )
         existing_urls.add(url)
         created += 1

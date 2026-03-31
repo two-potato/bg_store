@@ -22,14 +22,17 @@ log = logging.getLogger("shopfront")
 
 
 def new_guest_access_token() -> str:
+    """Handle new guest access token."""
     return uuid4().hex
 
 
 def demo_payments_enabled() -> bool:
+    """Handle demo payments enabled."""
     return bool(getattr(settings, "ENABLE_DEMO_PAYMENTS", settings.DEBUG))
 
 
 def allowed_payment_methods() -> tuple[str, ...]:
+    """Handle allowed payment methods."""
     methods = [Order.PaymentMethod.CASH, Order.PaymentMethod.INVOICE]
     if demo_payments_enabled():
         methods.extend([Order.PaymentMethod.MIR_CARD, Order.PaymentMethod.ONLINE_CARD])
@@ -37,6 +40,7 @@ def allowed_payment_methods() -> tuple[str, ...]:
 
 
 def guest_order_session_map(request) -> dict[str, str]:
+    """Handle guest order session map."""
     raw = request.session.get("guest_order_tokens", {}) or {}
     if isinstance(raw, dict):
         return {str(key): str(value) for key, value in raw.items() if key and value}
@@ -44,6 +48,7 @@ def guest_order_session_map(request) -> dict[str, str]:
 
 
 def remember_guest_order(request, order: Order) -> None:
+    """Remember guest order."""
     token = order.guest_access_token or ""
     if not token:
         return
@@ -54,6 +59,7 @@ def remember_guest_order(request, order: Order) -> None:
 
 
 def has_guest_order_access(request, order: Order, token: str | None = None) -> bool:
+    """Handle has guest order access."""
     if request.user.is_authenticated and order.placed_by_id and order.placed_by_id == request.user.id:
         return True
     expected = (order.guest_access_token or "").strip()
@@ -65,36 +71,42 @@ def has_guest_order_access(request, order: Order, token: str | None = None) -> b
 
 
 def order_detail_url(order: Order) -> str:
+    """Handle order detail url."""
     if order.is_guest and order.guest_access_token:
         return reverse("guest_order_detail", kwargs={"order_id": order.id, "token": order.guest_access_token})
     return f"/account/orders/{order.id}/"
 
 
 def fake_payment_page_url(order: Order) -> str:
+    """Handle fake payment page url."""
     if order.is_guest and order.guest_access_token:
         return reverse("guest_fake_payment_page", kwargs={"order_id": order.id, "token": order.guest_access_token})
     return reverse("fake_payment_page", kwargs={"order_id": order.id})
 
 
 def fake_payment_event_url(order: Order) -> str:
+    """Handle fake payment event url."""
     if order.is_guest and order.guest_access_token:
         return reverse("guest_fake_payment_event", kwargs={"order_id": order.id, "token": order.guest_access_token})
     return reverse("fake_payment_event", kwargs={"order_id": order.id})
 
 
 def online_payment_page_url(order: Order) -> str:
+    """Handle online payment page url."""
     if order.is_guest and order.guest_access_token:
         return reverse("guest_online_payment_page", kwargs={"order_id": order.id, "token": order.guest_access_token})
     return reverse("online_payment_page", kwargs={"order_id": order.id})
 
 
 def online_payment_event_url(order: Order) -> str:
+    """Handle online payment event url."""
     if order.is_guest and order.guest_access_token:
         return reverse("guest_online_payment_event", kwargs={"order_id": order.id, "token": order.guest_access_token})
     return reverse("online_payment_event", kwargs={"order_id": order.id})
 
 
 def tracking_item_from_product(product: Product, quantity: int = 1) -> dict:
+    """Handle tracking item from product."""
     category_name = getattr(product.category, "name", "") or ""
     seller_store = getattr(getattr(product, "seller", None), "seller_store", None)
     offer = getattr(product, "active_offer", None) or resolve_product_offer(product)
@@ -113,6 +125,7 @@ def tracking_item_from_product(product: Product, quantity: int = 1) -> dict:
 
 
 def recommendation_impression_payload(source: str, products) -> str:
+    """Handle recommendation impression payload."""
     if not products:
         return ""
     return json.dumps(
@@ -129,6 +142,7 @@ def recommendation_impression_payload(source: str, products) -> str:
 
 
 def checkout_items_payload(items, total: Decimal, seller_count: int) -> dict:
+    """Handle checkout items payload."""
     return {
         "seller_count": seller_count,
         "ecommerce": {
@@ -140,6 +154,7 @@ def checkout_items_payload(items, total: Decimal, seller_count: int) -> dict:
 
 
 def checkout_step_tracking_payload(step_name: str, *, items, total: Decimal, seller_count: int) -> dict:
+    """Handle checkout step tracking payload."""
     return {
         "event": "checkout_step_view",
         "checkout_step": step_name,
@@ -156,6 +171,7 @@ def checkout_error_tracking_payload(
     total: Decimal = Decimal("0.00"),
     seller_count: int = 0,
 ) -> dict:
+    """Handle checkout error tracking payload."""
     payload = {
         "event": "checkout_error",
         "checkout_step": "details",
@@ -177,6 +193,7 @@ def payment_tracking_payload(
     search_attribution: dict | None = None,
     recommendation_attribution: dict | None = None,
 ) -> dict:
+    """Handle payment tracking payload."""
     payload = {
         "event": event_name,
         "payment_method": order.payment_method,
@@ -215,6 +232,7 @@ def payment_tracking_payload(
 
 
 def order_tracking_payload(order: Order, *, search_attribution: dict | None = None, recommendation_attribution: dict | None = None) -> dict:
+    """Handle order tracking payload."""
     payload = {
         "event": "purchase",
         "seller_count": order.seller_splits.count(),
@@ -246,14 +264,17 @@ def order_tracking_payload(order: Order, *, search_attribution: dict | None = No
 
 
 def payment_event_label(event_code: str) -> str:
+    """Handle payment event label."""
     return dict(FakeAcquiringPayment.Event.choices).get(event_code, event_code)
 
 
 def allowed_fake_payment_events() -> set[str]:
+    """Handle allowed fake payment events."""
     return {code for code, _ in FakeAcquiringPayment.Event.choices}
 
 
 def append_payment_history(payment: FakeAcquiringPayment, event_code: str, status_code: str, note: str = ""):
+    """Handle append payment history."""
     history = list(payment.history or [])
     history.append(
         {
@@ -271,6 +292,7 @@ def append_payment_history(payment: FakeAcquiringPayment, event_code: str, statu
 
 
 def apply_fake_payment_event(order: Order, payment: FakeAcquiringPayment, event_code: str):
+    """Apply fake payment event."""
     status_map = {
         FakeAcquiringPayment.Event.START: FakeAcquiringPayment.Status.PROCESSING,
         FakeAcquiringPayment.Event.REQUIRE_3DS: FakeAcquiringPayment.Status.REQUIRES_3DS,
@@ -356,10 +378,12 @@ def apply_fake_payment_event(order: Order, payment: FakeAcquiringPayment, event_
 
 
 def payment_mode_title(payment_method: str) -> str:
+    """Handle payment mode title."""
     return "Онлайн-эквайринг" if payment_method == Order.PaymentMethod.ONLINE_CARD else "Тестовый эквайринг"
 
 
 def payment_page_context(order: Order, payment: FakeAcquiringPayment, *, event_url: str, search_attribution: dict | None = None) -> dict:
+    """Handle payment page context."""
     context = fake_payment_template_context(
         order=order,
         payment=payment,
@@ -376,6 +400,7 @@ def payment_page_context(order: Order, payment: FakeAcquiringPayment, *, event_u
 
 
 def payment_panel_context(order: Order, payment: FakeAcquiringPayment, *, event_url: str, page_url: str) -> dict:
+    """Handle payment panel context."""
     context = fake_payment_template_context(
         order=order,
         payment=payment,
@@ -389,6 +414,7 @@ def payment_panel_context(order: Order, payment: FakeAcquiringPayment, *, event_
 
 
 def payment_event_trigger_payload(order: Order, payment: FakeAcquiringPayment, event: str, *, search_attribution: dict | None = None) -> dict:
+    """Handle payment event trigger payload."""
     payload = {
         "toast": {
             "message": f"Событие: {payment_event_label(event)}",
@@ -412,6 +438,7 @@ def render_payment_panel_response(
     page_url: str,
     search_attribution: dict | None = None,
 ) -> HttpResponse:
+    """Render payment panel response."""
     response = HttpResponse(
         render_to_string(
             "shopfront/partials/fake_payment_panel.html",

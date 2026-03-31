@@ -16,17 +16,17 @@ from core.logging_utils import log_calls
 from ..cart_checkout_service import cart_badge_context as _cart_badge_context, cart_summary as _cart_summary
 from ..cart_mutation_service import add_to_cart_session, clear_cart_session, remove_from_cart_session, update_cart_session
 from ..checkout_common import attach_cart_badge_oob as _attach_cart_badge_oob, log, seo_context as _seo_context
-from ..checkout_support import recommendation_impression_payload as _recommendation_impression_payload, tracking_item_from_product as _tracking_item_from_product
-from ..recommendation_attribution_service import (
+from ..checkout_support import tracking_item_from_product as _tracking_item_from_product
+from ..recommendation.attribution_service import (
     bind_cart_item_recommendation_attribution,
     cart_item_recommendation_attribution,
     record_recommendation_event,
     remove_cart_item_recommendation_attribution,
     recommendation_attribution_for_product,
 )
-from ..recommendation_service import cart_recommendations
-from ..search_attribution_service import bind_cart_item_search_attribution, search_attribution_for_product
-from ..search_observability import observe_search_feedback_event
+from ..recommendation.service import cart_recommendations
+from ..searching.attribution import bind_cart_item_search_attribution, search_attribution_for_product
+from ..searching.observability import observe_search_feedback_event
 
 
 class CartBadgeView(TemplateView):
@@ -154,7 +154,7 @@ class CartPageView(TemplateView):
         ctx["cart_recommendations_tracking_payload"] = rec_ctx["tracking_payload"]
         ctx["cart_reorder_recommendations"] = []
         if not ctx.get("items"):
-            from ..recommendation_service import reorder_recommendations
+            from ..recommendation.service import reorder_recommendations
 
             ctx["cart_reorder_recommendations"] = reorder_recommendations(self.request.user, limit=8)
         ctx.update(

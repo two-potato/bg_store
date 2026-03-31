@@ -6,21 +6,24 @@ from catalog.models import Product
 from catalog.offer_service import active_offer_queryset, apply_offer_snapshot
 
 from .cart_store import persist_cart_for_user
-from .recommendation_attribution_service import clear_cart_recommendation_attribution, remove_cart_item_recommendation_attribution
-from .search_attribution_service import clear_cart_search_attribution, remove_cart_item_search_attribution
+from .recommendation.attribution_service import clear_cart_recommendation_attribution, remove_cart_item_recommendation_attribution
+from .searching.attribution import clear_cart_search_attribution, remove_cart_item_search_attribution
 
 
 def _load_cart_product(product_id: int):
+    """Internal helper for load cart product."""
     product = Product.objects.prefetch_related(Prefetch("seller_offers", queryset=active_offer_queryset())).get(pk=product_id)
     apply_offer_snapshot([product])
     return product
 
 
 def _max_qty_for_product(product) -> int:
+    """Internal helper for max qty for product."""
     return max(0, int(product.display_stock_qty or 0))
 
 
 def add_to_cart_session(*, request, product_id: int, qty: int, logger):
+    """Add to cart session."""
     cart = request.session.setdefault("cart", {})
     product = _load_cart_product(product_id)
     max_qty = _max_qty_for_product(product)
@@ -45,6 +48,7 @@ def add_to_cart_session(*, request, product_id: int, qty: int, logger):
 
 
 def remove_from_cart_session(*, request, product_id: str | int):
+    """Remove from cart session."""
     cart = request.session.setdefault("cart", {})
     cart.pop(str(product_id), None)
     remove_cart_item_search_attribution(request, product_id=product_id)
@@ -54,6 +58,7 @@ def remove_from_cart_session(*, request, product_id: str | int):
 
 
 def clear_cart_session(*, request):
+    """Clear cart session."""
     request.session["cart"] = {}
     clear_cart_search_attribution(request)
     clear_cart_recommendation_attribution(request)
@@ -62,6 +67,7 @@ def clear_cart_session(*, request):
 
 
 def update_cart_session(*, request, product_id: int, op: str, requested_qty, logger):
+    """Update cart session."""
     cart = request.session.setdefault("cart", {})
     item = cart.get(str(product_id))
     if not item:

@@ -14,8 +14,8 @@ from shopfront.models import (
     RecommendationSet,
     RecentlyViewedProduct,
 )
-from shopfront.recommendation_policy import remember_recommendation_dismiss
-from shopfront.recommendation_service import (
+from shopfront.recommendation.policy import remember_recommendation_dismiss
+from shopfront.recommendation.service import (
     cart_recommendations,
     home_recommendations_context,
     product_detail_recommendations,

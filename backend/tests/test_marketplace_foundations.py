@@ -15,7 +15,7 @@ from shopfront.cart_checkout_service import cart_badge_context, cart_summary
 from shopfront.checkout_flow_service import ensure_checkout_idempotency_key
 from shopfront.cart_store import merge_session_cart_with_persistent
 from shopfront.models import PersistentCart, RecentlyViewedProduct
-from shopfront.recommendations import record_recent_view
+from shopfront.recommendation.heuristics import record_recent_view
 from catalog.offer_service import apply_offer_snapshot
 
 

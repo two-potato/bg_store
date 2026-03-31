@@ -1,0 +1,76 @@
+name: Backup Restore Drill
+
+on:
+  schedule:
+    - cron: "45 3 * * 1"
+  workflow_dispatch:
+
+jobs:
+  postgres-backup-restore-drill:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: drill_source
+          POSTGRES_USER: shop
+          POSTGRES_PASSWORD: shop
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U shop -d drill_source"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Seed source database
+        env:
+          PGPASSWORD: shop
+        run: |
+          psql -h 127.0.0.1 -U shop -d drill_source -c "CREATE TABLE IF NOT EXISTS audit_probe(id serial primary key, name text not null);"
+          psql -h 127.0.0.1 -U shop -d drill_source -c "TRUNCATE TABLE audit_probe;"
+          psql -h 127.0.0.1 -U shop -d drill_source -c "INSERT INTO audit_probe(name) VALUES ('alpha'),('beta'),('gamma');"
+
+      - name: Create backup artifact
+        env:
+          PGPASSWORD: shop
+        run: |
+          mkdir -p backups/postgres
+          pg_dump -h 127.0.0.1 -U shop -d drill_source | gzip > backups/postgres/servio-postgres-ci-drill.sql.gz
+
+      - name: Restore backup into target database
+        env:
+          PGPASSWORD: shop
+        run: |
+          psql -h 127.0.0.1 -U shop -d postgres -c "DROP DATABASE IF EXISTS drill_target;"
+          psql -h 127.0.0.1 -U shop -d postgres -c "CREATE DATABASE drill_target;"
+          gunzip -c backups/postgres/servio-postgres-ci-drill.sql.gz | psql -h 127.0.0.1 -U shop -d drill_target
+
+      - name: Verify restored data
+        env:
+          PGPASSWORD: shop
+        run: |
+          restored_count="$(psql -h 127.0.0.1 -U shop -d drill_target -tAc "SELECT count(*) FROM audit_probe;")"
+          if [ "$restored_count" != "3" ]; then
+            echo "Expected 3 rows in restored database, got $restored_count"
+            exit 1
+          fi
+          echo "Restore drill passed with $restored_count rows"
+
+      - name: Check backup freshness script
+        run: |
+          chmod +x scripts/check_backup_freshness.sh
+          BACKUP_DIR="$PWD/backups/postgres" MAX_AGE_HOURS=1 scripts/check_backup_freshness.sh
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-restore-drill-artifacts
+          path: backups/postgres/servio-postgres-ci-drill.sql.gz

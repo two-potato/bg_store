@@ -6,12 +6,10 @@ from decimal import Decimal
 
 from celery import shared_task
 from django.conf import settings
-from django.db import transaction
-from django.db.models import Count
 from django.utils import timezone
 
 from catalog.models import Product
-from orders.models import OrderItem
+from orders.models import Order, OrderItem
 from users.models import UserProfile
 from core.notifications import apost_notify_json, is_telegram_recipient_quarantined, send_mail_message
 from .models import (
@@ -24,21 +22,24 @@ from .models import (
     RecommendationUserAffinity,
     RecentlyViewedProduct,
 )
-from .recommendation_feature_store import refresh_recommendation_feature_snapshots
-from .recommendation_ml import activate_model, build_training_dataset, train_recommendation_model
-from .recommendation_ranker import rerank_product_ids
-from .recommendation_selectors import (
+from .recommendation.feature_store import refresh_recommendation_feature_snapshots
+from .recommendation.ml import activate_model, build_training_dataset, train_recommendation_model
+from .recommendation.observability import observe_recommendation_order_attribution
+from .recommendation.ranker import rerank_product_ids
+from .recommendation.selectors import (
     hybrid_affinity_candidates,
     personalized_candidate_ids,
     user_reorder_ids,
     user_affinity_seed_ids,
     watchlist_candidate_ids,
 )
+from .searching.observability import observe_search_feedback_event, observe_search_order_attribution
 
 log = logging.getLogger("shopfront")
 
 
 def _admin_emails() -> list[str]:
+    """Internal helper for admin emails."""
     emails = list(getattr(settings, "ADMIN_NOTIFY_EMAILS", []) or [])
     if emails:
         return emails
@@ -47,6 +48,7 @@ def _admin_emails() -> list[str]:
 
 
 def _admin_telegram_ids() -> list[int]:
+    """Internal helper for admin telegram ids."""
     recipients: list[int] = []
     seen: set[int] = set()
     qs = UserProfile.objects.filter(
@@ -78,6 +80,7 @@ def _admin_telegram_ids() -> list[int]:
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def notify_contact_feedback(self, *, name: str, phone: str, message: str, source: str):
+    """Handle notify contact feedback."""
     text = (
         "Новая заявка из формы обратной связи\n\n"
         f"Имя: {name}\n"
@@ -138,6 +141,7 @@ def notify_contact_feedback(self, *, name: str, phone: str, message: str, source
 
 
 def _replace_snapshot_rows(*, scope_type: str, scope_id: int, window: str, rows: list[dict]) -> int:
+    """Internal helper for replace snapshot rows."""
     RecommendationPopularitySnapshot.objects.filter(scope_type=scope_type, scope_id=scope_id, window=window).delete()
     RecommendationPopularitySnapshot.objects.bulk_create(
         [
@@ -156,7 +160,77 @@ def _replace_snapshot_rows(*, scope_type: str, scope_id: int, window: str, rows:
     return len(rows)
 
 
+@shared_task
+def emit_checkout_search_feedback(*, order_id: int, attribution: dict) -> int:
+    """Emit checkout search attribution feedback in the background."""
+    if not attribution:
+        return 0
+    order = Order.objects.filter(id=order_id).first()
+    if order is None:
+        return 0
+    observe_search_order_attribution(order=order, attribution=attribution, logger=log)
+    emitted = 0
+    for item in attribution.get("items", []):
+        observe_search_feedback_event(
+            event_name="purchase",
+            surface="checkout",
+            origin=item.get("search_origin", "unknown"),
+            search_term=item.get("search_term", ""),
+            item_id=item.get("product_id", ""),
+            item_name=item.get("product_name", ""),
+            position=int(item.get("position") or 0),
+            results_count=0,
+            provider=item.get("search_provider", ""),
+            rewrite_kind=item.get("search_rewrite_kind", ""),
+            logger=log,
+        )
+        emitted += 1
+    return emitted
+
+
+@shared_task
+def emit_checkout_recommendation_feedback(*, order_id: int, attribution: dict) -> int:
+    """Persist checkout recommendation purchase feedback in the background."""
+    if not attribution:
+        return 0
+    order = Order.objects.filter(id=order_id).first()
+    if order is None:
+        return 0
+    observe_recommendation_order_attribution(order=order, attribution=attribution, logger=log)
+    order_items = list(order.items.select_related("product"))
+    product_by_id = {str(item.product_id): item.product for item in order_items}
+    emitted = 0
+    for item in attribution.get("items", []):
+        product = product_by_id.get(str(item.get("product_id")))
+        if product is None:
+            continue
+        RecommendationEvent.objects.create(
+            event="purchase",
+            user=order.placed_by if order.placed_by_id else None,
+            session_key="",
+            surface=str(item.get("surface") or "checkout"),
+            recommendation_source=str(item.get("recommendation_source") or ""),
+            product=product,
+            seller_id=getattr(product, "seller_id", None),
+            brand_id=getattr(product, "brand_id", None),
+            category_id=getattr(product, "category_id", None),
+            position=int(item.get("position") or 0),
+            request_id=str(item.get("request_id") or ""),
+            payload={
+                "surface": "checkout",
+                "order_id": order.id,
+                "qty": int(item.get("qty") or 0),
+                "reason_codes": list(item.get("reason_codes") or []),
+                "candidate_sources": list(item.get("candidate_sources") or []),
+                "score_hint": float(item.get("score_hint") or 0),
+            },
+        )
+        emitted += 1
+    return emitted
+
+
 def _set_recommendation_set(*, kind: str, scope_type: str, scope_id: int, source: str, product_ids: list[int], expires_in_sec: int = 3600, metadata: dict | None = None) -> RecommendationSet:
+    """Internal helper for set recommendation set."""
     now = timezone.now()
     return RecommendationSet.objects.create(
         kind=kind,
@@ -172,6 +246,7 @@ def _set_recommendation_set(*, kind: str, scope_type: str, scope_id: int, source
 
 @shared_task
 def refresh_recommendation_popularity(window: str = "7d", limit: int = 60):
+    """Refresh recommendation popularity."""
     since = timezone.now() - timedelta(days=30 if window == "30d" else 7)
     recent_views = Counter(
         RecentlyViewedProduct.objects.filter(updated_at__gte=since).values_list("product_id", flat=True)
@@ -249,6 +324,7 @@ def refresh_recommendation_popularity(window: str = "7d", limit: int = 60):
 
 @shared_task
 def refresh_recommendation_affinities(limit_per_product: int = 24):
+    """Refresh recommendation affinities."""
     order_item_rows = list(
         OrderItem.objects.values_list("order_id", "product_id").order_by("order_id", "product_id")
     )
@@ -336,6 +412,7 @@ def refresh_recommendation_affinities(limit_per_product: int = 24):
 
 @shared_task
 def refresh_recommendation_user_affinity(limit_per_dimension: int = 12):
+    """Refresh recommendation user affinity."""
     RecommendationUserAffinity.objects.all().delete()
     price_band_bounds = (
         ("entry", lambda price: Decimal(str(price or 0)) < Decimal("2000")),
@@ -398,6 +475,7 @@ def refresh_recommendation_user_affinity(limit_per_dimension: int = 12):
 
 @shared_task
 def refresh_recommendation_replenishment(limit_per_user: int = 24):
+    """Refresh recommendation replenishment."""
     RecommendationReplenishmentProfile.objects.all().delete()
     rows = []
     grouped: dict[tuple[int, int], list] = defaultdict(list)
@@ -443,6 +521,7 @@ def refresh_recommendation_replenishment(limit_per_user: int = 24):
 
 @shared_task
 def refresh_recommendation_sets(limit: int = 8):
+    """Refresh recommendation sets."""
     now = timezone.now()
     RecommendationSet.objects.filter(expires_at__lt=now - timedelta(days=1)).delete()
     global_ids = list(
@@ -546,6 +625,7 @@ def refresh_recommendation_sets(limit: int = 8):
 
 @shared_task
 def refresh_recommendation_ml_features(user_limit: int = 1000, product_limit: int = 2000):
+    """Refresh recommendation ml features."""
     result = refresh_recommendation_feature_snapshots(user_limit=user_limit, product_limit=product_limit)
     log.info("recommendation_ml_features_refreshed", extra=result)
     return result
@@ -553,6 +633,7 @@ def refresh_recommendation_ml_features(user_limit: int = 1000, product_limit: in
 
 @shared_task
 def train_recommendation_ml_surface(surface: str = "home", label_kind: str = "purchase", activate: bool = True):
+    """Train recommendation ml surface."""
     dataset = build_training_dataset(surface=surface, label_kind=label_kind)
     model = train_recommendation_model(dataset, trainer="auto")
     if activate and model.status == model.Status.READY:

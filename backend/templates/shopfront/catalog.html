@@ -7,6 +7,11 @@
 {% include "shopfront/components/tag_chips.html" %}
 
 <section class="catalog-layout-neo catalog-layout-neo--listing">
+  <div class="catalog-mobile-utility-bar">
+    <a class="catalog-mobile-utility-bar__item" href="#catalog-toolbar">Поиск и сортировка</a>
+    <a class="catalog-mobile-utility-bar__item" href="#product-grid">Выдача</a>
+    <a class="catalog-mobile-utility-bar__item" href="/compare/" hx-boost="false">Сравнение{% if compare_count %} ({{ compare_count }}){% endif %}</a>
+  </div>
   {% include "shopfront/components/product_grid.html" with products=products grid_id="product-grid" %}
     {% if not products %}
       <div class="mt-4 rounded-2xl border border-base-200/80 bg-base-100 p-4">
@@ -39,15 +44,23 @@
         {% endif %}
         {% if search_recovery_products %}
           <div class="mt-4 border-t border-base-200 pt-4">
-            {% include "shopfront/components/recommendation_section.html" with products=search_recovery_products title=search_recovery_title subtitle="Hybrid recovery блок объединяет семантический recall, affinity-профиль и popularity fallback." recommendation_source="search_recovery" tracking_payload=search_recovery_tracking_payload %}
+            <details class="catalog-recovery-panel">
+              <summary>Показать расширенную recovery-подборку</summary>
+              <div class="catalog-recovery-panel__body">
+                {% include "shopfront/components/recommendation_section.html" with products=search_recovery_products title=search_recovery_title subtitle="Hybrid recovery блок объединяет семантический recall, affinity-профиль и popularity fallback." recommendation_source="search_recovery" tracking_payload=search_recovery_tracking_payload %}
+              </div>
+            </details>
           </div>
         {% endif %}
       </div>
     {% endif %}
     {% if products and search_recovery_products %}
-      <div class="mt-4">
-        {% include "shopfront/components/recommendation_section.html" with products=search_recovery_products title=search_recovery_title subtitle="Если выдача выглядит слишком узкой, мы добавляем похожие позиции из hybrid recovery слоя." recommendation_source="search_recovery" tracking_payload=search_recovery_tracking_payload %}
-      </div>
+      <details class="catalog-recovery-panel mt-4">
+        <summary>Расширить выдачу похожими товарами</summary>
+        <div class="catalog-recovery-panel__body">
+          {% include "shopfront/components/recommendation_section.html" with products=search_recovery_products title=search_recovery_title subtitle="Если выдача выглядит слишком узкой, мы добавляем похожие позиции из hybrid recovery слоя." recommendation_source="search_recovery" tracking_payload=search_recovery_tracking_payload %}
+        </div>
+      </details>
     {% endif %}
     {% if has_next %}
       <div id="load-more"

@@ -6,6 +6,16 @@
     <div class="account-2026__hero-title">Seller order #{{ seller_order.id }}</div>
     <div class="account-2026__hero-sub">Fulfillment карточка продавца: статусы, shipment и buyer order context.</div>
   </div>
+  {% if seller_order.shipments.all %}
+    <section class="account-2026__panel">
+      <div class="account-2026__timeline">
+        <div class="account-2026__timeline-item is-done"><strong>Order accepted</strong><span>{{ seller_order.get_status_display }}</span></div>
+        <div class="account-2026__timeline-item {% if seller_order.status == 'picking' or seller_order.status == 'shipped' or seller_order.status == 'delivered' %}is-done{% endif %}"><strong>Picking</strong><span>Комплектация и распределение по shipment</span></div>
+        <div class="account-2026__timeline-item {% if seller_order.status == 'shipped' or seller_order.status == 'delivered' %}is-done{% endif %}"><strong>Shipped</strong><span>Трекинг и carrier updates</span></div>
+        <div class="account-2026__timeline-item {% if seller_order.status == 'delivered' %}is-done{% endif %}"><strong>Delivered</strong><span>Подтверждение buyer order</span></div>
+      </div>
+    </section>
+  {% endif %}
 
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
     <section class="account-2026__panel lg:col-span-2">

@@ -67,7 +67,7 @@
     {% endif %}
     <link rel="stylesheet" href="{% static 'shopfront/css/components/brands.css' %}?v=20260309-1">
     <link rel="stylesheet" href="{% static 'shopfront/css/components/catalog.css' %}?v=20260313-catalogfilters1">
-    {% if page_type == 'product' or page_type == 'catalog' or page_type == 'search' or page_type == 'home' or page_type == 'twa_home' %}
+    {% if page_type == 'product' or page_type == 'catalog' or page_type == 'search' %}
     <link rel="stylesheet" href="{% static 'shopfront/css/components/product.css' %}?v=20260316-cardflow5">
     {% endif %}
     <link rel="stylesheet" href="{% static 'shopfront/css/components/live-search.css' %}?v=20260316-live-search-redesign2">
@@ -88,7 +88,7 @@
     <script defer src="{% static 'shopfront/ui.cart.js' %}?v=20260310-cardflow3"></script>
     <script defer src="{% static 'shopfront/ui.product-cards.js' %}"></script>
     <script defer src="{% static 'shopfront/ui.interactions.js' %}?v=20260311-catalogautocomplete1"></script>
-    <script defer src="{% static 'shopfront/ui.social.js' %}"></script>
+    <script defer src="{% static 'shopfront/ui.social.js' %}?v=20260320-comparetray1"></script>
     <script defer src="{% static 'shopfront/ui.base.js' %}"></script>
     {% if page_type == 'checkout' or page_type == 'fake_payment_page' or page_type == 'online_payment_page' or page_type == 'guest_fake_payment_page' or page_type == 'guest_online_payment_page' or page_type == 'guest_order_detail' %}
     <script defer src="{% static 'shopfront/page.checkout.js' %}?v=20260309-41"></script>
@@ -144,6 +144,7 @@
       {% block content %}{% endblock %}
     </main>
     {% include 'shopfront/components/site_footer.html' %}
+    {% include 'shopfront/components/compare_tray.html' %}
 
     {% block cart_drawer %}{% endblock %}
     {% include 'shopfront/components/mobile_nav.html' %}

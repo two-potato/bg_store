@@ -13,7 +13,7 @@ from core.logging_utils import log_calls
 from orders.models import FakeAcquiringPayment, Order, OrderItem
 
 from ..checkout_common import log
-from ..search_attribution_service import order_search_attribution
+from ..searching.attribution import order_search_attribution
 from ..checkout_support import (
     allowed_fake_payment_events as _get_allowed_fake_payment_events,
     apply_fake_payment_event as _apply_fake_payment_event,

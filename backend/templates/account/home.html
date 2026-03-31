@@ -3,7 +3,7 @@
 <section id="account-main-content" class="account-2026__main">
   <div class="account-2026__hero">
     <div class="account-2026__hero-copy">
-      <div class="account-2026__hero-kicker">Control center</div>
+      <div class="account-2026__hero-kicker">Рабочий центр</div>
       <div class="account-2026__hero-title">Личный кабинет</div>
       <div class="account-2026__hero-sub">Управляйте заказами, компаниями, адресами и персональными инструментами из одного рабочего пространства.</div>
       <div class="account-2026__hero-actions">
@@ -21,7 +21,7 @@
         <strong>{{ metrics.orders_count }}</strong>
       </article>
       <article class="account-2026__hero-stat">
-        <span class="account-2026__hero-stat-label">B2B workspaces</span>
+        <span class="account-2026__hero-stat-label">B2B-пространства</span>
         <strong>{{ metrics.company_workspaces_count }}</strong>
       </article>
       <article class="account-2026__hero-stat">
@@ -30,6 +30,102 @@
       </article>
     </div>
   </div>
+
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Фокус на сегодня</h2>
+      <span class="account-2026__panel-note">Верх кабинета теперь начинается с задач, а не со справочника всех возможностей</span>
+    </div>
+    <div class="account-2026__focus-grid">
+      <a class="account-2026__focus-card is-accent" href="/account/approvals/" hx-boost="false">
+        <span class="account-2026__focus-label">Согласование</span>
+        <strong>{{ metrics.orders_pending_approval_count }}</strong>
+        <span class="account-2026__focus-meta">Заказы, которые требуют решения прямо сейчас</span>
+      </a>
+      <a class="account-2026__focus-card" href="#buyer-repeat-procurement">
+        <span class="account-2026__focus-label">Повтор закупки</span>
+        <strong>{{ account_reorder_products|length }}</strong>
+        <span class="account-2026__focus-meta">Быстрый возврат к позициям с repeat-purchase сигналом</span>
+      </a>
+      <a class="account-2026__focus-card" href="/account/notifications/" hx-boost="false">
+        <span class="account-2026__focus-label">Уведомления</span>
+        <strong>{{ notifications|length }}</strong>
+        <span class="account-2026__focus-meta">Новые события, статусы и системные напоминания</span>
+      </a>
+      <a class="account-2026__focus-card" href="/account/legal/" hx-get="/account/legal/" hx-target="#account-main-content" hx-select="#account-main-content" hx-swap="outerHTML" hx-push-url="true">
+        <span class="account-2026__focus-label">Компании и адреса</span>
+        <strong>{{ metrics.entities_count }} / {{ metrics.addresses_count }}</strong>
+        <span class="account-2026__focus-meta">Юрлица, рабочие пространства и точки доставки под рукой</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="account-2026__panel">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Procurement queue</h2>
+      <span class="account-2026__panel-note">Непогашенные оплаты, invoices, claims и company context в одном операционном слое</span>
+    </div>
+    <div class="account-2026__queue-grid">
+      <article class="account-2026__queue-card">
+        <div class="account-2026__queue-title">Неоплаченные заказы</div>
+        <strong>{{ unpaid_orders|length }}</strong>
+        <div class="account-2026__queue-list">
+          {% for order in unpaid_orders %}
+            <a href="/account/orders/{{ order.id }}/" hx-get="/account/orders/{{ order.id }}/" hx-target="#account-main-content" hx-select="#account-main-content" hx-swap="outerHTML" hx-push-url="true">Заказ #{{ order.id }} · {{ order.total }} ₽</a>
+          {% empty %}
+            <span>Очередь пуста</span>
+          {% endfor %}
+        </div>
+      </article>
+      <article class="account-2026__queue-card">
+        <div class="account-2026__queue-title">Recent invoices</div>
+        <strong>{{ invoice_orders|length }}</strong>
+        <div class="account-2026__queue-list">
+          {% for order in invoice_orders %}
+            <a href="/account/orders/{{ order.id }}/invoice/" hx-boost="false">Invoice по заказу #{{ order.id }}</a>
+          {% empty %}
+            <span>Счета пока не нужны</span>
+          {% endfor %}
+        </div>
+      </article>
+      <article class="account-2026__queue-card">
+        <div class="account-2026__queue-title">Claims и support</div>
+        <strong>{{ open_claims|length }} / {{ support_tickets|length }}</strong>
+        <div class="account-2026__queue-list">
+          {% for claim in open_claims %}
+            <a href="/account/orders/{{ claim.order_id }}/" hx-get="/account/orders/{{ claim.order_id }}/" hx-target="#account-main-content" hx-select="#account-main-content" hx-swap="outerHTML" hx-push-url="true">Claim по заказу #{{ claim.order_id }}</a>
+          {% empty %}
+            <span>Открытых claims нет</span>
+          {% endfor %}
+          {% for ticket in support_tickets %}
+            <a href="/account/orders/{{ ticket.order_id }}/" hx-get="/account/orders/{{ ticket.order_id }}/" hx-target="#account-main-content" hx-select="#account-main-content" hx-swap="outerHTML" hx-push-url="true">Support: {{ ticket.subject }}</a>
+          {% empty %}
+            <span>Support queue пуста</span>
+          {% endfor %}
+        </div>
+      </article>
+      <article class="account-2026__queue-card">
+        <div class="account-2026__queue-title">Company context</div>
+        <strong>{{ company_memberships|length }}</strong>
+        <div class="account-2026__queue-list">
+          {% for membership in company_memberships %}
+            <a href="/account/legal/" hx-get="/account/legal/" hx-target="#account-main-content" hx-select="#account-main-content" hx-swap="outerHTML" hx-push-url="true">{{ membership.company.display_name|default:membership.company.legal_entity.name }} · {{ membership.get_role_display }}</a>
+          {% empty %}
+            <span>Подключите юрлицо для B2B flow</span>
+          {% endfor %}
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="account-2026__panel" id="buyer-repeat-procurement">
+    <div class="account-2026__panel-head">
+      <h2 class="account-2026__panel-title">Повторные закупки</h2>
+      <span class="account-2026__panel-note">Reorder и replenishment вынесены в главный рабочий контур</span>
+    </div>
+    {% include "shopfront/components/recommendation_section.html" with products=account_reorder_products title="Заказывают повторно" subtitle="Товары с самым сильным repeat-purchase сигналом по вашему аккаунту." recommendation_source="account_reorder" %}
+    {% include "shopfront/components/recommendation_section.html" with products=account_replenishment_products title="Пора пополнить" subtitle="Позиции, у которых подходит ожидаемый цикл пополнения." recommendation_source="account_replenishment" %}
+  </section>
 
   <section class="account-2026__panel">
     <div class="account-2026__panel-head">
@@ -62,7 +158,7 @@
         <div class="account-2026__metric-value">{{ metrics.subscriptions_count }}</div>
       </article>
       <article class="account-2026__metric">
-        <div class="account-2026__metric-label">B2B workspaces</div>
+        <div class="account-2026__metric-label">B2B-пространства</div>
         <div class="account-2026__metric-value">{{ metrics.company_workspaces_count }}</div>
       </article>
       <article class="account-2026__metric">
@@ -74,8 +170,8 @@
 
   <section class="account-2026__panel">
     <div class="account-2026__panel-head">
-      <h2 class="account-2026__panel-title">Быстрые сценарии</h2>
-      <span class="account-2026__panel-note">Частые действия без лишних переходов</span>
+      <h2 class="account-2026__panel-title">Рабочие переходы</h2>
+      <span class="account-2026__panel-note">Ниже остаются все вторичные сценарии, когда основные задачи уже разобраны</span>
     </div>
     <div class="account-2026__action-grid">
       <a class="account-2026__action-tile is-primary" href="/catalog/" hx-boost="false">
@@ -88,15 +184,15 @@
       </a>
       <a class="account-2026__action-tile" href="/account/legal/" hx-get="/account/legal/" hx-target="#account-main-content" hx-select="#account-main-content" hx-swap="outerHTML" hx-push-url="true">
         <span class="account-2026__action-title">Компании</span>
-        <span class="account-2026__action-meta">Юрлица, workspaces, approval</span>
+        <span class="account-2026__action-meta">Юрлица, рабочие пространства и согласование</span>
       </a>
       <a class="account-2026__action-tile" href="/account/addresses/" hx-get="/account/addresses/" hx-target="#account-main-content" hx-select="#account-main-content" hx-swap="outerHTML" hx-push-url="true">
         <span class="account-2026__action-title">Адреса</span>
-        <span class="account-2026__action-meta">Точки доставки и defaults</span>
+        <span class="account-2026__action-meta">Точки доставки и адреса по умолчанию</span>
       </a>
       <a class="account-2026__action-tile" href="/lists/" hx-boost="false">
         <span class="account-2026__action-title">Списки закупок</span>
-        <span class="account-2026__action-meta">Repeat purchase и заготовки</span>
+        <span class="account-2026__action-meta">Повтор закупки и заготовки под сценарии</span>
       </a>
       <a class="account-2026__action-tile" href="/favorites/" hx-boost="false">
         <span class="account-2026__action-title">Избранное</span>
@@ -111,15 +207,6 @@
         <span class="account-2026__action-meta">Повторный поиск и подписки</span>
       </a>
     </div>
-  </section>
-
-  <section class="account-2026__panel">
-    <div class="account-2026__panel-head">
-      <h2 class="account-2026__panel-title">Повторные закупки</h2>
-      <span class="account-2026__panel-note">Реальные reorder и replenishment сценарии на основе вашей истории</span>
-    </div>
-    {% include "shopfront/components/recommendation_section.html" with products=account_reorder_products title="Заказывают повторно" subtitle="Товары с самым сильным repeat-purchase сигналом по вашему аккаунту." recommendation_source="account_reorder" %}
-    {% include "shopfront/components/recommendation_section.html" with products=account_replenishment_products title="Пора пополнить" subtitle="Позиции, у которых подходит ожидаемый цикл пополнения." recommendation_source="account_replenishment" %}
   </section>
 
   <div class="account-2026__workspace-grid">
@@ -193,7 +280,7 @@
           <strong>{{ metrics.entities_count }} / {{ metrics.addresses_count }}</strong>
         </article>
         <article class="account-2026__mini-card">
-          <span class="account-2026__mini-label">B2B workspaces</span>
+          <span class="account-2026__mini-label">B2B-пространства</span>
           <strong>{{ metrics.company_workspaces_count }}</strong>
         </article>
       </div>
@@ -208,7 +295,21 @@
   <div class="account-2026__workspace-grid mt-3">
     <section class="account-2026__panel">
       <div class="account-2026__panel-head">
-        <h2 class="account-2026__panel-title">Notification center</h2>
+        <h2 class="account-2026__panel-title">Последние закупки и repeat path</h2>
+        <a class="account-2026__panel-link" href="/account/orders/" hx-get="/account/orders/" hx-target="#account-main-content" hx-select="#account-main-content" hx-swap="outerHTML" hx-push-url="true">Открыть историю</a>
+      </div>
+      <div class="account-2026__queue-list account-2026__queue-list--wide">
+        {% for order in recent_orders %}
+          <a href="/account/orders/{{ order.id }}/" hx-get="/account/orders/{{ order.id }}/" hx-target="#account-main-content" hx-select="#account-main-content" hx-swap="outerHTML" hx-push-url="true">Заказ #{{ order.id }} · {{ order.total }} ₽ · {{ order.get_status_display }}</a>
+        {% empty %}
+          <span>История заказов пока пуста</span>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="account-2026__panel">
+      <div class="account-2026__panel-head">
+        <h2 class="account-2026__panel-title">Центр уведомлений</h2>
         <a class="account-2026__panel-link" href="/account/notifications/" hx-boost="false">Открыть всё</a>
       </div>
       <div class="space-y-2">
@@ -225,7 +326,7 @@
 
     <section class="account-2026__panel">
       <div class="account-2026__panel-head">
-        <h2 class="account-2026__panel-title">Preferences</h2>
+        <h2 class="account-2026__panel-title">Предпочтения</h2>
         <a class="account-2026__panel-link" href="/account/preferences/" hx-boost="false">Полная форма</a>
       </div>
       <form method="post" class="account-2026__form">

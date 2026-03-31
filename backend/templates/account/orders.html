@@ -8,7 +8,10 @@
   <section class="account-2026__panel">
     <div class="account-2026__panel-head">
       <h2 class="account-2026__panel-title">Лента заказов</h2>
-      <a class="account-2026__panel-link" href="/catalog/" hx-boost="false">Перейти в каталог</a>
+      <div class="flex flex-wrap gap-2">
+        <a class="account-2026__panel-link" href="/catalog/" hx-boost="false">Перейти в каталог</a>
+        <a class="account-2026__panel-link" href="/lists/" hx-boost="false">Черновики закупки</a>
+      </div>
     </div>
     {% if orders %}
       {% include 'account/components/order_table.html' with orders=orders %}

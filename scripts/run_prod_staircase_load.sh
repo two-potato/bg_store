@@ -7,6 +7,7 @@ cd "$ROOT_DIR"
 LOCUST_BIN="${LOCUST_BIN:-$ROOT_DIR/.locust_env/bin/locust}"
 HOST="${HOST:-https://potatofarm.ru}"
 OUT_BASE="${OUT_BASE:-$ROOT_DIR/.artifacts/locust_runs}"
+PROFILE="${STAIRCASE_PROFILE:-full}"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 RUN_DIR="$OUT_BASE/$STAMP"
 mkdir -p "$RUN_DIR"
@@ -56,17 +57,22 @@ run_session() {
     --html "$prefix.html"
 }
 
-# Session 1: baseline staircase
-run_session "s01_baseline" 300 30 50 90s 60
+if [ "$PROFILE" = "nightly" ]; then
+  run_session "s01_nightly_baseline" 120 20 30 60s 45
+  run_session "s02_nightly_stress" 300 30 60 60s 60
+else
+  # Session 1: baseline staircase
+  run_session "s01_baseline" 300 30 50 90s 60
 
-# Session 2: stress staircase
-run_session "s02_stress" 900 60 150 90s 90
+  # Session 2: stress staircase
+  run_session "s02_stress" 900 60 150 90s 90
 
-# Session 3: peak staircase
-run_session "s03_peak" 1200 80 200 90s 120
+  # Session 3: peak staircase
+  run_session "s03_peak" 1200 80 200 90s 120
 
-# Session 4: endurance staircase
-run_session "s04_endurance" 800 50 200 120s 120
+  # Session 4: endurance staircase
+  run_session "s04_endurance" 800 50 200 120s 120
+fi
 
 echo ""
 echo "Load sessions completed. Artifacts: $RUN_DIR"

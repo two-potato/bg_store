@@ -1,130 +1,52 @@
 # Backend Guide
 
-## Goal
+## Layering
 
-This document is the shortest reliable mental model for changing backend code in this repository.
+Use this order of responsibility when adding backend code:
 
-## Key Entry Points
+1. Models for persistence and constraints
+2. Selectors/query helpers for read-heavy ORM assembly
+3. Services for orchestration and business rules
+4. Views/API serializers as transport adapters
+5. Tasks for async or scheduled work
 
-### API
+## Placement Rules
 
-- URL config: `backend/config/urls.py`
-- API docs: `/api/schema/`, `/api/docs/`, `/api/redoc/`
-- main API domains:
-  - `backend/catalog/`
-  - `backend/commerce/`
-  - `backend/orders/`
-  - `backend/users/`
-- package entrypoints that now matter:
-  - `backend/catalog/models/`
-  - `backend/commerce/models/`
-  - `backend/commerce/views/`
-  - `backend/orders/models/`
-  - `backend/users/views/`
+- New seller/account HTML logic: `backend/users/views/`
+- New storefront UI logic: `backend/shopfront/views/`
+- New search logic: `backend/shopfront/searching/`
+- New recommendation logic: `backend/shopfront/recommendation/`
+- New public search/recommendation contract API: `backend/shopfront/api/`
+- Shared order business rules: `backend/orders/services.py` or dedicated order service modules
 
-### Storefront
+## View Rules
 
-- shared storefront helpers: `backend/shopfront/views/`
-- storefront page/view modules:
-  - `backend/shopfront/page_views.py`
-  - `backend/shopfront/catalog_views.py`
-  - `backend/shopfront/product_views.py`
-  - `backend/shopfront/discovery_views.py`
-  - `backend/shopfront/checkout_views.py`
-- search services:
-  - `backend/shopfront/search.py`
-  - `backend/shopfront/search_service.py`
-  - `backend/shopfront/live_search_service.py`
-- recommendation helpers: `backend/shopfront/recommendations.py`
+- Parse request, call service, render response
+- Avoid large multi-branch ORM orchestration directly inside views
+- Keep redirects, HTMX partials, and JSON responses in the transport layer
 
-### Catalog Domain
+## Service Rules
 
-- catalog models package: `backend/catalog/models/`
-- most frequently touched modules:
-  - `backend/catalog/models/taxonomy.py`
-  - `backend/catalog/models/product.py`
-  - `backend/catalog/models/merchandising.py`
-  - `backend/catalog/models/marketplace.py`
-  - `backend/catalog/models/reviews.py`
+- Prefer typed inputs and outputs
+- Keep public service functions small and testable
+- Do not hide DB-heavy loops inside view helpers
 
-### Orders Domain
+## Performance Rules
 
-- order models package: `backend/orders/models/`
-- most frequently touched modules:
-  - `backend/orders/models/base.py`
-  - `backend/orders/models/fulfillment.py`
-  - `backend/orders/models/payment.py`
-  - `backend/orders/models/support.py`
-  - `backend/orders/services.py`
+- Default to `select_related` / `prefetch_related` on user-facing pages
+- Add query-budget tests for list/detail pages
+- Prefer cached selectors for expensive read-mostly filters and menus
 
-### Shared Infrastructure
+## Security Rules
 
-- logging and request context: `backend/core/logging_utils.py`
-- middleware: `backend/core/middleware.py`
-- notifications: `backend/core/notifications.py`
-- shared models: `backend/core/models.py`
+- No `csrf_exempt` on browser-driven endpoints without compensating control
+- Validate uploads server-side
+- Use internal token checks only for service-to-service endpoints
+- Fail fast in production when secrets are placeholders
 
-## Coding Conventions Used Here
+## Testing Rules
 
-- business behavior is often extracted into service modules even when consumed by views only
-- query-heavy code prefers dedicated selectors/services over bloated templates
-- search and recommendation logic intentionally use pragmatic heuristics, not heavyweight ML services
-- API contracts are described with `drf-spectacular` annotations and serializer metadata
-
-## Search Workflow
-
-If you change catalog search behavior:
-
-1. inspect `shopfront/search_service.py`
-2. inspect `shopfront/search.py`
-3. reindex:
-
-```bash
-docker compose exec backend python manage.py reindex_products_search
-```
-
-4. verify:
-
-```bash
-curl http://localhost:8080/api/schema/
-curl http://localhost:8080/
-```
-
-## API Documentation Workflow
-
-When adding or changing an endpoint:
-
-1. annotate the view with `extend_schema` or `extend_schema_view`
-2. document request and response serializers
-3. add examples and meaningful `help_text`
-4. verify live schema locally
-
-Useful command:
-
-```bash
-docker compose exec backend /app/.venv/bin/python manage.py spectacular --file /tmp/schema.yaml --validate
-```
-
-## Common Pitfalls
-
-- local compose bind-mounts `backend/` into `backend`, `backend-test`, `celery-worker`, and `celery-beat`
-- OpenSearch changes are invisible until the index is rebuilt
-- some flows depend on `INTERNAL_TOKEN`, Telegram env vars, or DaData env vars
-- use compose-backed commands for schema and tests so they run against the live tree and the `db` hostname
-
-## Recommended Change Strategy
-
-For most backend changes:
-
-1. inspect the owning domain and any service modules it calls
-2. update code and docstrings together
-3. update OpenAPI docs if the contract changes
-4. verify the live endpoint or live schema
-5. run the smallest relevant test slice
-
-Useful local verification:
-
-```bash
-docker compose run --rm --no-deps backend-test /app/.venv/bin/python manage.py check
-docker compose run --rm --no-deps backend-test /app/.venv/bin/pytest --no-cov tests/test_api_docs.py -q
-```
+- Unit test services
+- Integration test HTML views and API endpoints
+- Add query count assertions for catalog/order/account pages
+- Keep browser smoke for critical storefront flows

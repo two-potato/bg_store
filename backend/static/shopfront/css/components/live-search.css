@@ -551,3 +551,35 @@ body.app-theme .live-search-all--v3 {
     padding-right: 12px;
   }
 }
+
+body.app-theme .live-search-segments {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  padding: 4px 14px 10px;
+}
+
+body.app-theme .live-search-quick-actions {
+  display: grid;
+  gap: 8px;
+}
+
+body.app-theme .live-search-quick-action {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(213, 224, 237, 0.96);
+  background: rgba(255, 255, 255, 0.82);
+  color: #20425f;
+}
+
+body.app-theme .live-search-quick-action strong {
+  font-size: 0.84rem;
+  color: #17324f;
+}
+
+body.app-theme .live-search-quick-action span {
+  font-size: 0.76rem;
+  color: #6b7a8f;
+}

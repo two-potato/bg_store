@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 from random import Random
-import re
 
 from django.conf import settings
 from django.core.management.base import BaseCommand

@@ -59,6 +59,13 @@
            hx-select="#account-main-content"
            hx-swap="outerHTML"
            hx-push-url="true">Открыть заказ</a>
+        <form method="post" action="/account/orders/{{ o.id }}/reorder/">
+          {% csrf_token %}
+          <button class="account-2026__panel-link" type="submit">Buy again</button>
+        </form>
+        {% if o.payment_method == "invoice" %}
+          <a class="account-2026__panel-link" href="/account/orders/{{ o.id }}/invoice/" hx-boost="false">Invoice</a>
+        {% endif %}
       </div>
     </article>
   {% endfor %}

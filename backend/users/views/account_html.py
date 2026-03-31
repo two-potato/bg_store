@@ -24,12 +24,11 @@ from ..forms import (
     OrderClaimForm,
     OrderClaimUpdateForm,
     OrderSupportTicketForm,
-    OrderSupportTicketUpdateForm,
     ProfileForm,
 )
 from ..models import UserProfile
 from shopfront.models import FavoriteProduct, SavedSearch
-from shopfront.recommendation_service import order_reorder_candidates, reorder_recommendations
+from shopfront.recommendation.service import order_reorder_candidates, reorder_recommendations
 from .helpers import (
     _approval_approved_count,
     _approval_required_count,
@@ -39,7 +38,6 @@ from .helpers import (
     _managed_company_queryset,
     _notification_feed,
     _visible_orders_queryset,
-    _visible_seller_orders_queryset,
     _is_seller,
     log,
     ensure_company_workspace,
@@ -65,7 +63,7 @@ def account_home(request):
         messages.success(request, "Профиль обновлён")
         return redirect("account_home")
     from commerce.models import CompanyMembership, DeliveryAddress, LegalEntityMembership
-    from orders.models import Order
+    from orders.models import Order, OrderClaim, OrderSupportTicket
     from shopfront.models import BrandSubscription, CategorySubscription, SavedList
 
     entity_ids = list(LegalEntityMembership.objects.filter(user=request.user).values_list("legal_entity_id", flat=True))
@@ -82,6 +80,25 @@ def account_home(request):
     }
     if _is_seller(request):
         return redirect("account_seller_home")
+    recent_orders = Order.objects.filter(placed_by=request.user).select_related("legal_entity").order_by("-created_at", "-id")[:6]
+    unpaid_orders = Order.objects.filter(
+        placed_by=request.user,
+        payment_method__in=[Order.PaymentMethod.INVOICE, Order.PaymentMethod.MIR_CARD, Order.PaymentMethod.ONLINE_CARD],
+        status__in=[Order.Status.NEW, Order.Status.CONFIRMED, Order.Status.CHANGED],
+    ).order_by("-created_at", "-id")[:6]
+    invoice_orders = Order.objects.filter(
+        placed_by=request.user,
+        payment_method=Order.PaymentMethod.INVOICE,
+    ).order_by("-created_at", "-id")[:6]
+    open_claims = OrderClaim.objects.filter(
+        order__placed_by=request.user,
+        status__in=[OrderClaim.Status.OPEN, OrderClaim.Status.IN_REVIEW],
+    ).select_related("order").order_by("-updated_at", "-id")[:6]
+    support_tickets = OrderSupportTicket.objects.filter(
+        order__placed_by=request.user,
+        status__in=[OrderSupportTicket.Status.OPEN, OrderSupportTicket.Status.IN_PROGRESS],
+    ).select_related("order").order_by("-updated_at", "-id")[:6]
+    company_memberships = CompanyMembership.objects.select_related("company", "company__legal_entity").filter(user=request.user).order_by("company__display_name", "company__legal_entity__name")
     return render(
         request,
         "account/home.html",
@@ -93,6 +110,12 @@ def account_home(request):
             "metrics": metrics,
             "account_reorder_products": reorder_recommendations(request.user, limit=8),
             "account_replenishment_products": reorder_recommendations(request.user, limit=8),
+            "recent_orders": recent_orders,
+            "unpaid_orders": unpaid_orders,
+            "invoice_orders": invoice_orders,
+            "open_claims": open_claims,
+            "support_tickets": support_tickets,
+            "company_memberships": company_memberships,
             "account_section": "home",
         },
     )

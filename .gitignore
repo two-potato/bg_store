@@ -36,3 +36,6 @@ coverage.xml
 output/
 deploy/glitchtip/.env
 deploy/letsencrypt-local/
+frontend/.next/
+frontend/node_modules/
+frontend/tsconfig.tsbuildinfo

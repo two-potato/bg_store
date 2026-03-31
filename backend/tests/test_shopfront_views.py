@@ -2,11 +2,12 @@ import json
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.test import Client
 from django.test.utils import override_settings
 from catalog.models import Brand, Category, Collection, CollectionItem, Country, Product, ProductDocument, ProductQuestion, ProductReview, ProductReviewComment, ProductReviewPhoto, ProductReviewVote, Series, Tag, SellerOffer, SellerInventory
-from shopfront import search as sf_search
-from shopfront.search_attribution_service import SEARCH_ATTRIBUTION_SESSION_KEY
-from shopfront.search_service import SearchBundle
+from shopfront.searching import backend as sf_search
+from shopfront.searching.attribution import SEARCH_ATTRIBUTION_SESSION_KEY
+from shopfront.searching.service import SearchBundle
 from commerce.models import LegalEntity, LegalEntityMembership, DeliveryAddress, SellerStore, StoreReview
 from orders.models import Order, FakeAcquiringPayment
 from promotions.models import Coupon, PromotionRule, PromotionRedemption
@@ -69,7 +70,10 @@ def test_catalog_filter_suggestions_endpoint(client, db):
     category_response = client.get("/catalog/filter-suggestions/?kind=category&q=syr")
     assert category_response.status_code == 200
     category_items = category_response.json()["items"]
-    assert any(item["value"] == child.slug for item in category_items)
+    assert any(
+        item["value"] in {child.slug, f"{category.slug}/{child.slug}"}
+        for item in category_items
+    )
     assert any("Coffee Syrups" in item["hint"] for item in category_items)
 
     tag_response = client.get("/catalog/filter-suggestions/?kind=tag&q=goo")
@@ -92,6 +96,53 @@ def test_search_feedback_ingest_accepts_search_event(client, db):
     )
 
     assert response.status_code == 204
+
+
+def test_search_feedback_ingest_requires_same_origin_when_origin_header_present(db):
+    _prod()
+    csrf_client = Client(enforce_csrf_checks=True)
+    page = csrf_client.get("/")
+    assert page.status_code == 200
+    token = page.cookies["csrftoken"].value
+
+    allowed = csrf_client.post(
+        "/analytics/search-feedback/",
+        data='{"event":"search","search_term":"сироп"}',
+        content_type="application/json",
+        HTTP_ORIGIN="http://testserver",
+        HTTP_X_CSRFTOKEN=token,
+    )
+    assert allowed.status_code == 204
+
+    blocked = csrf_client.post(
+        "/analytics/search-feedback/",
+        data='{"event":"search","search_term":"сироп"}',
+        content_type="application/json",
+        HTTP_ORIGIN="https://evil.example",
+        HTTP_X_CSRFTOKEN=token,
+    )
+    assert blocked.status_code == 403
+
+
+@override_settings(ANALYTICS_INGEST_RATE_LIMIT=2, ANALYTICS_INGEST_WINDOW_SECONDS=60)
+def test_search_feedback_ingest_rate_limits_bursts(db):
+    _prod()
+    csrf_client = Client(enforce_csrf_checks=True)
+    page = csrf_client.get("/")
+    token = page.cookies["csrftoken"].value
+    headers = {
+        "content_type": "application/json",
+        "HTTP_ORIGIN": "http://testserver",
+        "HTTP_X_CSRFTOKEN": token,
+    }
+
+    first = csrf_client.post("/analytics/search-feedback/", data='{"event":"search","search_term":"чай"}', **headers)
+    second = csrf_client.post("/analytics/search-feedback/", data='{"event":"search","search_term":"чай"}', **headers)
+    third = csrf_client.post("/analytics/search-feedback/", data='{"event":"search","search_term":"чай"}', **headers)
+
+    assert first.status_code == 204
+    assert second.status_code == 204
+    assert third.status_code == 429
 
 
 def test_search_feedback_ingest_rejects_invalid_payload(client, db):
@@ -146,6 +197,8 @@ def test_search_feedback_attribution_enriches_add_to_cart(client, db):
 
 def test_recommendation_feedback_ingest_and_add_to_cart_linkage(client, db):
     product, *_ = _prod()
+    recommendation_id = "reco-stage1-001"
+    impression_id = "imp-stage1-001"
     response = client.post(
         "/analytics/recommendation-feedback/",
         data=json.dumps(
@@ -157,11 +210,19 @@ def test_recommendation_feedback_ingest_and_add_to_cart_linkage(client, db):
                 "request_id": "req-1",
                 "strategy": "materialized_or_ranked",
                 "model_version": "heuristic_ltr_prep_v1",
+                "recommendation_id": recommendation_id,
+                "engine_source": "django-inline",
+                "service_source": "django-inline",
+                "fallback_source": "",
+                "empty_reason": "",
+                "latency_ms": 42,
                 "ecommerce": {
                     "items": [
                         {
                             "item_id": str(product.id),
                             "item_name": product.name,
+                            "recommendation_id": recommendation_id,
+                            "impression_id": impression_id,
                             "recommendation_reason_codes": ["trending"],
                             "recommendation_candidate_sources": ["global_popular"],
                             "recommendation_score_hint": 1.25,
@@ -186,6 +247,13 @@ def test_recommendation_feedback_ingest_and_add_to_cart_linkage(client, db):
                 "item_id": str(product.id),
                 "item_name": product.name,
                 "position": 1,
+                "recommendation_id": recommendation_id,
+                "impression_id": impression_id,
+                "engine_source": "django-inline",
+                "service_source": "django-inline",
+                "fallback_source": "",
+                "empty_reason": "",
+                "latency_ms": 42,
             }
         ),
         content_type="application/json",
@@ -199,7 +267,18 @@ def test_recommendation_feedback_ingest_and_add_to_cart_linkage(client, db):
     assert trigger["analyticsEvent"]["experiment_variant"] == "ranked_v2"
     assert RecommendationEvent.objects.filter(event="add_to_cart", recommendation_source="home_popular", product=product).exists()
     impression = RecommendationEvent.objects.get(event="recommendation_impression", recommendation_source="home_popular", product=product)
+    add_event = RecommendationEvent.objects.get(event="add_to_cart", recommendation_source="home_popular", product=product)
     assert impression.payload["recommendation_reason_codes"] == ["trending"]
+    assert impression.payload["recommendation_id"] == recommendation_id
+    assert impression.payload["impression_id"] == impression_id
+    assert impression.payload["engine_source"] == "django-inline"
+    assert impression.payload["service_source"] == "django-inline"
+    assert impression.payload["latency_ms"] == 42
+    assert add_event.payload["recommendation_id"] == recommendation_id
+    assert add_event.payload["impression_id"] == impression_id
+    assert add_event.payload["engine_source"] == "django-inline"
+    assert add_event.payload["service_source"] == "django-inline"
+    assert add_event.payload["latency_ms"] == 42
 
 
 def test_catalog_renders_single_main_product_grid_id(client, db):
@@ -478,7 +557,6 @@ def test_home_and_brands_use_generated_brand_logos_and_static_hero_images(client
 
 def test_home_renders_popular_recommendation_section(client_logged, user, db):
     p, *_ = _prod()
-    from shopfront.models import RecommendationSet
 
     RecommendationSet.objects.create(
         kind="home_popular",
@@ -641,11 +719,11 @@ def test_catalog_q_uses_es_ids_only(client, monkeypatch, db):
         def live_bundle(self, query, limit, country_limit):
             return SearchBundle(product_ids=[p2.id], countries=[], suggestions=[], provider="test")
 
-    monkeypatch.setattr("shopfront.views.get_search_provider", lambda: _Provider())
+    monkeypatch.setattr("shopfront.catalog_page_service.get_search_provider", lambda: _Provider())
     r = client.get("/search/?q=alpha")
     assert r.status_code == 200
     assert "Beta" in r.text
-    assert "Alpha" not in r.text
+    assert ">Alpha<" not in r.text
 
 
 def test_catalog_parent_category_includes_descendants(client, db):
@@ -700,7 +778,7 @@ def test_catalog_zero_results_shows_recovery_and_fallback_products(client, monke
         def live_bundle(self, query, limit, country_limit):
             return SearchBundle(product_ids=[], countries=[], suggestions=[], provider="test")
 
-    monkeypatch.setattr("shopfront.views.get_search_provider", lambda: _Provider())
+    monkeypatch.setattr("shopfront.catalog_page_service.get_search_provider", lambda: _Provider())
     r = client.get("/search/?q=сиропы")
     assert r.status_code == 200
     assert "Возможно, вы искали" in r.text
@@ -773,7 +851,10 @@ def test_catalog_zero_results_renders_search_recovery_recommendations(client, mo
     def _fake_recovery(query, *, user=None, request=None, limit=8):
         return {"products": [product], "tracking_payload": "", "variant": "ranked_v2"}
 
-    monkeypatch.setattr("shopfront.views.catalog.search_recovery_recommendations", _fake_recovery)
+    monkeypatch.setattr(
+        "shopfront.catalog_page_service.search_recovery_recommendations",
+        _fake_recovery,
+    )
 
     response = client.get("/search/?q=totally-missing-query")
 

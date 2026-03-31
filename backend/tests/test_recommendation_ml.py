@@ -7,9 +7,9 @@ from django.test import RequestFactory, override_settings
 from catalog.models import Brand, Category, Product
 from orders.models import Order, OrderItem
 from shopfront.models import FavoriteProduct, RecommendationEvent, RecommendationFeatureSnapshot, RecentlyViewedProduct
-from shopfront.recommendation_feature_store import refresh_recommendation_feature_snapshots
-from shopfront.recommendation_ml import activate_model, active_model_for_surface, build_training_dataset, train_logistic_model, train_recommendation_model
-from shopfront.recommendation_scoring_service import score_candidates_contract
+from shopfront.recommendation.feature_store import refresh_recommendation_feature_snapshots
+from shopfront.recommendation.ml import activate_model, active_model_for_surface, build_training_dataset, train_logistic_model, train_recommendation_model
+from shopfront.recommendation.scoring_service import score_candidates_contract
 
 
 pytestmark = pytest.mark.django_db

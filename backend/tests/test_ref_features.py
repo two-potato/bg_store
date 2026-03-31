@@ -48,8 +48,17 @@ def test_friendship_unique_and_str():
     f.accepted = True
     f.save()
     assert "accepted" in str(f)
-    with pytest.raises(Exception):
-        Friendship.objects.create(from_user=u1, to_user=u2)
+    duplicate = Friendship.objects.create(from_user=u1, to_user=u2)
+    assert duplicate.pk == f.pk
+    assert Friendship.objects.filter(from_user=u1, to_user=u2).count() == 1
+
+
+def test_friendship_rejects_self_reference():
+    U = get_user_model()
+    u1 = U.objects.create_user(username="solo")
+
+    with pytest.raises(ValidationError):
+        Friendship.objects.create(from_user=u1, to_user=u1)
 
 
 def test_product_serializer_color_country_names():

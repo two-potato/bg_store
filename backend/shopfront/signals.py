@@ -6,11 +6,13 @@ from catalog.models import Brand, Category, Product, ProductImage, ProductReview
 
 
 def _invalidate(*keys: str):
+    """Internal helper for invalidate."""
     cache.delete_many(list(keys))
 
 
 @receiver([post_save, post_delete], sender=Category)
 def _invalidate_categories_cache(**kwargs):
+    """Internal helper for invalidate categories cache."""
     _invalidate(
         "shopfront:header_categories:v1",
         "shopfront:home:category_ids:v1:8",
@@ -20,22 +22,26 @@ def _invalidate_categories_cache(**kwargs):
 
 @receiver([post_save, post_delete], sender=Brand)
 def _invalidate_brands_cache(**kwargs):
+    """Internal helper for invalidate brands cache."""
     _invalidate("shopfront:catalog:brands:v1")
 
 
 @receiver([post_save, post_delete], sender=Tag)
 def _invalidate_tags_cache(**kwargs):
+    """Internal helper for invalidate tags cache."""
     _invalidate("shopfront:catalog:tags:v1")
 
 
 @receiver([post_save, post_delete], sender=Product)
 @receiver([post_save, post_delete], sender=ProductImage)
 def _invalidate_products_cache(**kwargs):
+    """Internal helper for invalidate products cache."""
     _invalidate("shopfront:home:product_ids:v1:12")
 
 
 @receiver([post_save, post_delete], sender=ProductReview)
 def _invalidate_product_review_cache(sender, instance: ProductReview, **kwargs):
+    """Internal helper for invalidate product review cache."""
     keys = [
         "shopfront:home:product_ids:v1:12",
         f"shopfront:product_rating:v1:{instance.product_id}",

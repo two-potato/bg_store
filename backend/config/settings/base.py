@@ -187,6 +187,8 @@ SPECTACULAR_SETTINGS = {
         "- Commerce: юрлица, адреса доставки, Dadata lookup и административные действия\n"
         "- Catalog: бренды, серии, категории и товары\n"
         "- Orders: создание, просмотр и служебные approve/reject операции\n\n"
+        "- Search: контрактный слой поиска и suggest/facet surfaces\n"
+        "- Recommendations: контрактный слой recommendation surfaces\n\n"
         "Аутентификация:\n"
         "- Большинство методов требуют Bearer JWT access token\n"
         "- `/api/users/auth/tg-webapp/` выдаёт access token для Telegram WebApp\n"
@@ -203,6 +205,8 @@ SPECTACULAR_SETTINGS = {
         {"name": "Catalog", "description": "Публичный каталог брендов, категорий, серий и товаров"},
         {"name": "Orders", "description": "Создание и чтение заказов компании"},
         {"name": "Internal Orders", "description": "Внутренние approve/reject операции для заказов"},
+        {"name": "Search", "description": "Контрактный слой поиска storefront и фасеты/suggestions"},
+        {"name": "Recommendations", "description": "Контрактный слой recommendation surfaces storefront"},
         {"name": "Schema", "description": "OpenAPI schema и UI-документация"},
     ],
     "COMPONENT_SPLIT_REQUEST": True,
@@ -283,6 +287,8 @@ POSTHOG_API_KEY = os.getenv("POSTHOG_API_KEY", "").strip()
 POSTHOG_HOST = os.getenv("POSTHOG_HOST", "https://app.posthog.com").strip()
 CLARITY_PROJECT_ID = os.getenv("CLARITY_PROJECT_ID", "").strip()
 ANALYTICS_REQUIRE_CONSENT = _env_bool("ANALYTICS_REQUIRE_CONSENT", not DEBUG)
+ANALYTICS_INGEST_RATE_LIMIT = int(os.getenv("ANALYTICS_INGEST_RATE_LIMIT", "180"))
+ANALYTICS_INGEST_WINDOW_SECONDS = int(os.getenv("ANALYTICS_INGEST_WINDOW_SECONDS", "60"))
 
 # Search readiness
 SEARCH_PROVIDER = os.getenv("SEARCH_PROVIDER", "opensearch").strip().lower()
@@ -292,6 +298,12 @@ SEARCH_QUERY_REWRITE_ENABLED = _env_bool("SEARCH_QUERY_REWRITE_ENABLED", True)
 SEARCH_KEYBOARD_LAYOUT_CORRECTION_ENABLED = _env_bool("SEARCH_KEYBOARD_LAYOUT_CORRECTION_ENABLED", True)
 SEARCH_RERANK_ENABLED = _env_bool("SEARCH_RERANK_ENABLED", True)
 SEMANTIC_SEARCH_BACKEND = os.getenv("SEMANTIC_SEARCH_BACKEND", "hybrid-db").strip().lower()
+SEARCH_SERVICE_MODE = os.getenv("SEARCH_SERVICE_MODE", "django-inline").strip().lower()
+SEARCH_SERVICE_URL = os.getenv("SEARCH_SERVICE_URL", "http://search-api:8010").strip().rstrip("/")
+SEARCH_SERVICE_TIMEOUT_SECONDS = float(os.getenv("SEARCH_SERVICE_TIMEOUT_SECONDS", "0.8"))
+RECOMMENDATION_SERVICE_MODE = os.getenv("RECOMMENDATION_SERVICE_MODE", "django-inline").strip().lower()
+RECOMMENDATION_SERVICE_URL = os.getenv("RECOMMENDATION_SERVICE_URL", "http://recommendation-api:8011").strip().rstrip("/")
+RECOMMENDATION_SERVICE_TIMEOUT_SECONDS = float(os.getenv("RECOMMENDATION_SERVICE_TIMEOUT_SECONDS", "0.8"))
 
 # Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -300,6 +312,10 @@ TG_INIT_DATA_MAX_AGE_SECONDS = int(os.getenv("TG_INIT_DATA_MAX_AGE_SECONDS", "30
 # Login captcha / anti-bruteforce
 LOGIN_CAPTCHA_THRESHOLD = int(os.getenv("LOGIN_CAPTCHA_THRESHOLD", "5"))
 LOGIN_CAPTCHA_WINDOW_SECONDS = int(os.getenv("LOGIN_CAPTCHA_WINDOW_SECONDS", "900"))
+AUTH_LOGIN_RATE_LIMIT_ATTEMPTS = int(os.getenv("AUTH_LOGIN_RATE_LIMIT_ATTEMPTS", "30"))
+AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS", "3600"))
+AUTH_REGISTER_RATE_LIMIT_ATTEMPTS = int(os.getenv("AUTH_REGISTER_RATE_LIMIT_ATTEMPTS", "20"))
+AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS", "3600"))
 TURNSTILE_SITE_KEY = os.getenv("TURNSTILE_SITE_KEY", "1x00000000000000000000AA")
 TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "1x0000000000000000000000000000000AA")
 
@@ -459,13 +475,20 @@ LOG_JSON = os.getenv("LOG_JSON", "0") == "1"
 
 # File logging configuration
 LOG_FILE_PATH = os.getenv("LOG_FILE_PATH", "/app/logs/app.log")
-_log_handlers = ["console", "file"]
-_log_dir = os.path.dirname(LOG_FILE_PATH) or "."
-try:
-    os.makedirs(_log_dir, exist_ok=True)
-except Exception:  # pragma: no cover - filesystem edge-case
-    # Fall back to console-only logging when the file path is unavailable.
-    _log_handlers = ["console"]
+
+
+def _can_use_log_file(path: str) -> bool:
+    log_dir = os.path.dirname(path) or "."
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+        with open(path, "a", encoding="utf-8"):
+            pass
+    except OSError:
+        return False
+    return True
+
+
+_log_handlers = ["console", "file"] if _can_use_log_file(LOG_FILE_PATH) else ["console"]
 
 _LOG_FORMAT = (
     "%(asctime)s %(levelname)s %(name)s [rid=%(request_id)s user=%(user)s] "

@@ -3,10 +3,12 @@ import re
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client
+from django.utils.datastructures import MultiValueDict
 from orders.models import Order, OrderItem, SellerOrder, ShipmentItem, FakeAcquiringPayment, OrderSupportTicket
 from orders.services import plan_seller_splits
 from commerce.models import LegalEntity, LegalEntityMembership, DeliveryAddress, LegalEntityCreationRequest, SellerStore, MembershipRole, CompanyMembership, ApprovalPolicy
 from users.models import UserProfile
+from users.forms import SellerProductCreateForm, SellerProductImportForm
 from catalog.models import Brand, Category, Product, ProductReview, ProductReviewComment, SellerOffer, SellerInventory, ProductQuestion, StockMovement
 from orders.models import OrderClaim
 
@@ -282,8 +284,9 @@ def test_twa_login_flow(monkeypatch, client):
     r0 = client.get("/account/twa/login/")
     assert r0.status_code in (302, 303)
     # valid flow
-    from users import views_html as vhtml
-    monkeypatch.setattr(vhtml, "verify_init_data", lambda _: {"id": 1, "username": "tg"})
+    from users.views import auth_html as auth_views
+
+    monkeypatch.setattr(auth_views, "verify_init_data", lambda _: {"id": 1, "username": "tg"})
     r1 = client.get("/account/twa/login/?initData=dummy")
     assert r1.status_code in (302, 303)
 
@@ -572,7 +575,7 @@ def test_seller_can_reply_to_review_and_filter_orders(client_logged, user, db):
     plan_seller_splits(order)
     r2 = client_logged.get("/account/seller/orders/?sku=99887766&customer=review@example.com")
     assert r2.status_code == 200
-    assert f"Seller order #" in r2.text
+    assert "Seller order #" in r2.text
 
 
 def test_company_member_self_service_and_order_claims(client_logged, user, db):
@@ -932,6 +935,36 @@ def test_company_policy_multistep_approval_and_support_retry_payment(client_logg
     r5 = client_logged.get(f"/account/orders/{order.id}/retry-payment/")
     assert r5.status_code in (302, 303)
     assert r5.headers["Location"].endswith(f"/payments/fake/{order.id}/")
+
+
+def test_seller_product_form_rejects_invalid_binary_image(user, db):
+    brand = Brand.objects.create(name="Form Brand")
+    category = Category.objects.create(name="Form Category")
+    bad_upload = SimpleUploadedFile("unsafe.jpg", b"this-is-not-an-image", content_type="image/jpeg")
+
+    form = SellerProductCreateForm(
+        data={
+            "sku": "55667788",
+            "name": "Protected Product",
+            "brand": str(brand.id),
+            "category": str(category.id),
+            "price": "99.90",
+            "stock_qty": "5",
+        },
+        files=MultiValueDict({"image_files": [bad_upload]}),
+        user=user,
+    )
+
+    assert not form.is_valid()
+    assert any("безопасное изображение" in error for error in form.non_field_errors())
+
+
+def test_seller_product_import_form_rejects_non_csv_binary(db):
+    upload = SimpleUploadedFile("catalog.csv", b"\xff\xd8\xffbroken", content_type="image/jpeg")
+    form = SellerProductImportForm(files=MultiValueDict({"csv_file": [upload]}))
+
+    assert not form.is_valid()
+    assert "Неверный content-type" in form.errors["csv_file"][0]
 
 
 def test_notification_preferences_and_ops_pages(client_logged, user, db):

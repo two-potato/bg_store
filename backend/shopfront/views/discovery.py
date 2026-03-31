@@ -16,33 +16,36 @@ from core.logging_utils import log_calls
 from orders.models import Order
 
 from ..cart_checkout_service import session_cart as _cart
-from ..live_search_service import live_search_context
+from ..searching.live import live_search_context
 from ..models import (
     BrandSubscription,
     CategorySubscription,
     FavoriteProduct,
     SavedList,
-    SavedListItem,
     SavedSearch,
 )
-from ..context_processors import invalidate_favorites_state
-from ..recommendation_attribution_service import record_recommendation_event
-from ..search_service import get_search_provider
+from ..recommendation.attribution_service import record_recommendation_event
+from ..searching.service import get_search_provider
+from ..checkout_support import tracking_item_from_product as _tracking_item_from_product
 from ..view_mixins import JsonLoginRequiredMixin
-from . import (
-    COMPARE_LIMIT,
-    _absolute_url,
+from ..saved_list_service import (
+    FavoriteOperationService,
+    SavedListOperationService,
+    SavedSearchService,
+    SubscriptionOperationService,
+)
+from .constants import COMPARE_LIMIT, log
+from .utils_seo import _absolute_url, _seo_context, _truncate_text
+from .utils_state import (
     _cart_add_product,
     _compare_fields,
     _compare_ids,
-    _ordered_products_with_related,
     _saved_list_add_products,
     _saved_list_queryset,
-    _seo_context,
     _set_compare_ids,
-    _tracking_item_from_product,
-    _truncate_text,
-    log,
+)
+from ..catalog_selectors import (
+    ordered_products_with_related as _ordered_products_with_related,
 )
 
 
@@ -53,9 +56,14 @@ class FavoriteToggleView(JsonLoginRequiredMixin, LoginRequiredMixin, View):
         if not str(product_id or "").isdigit():
             log.warning(
                 "favorite_toggle_invalid_payload",
-                extra={"ui_surface": "favorites_toggle", "product_id": product_id or ""},
+                extra={
+                    "ui_surface": "favorites_toggle",
+                    "product_id": product_id or "",
+                },
             )
-            return JsonResponse({"ok": False, "error": "invalid product_id"}, status=400)
+            return JsonResponse(
+                {"ok": False, "error": "invalid product_id"}, status=400
+            )
         try:
             product = Product.objects.get(pk=int(product_id))
         except Product.DoesNotExist:
@@ -64,18 +72,10 @@ class FavoriteToggleView(JsonLoginRequiredMixin, LoginRequiredMixin, View):
                 extra={"ui_surface": "favorites_toggle", "product_id": int(product_id)},
             )
             return JsonResponse({"ok": False, "error": "product_not_found"}, status=404)
-        obj, created = FavoriteProduct.objects.get_or_create(user=request.user, product=product)
-        if not created:
-            obj.delete()
-        if created:
-            record_recommendation_event(
-                request=request,
-                event_name="favorite_add",
-                product=product,
-                payload={"surface": "favorites_toggle"},
-                logger=log,
-            )
-        invalidate_favorites_state(request.user.id)
+        _, created = FavoriteOperationService(request.user).toggle_favorite(
+            product=product,
+            request=request,
+        )
         log.info(
             "favorite_toggle_ok",
             extra={
@@ -105,7 +105,11 @@ class SubscriptionToggleView(JsonLoginRequiredMixin, LoginRequiredMixin, View):
         if not str(entity_id or "").isdigit():
             log.warning(
                 "subscription_toggle_invalid_entity_id",
-                extra={"ui_surface": "subscription_toggle", "entity": entity, "entity_id": entity_id or ""},
+                extra={
+                    "ui_surface": "subscription_toggle",
+                    "entity": entity,
+                    "entity_id": entity_id or "",
+                },
             )
             return JsonResponse({"ok": False, "error": "invalid entity_id"}, status=400)
 
@@ -116,23 +120,37 @@ class SubscriptionToggleView(JsonLoginRequiredMixin, LoginRequiredMixin, View):
         if entity not in model_map:
             log.warning(
                 "subscription_toggle_invalid_entity",
-                extra={"ui_surface": "subscription_toggle", "entity": entity, "entity_id": int(entity_id)},
+                extra={
+                    "ui_surface": "subscription_toggle",
+                    "entity": entity,
+                    "entity_id": int(entity_id),
+                },
             )
             return JsonResponse({"ok": False, "error": "invalid entity"}, status=400)
 
-        subscription_model, source_model, fk_name = model_map[entity]
+        _, source_model, _ = model_map[entity]
         try:
             source = source_model.objects.get(pk=int(entity_id))
         except source_model.DoesNotExist:
             log.warning(
                 "subscription_toggle_source_not_found",
-                extra={"ui_surface": "subscription_toggle", "entity": entity, "entity_id": int(entity_id)},
+                extra={
+                    "ui_surface": "subscription_toggle",
+                    "entity": entity,
+                    "entity_id": int(entity_id),
+                },
             )
             return JsonResponse({"ok": False, "error": "entity_not_found"}, status=404)
-        lookup = {"user": request.user, fk_name: source}
-        obj, created = subscription_model.objects.get_or_create(**lookup)
-        if not created:
-            obj.delete()
+        result = SubscriptionOperationService(request.user).toggle_subscription(
+            entity=entity,
+            entity_id=source.id,
+        )
+        if not result.success:
+            return JsonResponse(
+                {"ok": False, "error": result.message},
+                status=400,
+            )
+        subscribed = bool((result.meta or {}).get("subscribed"))
 
         log.info(
             "subscription_toggle_ok",
@@ -140,7 +158,7 @@ class SubscriptionToggleView(JsonLoginRequiredMixin, LoginRequiredMixin, View):
                 "ui_surface": "subscription_toggle",
                 "entity": entity,
                 "entity_id": int(entity_id),
-                "subscribed": created,
+                "subscribed": subscribed,
                 "user_id": request.user.id,
             },
         )
@@ -148,7 +166,7 @@ class SubscriptionToggleView(JsonLoginRequiredMixin, LoginRequiredMixin, View):
         return JsonResponse(
             {
                 "ok": True,
-                "subscribed": created,
+                "subscribed": subscribed,
                 "entity": entity,
                 "entity_id": int(entity_id),
             }
@@ -164,9 +182,13 @@ class CompareToggleView(View):
                 "compare_toggle_invalid_payload",
                 extra={"ui_surface": "compare_toggle", "product_id": product_id or ""},
             )
-            return JsonResponse({"ok": False, "error": "invalid product_id"}, status=400)
+            return JsonResponse(
+                {"ok": False, "error": "invalid product_id"}, status=400
+            )
         try:
-            product = Product.objects.only("id", "name", "slug", "price").get(pk=int(product_id))
+            product = Product.objects.only("id", "name", "slug", "price").get(
+                pk=int(product_id)
+            )
         except Product.DoesNotExist:
             log.warning(
                 "compare_toggle_product_not_found",
@@ -179,10 +201,13 @@ class CompareToggleView(View):
         if product_id_int in compare_ids:
             compare_ids = [pid for pid in compare_ids if pid != product_id_int]
         else:
-            compare_ids = [product_id_int] + [pid for pid in compare_ids if pid != product_id_int]
+            compare_ids = [product_id_int] + [
+                pid for pid in compare_ids if pid != product_id_int
+            ]
             compare_ids = compare_ids[:COMPARE_LIMIT]
             added = True
         compare_ids = _set_compare_ids(request, compare_ids)
+        compare_products = _ordered_products_with_related(compare_ids, include_rating=False)
         log.info(
             "compare_toggle_ok",
             extra={
@@ -199,6 +224,15 @@ class CompareToggleView(View):
                 "in_compare": added,
                 "compare_count": len(compare_ids),
                 "compare_ids": compare_ids,
+                "compare_items": [
+                    {
+                        "id": item.id,
+                        "name": item.name,
+                        "slug": item.slug,
+                        "brand_name": getattr(item.brand, "name", ""),
+                    }
+                    for item in compare_products[:COMPARE_LIMIT]
+                ],
                 "tracking": {
                     "event": "compare_add" if added else "compare_remove",
                     "ecommerce": {"items": [_tracking_item_from_product(product)]},
@@ -217,7 +251,9 @@ class ComparePageView(TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        products = _ordered_products_with_related(_compare_ids(self.request), include_rating=True)
+        products = _ordered_products_with_related(
+            _compare_ids(self.request), include_rating=True
+        )
         ctx["products"] = products
         ctx["compare_rows"] = _compare_fields(products)
         ctx.update(
@@ -247,7 +283,9 @@ class FavoritesPageView(LoginRequiredMixin, TemplateView):
             .order_by("-created_at")
             .values_list("product_id", flat=True)[:300]
         )
-        ctx["products"] = _ordered_products_with_related(product_ids, include_rating=True)
+        ctx["products"] = _ordered_products_with_related(
+            product_ids, include_rating=True
+        )
         ctx["category_subscriptions"] = (
             CategorySubscription.objects.select_related("category")
             .filter(user=self.request.user)
@@ -281,24 +319,29 @@ class SavedListsPageView(LoginRequiredMixin, TemplateView):
     @log_calls(log)
     def post(self, request, *args, **kwargs):
         action = (request.POST.get("action") or "").strip()
+        service = SavedListOperationService(request.user)
+        result = None
+
         if action == "create":
-            name = (request.POST.get("name") or "").strip() or "Новый список"
-            description = (request.POST.get("description") or "").strip()
-            SavedList.objects.create(user=request.user, name=name[:140], description=description[:255])
-            messages.success(request, "Список создан")
+            name = request.POST.get("name", "")
+            description = request.POST.get("description", "")
+            result = service.create_list(name=name, description=description)
         elif action == "delete":
             list_id = request.POST.get("list_id")
             if str(list_id or "").isdigit():
-                SavedList.objects.filter(user=request.user, id=int(list_id)).delete()
-                messages.success(request, "Список удалён")
+                result = service.delete_list(int(list_id))
         elif action == "create_from_favorites":
             product_ids = list(
-                FavoriteProduct.objects.filter(user=request.user).order_by("-created_at").values_list("product_id", flat=True)[:80]
+                FavoriteProduct.objects.filter(user=request.user)
+                .order_by("-created_at")
+                .values_list("product_id", flat=True)[:80]
             )
             if product_ids:
-                saved_list = SavedList.objects.create(user=request.user, name="Из избранного", source=SavedList.Source.FAVORITES)
-                _saved_list_add_products(saved_list, product_ids)
-                messages.success(request, "Список из избранного создан")
+                result = service.create_list(
+                    name="Из избранного", source=SavedList.Source.FAVORITES
+                )
+                if result.success and result.list_id:
+                    service.add_products_to_list(result.list_id, product_ids)
         elif action == "create_from_cart":
             cart = _cart(request)
             product_ids = []
@@ -307,26 +350,46 @@ class SavedListsPageView(LoginRequiredMixin, TemplateView):
                 if str(raw_id).isdigit():
                     product_id = int(raw_id)
                     product_ids.append(product_id)
-                    quantities[product_id] = max(1, int((payload or {}).get("qty") or 1))
-            if product_ids:
-                saved_list = SavedList.objects.create(user=request.user, name="Текущая корзина", source=SavedList.Source.CART)
-                _saved_list_add_products(saved_list, product_ids, quantities=quantities)
-                for product in Product.objects.filter(id__in=product_ids):
-                    record_recommendation_event(
-                        request=request,
-                        event_name="saved_list_add",
-                        product=product,
-                        payload={"surface": "saved_lists", "saved_list_id": saved_list.id},
-                        logger=log,
+                    quantities[product_id] = max(
+                        1, int((payload or {}).get("qty") or 1)
                     )
-                messages.success(request, "Корзина сохранена как список")
+            if product_ids:
+                result = service.create_list(
+                    name="Текущая корзина", source=SavedList.Source.CART
+                )
+                if result.success and result.list_id:
+                    service.add_products_to_list(
+                        result.list_id, product_ids, quantities=quantities
+                    )
+                    for product in Product.objects.filter(id__in=product_ids):
+                        record_recommendation_event(
+                            request=request,
+                            event_name="saved_list_add",
+                            product=product,
+                            payload={
+                                "surface": "saved_lists",
+                                "saved_list_id": result.list_id,
+                            },
+                            logger=log,
+                        )
+
+        if result and result.success:
+            messages.success(request, result.message)
+        elif result and not result.success:
+            messages.error(request, result.message)
+
         return redirect("saved_lists")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["saved_lists"] = _saved_list_queryset(self.request.user)[:100]
-        ctx["favorites_count"] = FavoriteProduct.objects.filter(user=self.request.user).count()
-        ctx["cart_items_count"] = sum(max(0, int(item.get("qty", 0) or 0)) for item in _cart(self.request).values())
+        ctx["favorites_count"] = FavoriteProduct.objects.filter(
+            user=self.request.user
+        ).count()
+        ctx["cart_items_count"] = sum(
+            max(0, int(item.get("qty", 0) or 0))
+            for item in _cart(self.request).values()
+        )
         ctx.update(
             _seo_context(
                 self.request,
@@ -343,7 +406,11 @@ class SavedListDetailView(LoginRequiredMixin, TemplateView):
 
     def _get_list(self):
         return get_object_or_404(
-            SavedList.objects.prefetch_related("items__product__images", "items__product__brand", "items__product__seller__seller_store"),
+            SavedList.objects.prefetch_related(
+                "items__product__images",
+                "items__product__brand",
+                "items__product__seller__seller_store",
+            ),
             user=self.request.user,
             id=self.kwargs["list_id"],
         )
@@ -357,10 +424,13 @@ class SavedListDetailView(LoginRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         saved_list = self._get_list()
         action = (request.POST.get("action") or "").strip()
+        service = SavedListOperationService(request.user)
         if action == "toggle_public":
-            saved_list.is_public = not saved_list.is_public
-            saved_list.save(update_fields=["is_public", "updated_at"])
-            messages.success(request, "Настройки доступа обновлены")
+            result = service.toggle_list_public(saved_list.id)
+            if result.success:
+                messages.success(request, result.message)
+            else:
+                messages.error(request, result.message)
         elif action == "move_to_cart":
             for item in saved_list.items.select_related("product").all():
                 _cart_add_product(request, item.product_id, qty=item.quantity)
@@ -368,8 +438,11 @@ class SavedListDetailView(LoginRequiredMixin, TemplateView):
         elif action == "remove_item":
             item_id = request.POST.get("item_id")
             if str(item_id or "").isdigit():
-                SavedListItem.objects.filter(saved_list=saved_list, id=int(item_id)).delete()
-                messages.success(request, "Товар удалён из списка")
+                result = service.remove_item_from_list(saved_list.id, int(item_id))
+                if result.success:
+                    messages.success(request, result.message)
+                else:
+                    messages.error(request, result.message)
         return redirect("saved_list_detail", list_id=saved_list.id)
 
     def get_context_data(self, **kwargs):
@@ -377,13 +450,22 @@ class SavedListDetailView(LoginRequiredMixin, TemplateView):
         saved_list = self._get_list()
         product_ids = list(saved_list.items.values_list("product_id", flat=True))
         ctx["saved_list"] = saved_list
-        ctx["products"] = _ordered_products_with_related(product_ids, include_rating=True)
-        ctx["share_url"] = _absolute_url(self.request, reverse("saved_list_shared", kwargs={"share_token": saved_list.share_token}))
+        ctx["products"] = _ordered_products_with_related(
+            product_ids, include_rating=True
+        )
+        ctx["share_url"] = _absolute_url(
+            self.request,
+            reverse(
+                "saved_list_shared", kwargs={"share_token": saved_list.share_token}
+            ),
+        )
         ctx.update(
             _seo_context(
                 self.request,
                 title=f"{saved_list.name} — список закупок Servio",
-                description=_truncate_text(saved_list.description or f"Список {saved_list.name} в Servio.", 160),
+                description=_truncate_text(
+                    saved_list.description or f"Список {saved_list.name} в Servio.", 160
+                ),
                 robots="noindex,nofollow",
             )
         )
@@ -401,7 +483,9 @@ class SharedSavedListView(TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         saved_list = get_object_or_404(
-            SavedList.objects.prefetch_related("items__product__images", "items__product__brand"),
+            SavedList.objects.prefetch_related(
+                "items__product__images", "items__product__brand"
+            ),
             share_token=kwargs["share_token"],
             is_public=True,
         )
@@ -414,7 +498,11 @@ class SharedSavedListView(TemplateView):
             _seo_context(
                 self.request,
                 title=f"{saved_list.name} — публичный список Servio",
-                description=_truncate_text(saved_list.description or f"Публичный список {saved_list.name} в Servio.", 160),
+                description=_truncate_text(
+                    saved_list.description
+                    or f"Публичный список {saved_list.name} в Servio.",
+                    160,
+                ),
             )
         )
         return ctx
@@ -423,7 +511,9 @@ class SharedSavedListView(TemplateView):
 class SavedListFromOrderView(LoginRequiredMixin, View):
     @log_calls(log)
     def post(self, request, order_id: int):
-        order = get_object_or_404(Order.objects.prefetch_related("items"), id=order_id, placed_by=request.user)
+        order = get_object_or_404(
+            Order.objects.prefetch_related("items"), id=order_id, placed_by=request.user
+        )
         saved_list = SavedList.objects.create(
             user=request.user,
             name=f"Повтор заказа #{order.id}",
@@ -431,13 +521,19 @@ class SavedListFromOrderView(LoginRequiredMixin, View):
             source=SavedList.Source.ORDER,
         )
         quantities = {item.product_id: item.qty for item in order.items.all()}
-        _saved_list_add_products(saved_list, list(quantities.keys()), quantities=quantities)
+        _saved_list_add_products(
+            saved_list, list(quantities.keys()), quantities=quantities
+        )
         for item in order.items.select_related("product").all():
             record_recommendation_event(
                 request=request,
                 event_name="saved_list_add",
                 product=item.product,
-                payload={"surface": "order_detail", "saved_list_id": saved_list.id, "order_id": order.id},
+                payload={
+                    "surface": "order_detail",
+                    "saved_list_id": saved_list.id,
+                    "order_id": order.id,
+                },
                 logger=log,
             )
         messages.success(request, "Заказ сохранён как список")
@@ -455,26 +551,27 @@ class SavedSearchesPageView(LoginRequiredMixin, TemplateView):
     @log_calls(log)
     def post(self, request, *args, **kwargs):
         action = (request.POST.get("action") or "").strip()
+        service = SavedSearchService(request.user)
+        result = None
         if action == "save":
             querystring = (request.POST.get("querystring") or "").strip()
             name = (request.POST.get("name") or "").strip() or "Мой фильтр"
-            if querystring:
-                SavedSearch.objects.create(
-                    user=request.user,
-                    name=name[:120],
-                    querystring=querystring[:512],
-                )
-                messages.success(request, "Поиск сохранён")
+            result = service.save_search(querystring=querystring, name=name)
         elif action == "delete":
             sid = request.POST.get("id")
             if str(sid or "").isdigit():
-                SavedSearch.objects.filter(user=request.user, id=int(sid)).delete()
-                messages.success(request, "Сохранённый поиск удалён")
+                result = service.delete_search(int(sid))
+        if result and result.success:
+            messages.success(request, result.message)
+        elif result and not result.success:
+            messages.error(request, result.message)
         return redirect("saved_searches")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["saved_searches"] = SavedSearch.objects.filter(user=self.request.user).order_by("-created_at")[:200]
+        ctx["saved_searches"] = SavedSearch.objects.filter(
+            user=self.request.user
+        ).order_by("-created_at")[:200]
         ctx.update(
             _seo_context(
                 self.request,
@@ -490,14 +587,21 @@ class LiveSearchView(View):
     @log_calls(log)
     def get(self, request):
         query = request.GET.get("q")
-        context = live_search_context(query=query, search_provider_getter=get_search_provider, logger=log)
+        context = live_search_context(
+            query=query,
+            request=request,
+            search_provider_getter=get_search_provider,
+            logger=log,
+        )
         log.info(
             "live_search_response_ready",
             extra={
                 "ui_surface": "live_search",
                 "query": (query or "").strip(),
                 "provider": context.get("search_provider", "unknown"),
-                "effective_query": context.get("search_effective_query", (query or "").strip()),
+                "effective_query": context.get(
+                    "search_effective_query", (query or "").strip()
+                ),
                 "rewritten_query": context.get("search_rewritten_query", ""),
                 "rewrite_kind": context.get("search_rewrite_kind", ""),
                 "show": context.get("show", False),

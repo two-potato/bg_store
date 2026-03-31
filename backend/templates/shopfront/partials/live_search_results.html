@@ -46,6 +46,64 @@
             </div>
           </div>
         {% endif %}
+        {% if recent_searches %}
+          <div class="live-search-block">
+            <div class="live-search-block__title">Recent searches</div>
+            <div class="live-search-block__caption">Вернитесь к рабочим сценариям поиска без ручного ввода</div>
+            <div class="live-search-chip-row">
+              {% for row in recent_searches %}
+                <a href="{{ row.href }}" class="live-search-country-chip" hx-boost="false">{{ row.label }}</a>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
+    {% if brands or categories or sellers or quick_actions %}
+      <div class="live-search-segments">
+        {% if brands %}
+          <div class="live-search-block">
+            <div class="live-search-block__title">Бренды</div>
+            <div class="live-search-chip-row">
+              {% for row in brands %}
+                <a href="{{ row.href }}" class="live-search-country-chip" hx-boost="false">{{ row.label }}</a>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+        {% if categories %}
+          <div class="live-search-block">
+            <div class="live-search-block__title">Категории</div>
+            <div class="live-search-chip-row">
+              {% for row in categories %}
+                <a href="{{ row.href }}" class="live-search-country-chip" hx-boost="false">{{ row.label }}</a>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+        {% if sellers %}
+          <div class="live-search-block">
+            <div class="live-search-block__title">Продавцы</div>
+            <div class="live-search-chip-row">
+              {% for row in sellers %}
+                <a href="{{ row.href }}" class="live-search-country-chip" hx-boost="false">{{ row.label }}</a>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+        {% if quick_actions %}
+          <div class="live-search-block live-search-block--actions">
+            <div class="live-search-block__title">Quick actions</div>
+            <div class="live-search-quick-actions">
+              {% for row in quick_actions %}
+                <a href="{{ row.href }}" class="live-search-quick-action" hx-boost="false">
+                  <strong>{{ row.label }}</strong>
+                  <span>{{ row.meta }}</span>
+                </a>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
       </div>
     {% endif %}
     {% if products %}

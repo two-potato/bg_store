@@ -16,6 +16,8 @@ urlpatterns = [
     path("api/commerce/", include("commerce.urls_admin")),
     path("api/catalog/", include("catalog.urls")),
     path("api/orders/", include("orders.urls")),
+    path("api/", include("shopfront.api.urls")),
+    path("api/internal/", include("shopfront.api.internal_urls")),
     path("", include("shopfront.urls")),
 ]
 

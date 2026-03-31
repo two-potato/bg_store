@@ -26,6 +26,7 @@ class CheckoutSubmissionData:
 
 
 def parse_checkout_submission(request, *, allowed_payment_methods: tuple[str, ...]) -> tuple[CheckoutSubmissionData | None, str | None]:
+    """Parse checkout submission."""
     payment_method = request.POST.get("payment_method") or Order.PaymentMethod.CASH
     if payment_method not in allowed_payment_methods:
         return None, "Выбранный способ оплаты недоступен"
@@ -46,6 +47,7 @@ def parse_checkout_submission(request, *, allowed_payment_methods: tuple[str, ..
 
 
 def load_checkout_products(cart: dict) -> dict[int, Product]:
+    """Load checkout products."""
     product_ids: list[int] = []
     for raw_id in cart.keys():
         try:
@@ -63,6 +65,7 @@ def load_checkout_products(cart: dict) -> dict[int, Product]:
 
 
 def build_checkout_lines(cart: dict, products: dict[int, Product]) -> tuple[list[dict], str | None]:
+    """Build checkout lines."""
     checkout_lines: list[dict] = []
     for raw_product_id, item in cart.items():
         try:
@@ -92,6 +95,7 @@ def create_checkout_order(
     discount_result,
     new_guest_access_token,
 ) -> tuple[Order | None, str | None]:
+    """Create checkout order."""
     if submission.customer_type == Order.CustomerType.COMPANY:
         if not request.user.is_authenticated:
             return None, "Для оформления B2B-заказа войдите в аккаунт компании"
@@ -172,6 +176,7 @@ def create_checkout_order(
 
 
 def build_order_items(*, cart: dict, products: dict[int, Product], order: Order) -> list[OrderItem]:
+    """Build order items."""
     items: list[OrderItem] = []
     for raw_product_id, item in cart.items():
         try:
@@ -195,6 +200,7 @@ def build_order_items(*, cart: dict, products: dict[int, Product], order: Order)
 
 
 def finalize_checkout_order(*, order: Order, submission: CheckoutSubmissionData, request_user, discount_result) -> None:
+    """Handle finalize checkout order."""
     order.recalc_totals(explicit_discount_amount=discount_result.total_discount_amount)
     if submission.customer_type == Order.CustomerType.COMPANY:
         approval = resolve_order_approval_requirement(legal_entity=order.legal_entity, user=request_user, order_total=order.total)

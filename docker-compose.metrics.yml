@@ -162,11 +162,13 @@ services:
       - --path.procfs=/host/proc
       - --path.sysfs=/host/sys
       - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($|/)
+      - --collector.textfile.directory=/host/textfile
     volumes:
       - /:/rootfs:ro
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /run/udev:/run/udev:ro
+      - ./.artifacts/node_exporter_textfile:/host/textfile
     logging: *default-logging
     restart: unless-stopped
 

@@ -18,6 +18,12 @@ def test_openapi_schema_exposes_key_api_paths(client):
     assert "/api/catalog/products/" in paths
     assert "/api/commerce/delivery-addresses/" in paths
     assert "/api/orders/" in paths
+    assert "/api/search/query/" in paths
+    assert "/api/search/suggestions/" in paths
+    assert "/api/recommendations/home/" in paths
+    assert "/api/recommendations/cart/" in paths
+    assert "/api/internal/search/query/" not in paths
+    assert "/api/internal/recommendations/home/" not in paths
     assert "400" in paths["/api/orders/"]["post"]["responses"]
     assert "401" in paths["/api/orders/"]["post"]["responses"]
     assert "404" in paths["/api/orders/{id}/"]["get"]["responses"]

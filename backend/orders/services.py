@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from django.utils import timezone
 
-from .models import Order, OrderSellerSplit, SellerOrder, SellerOrderItem, Shipment, ShipmentItem
+from .models import Order, OrderSellerSplit, SellerOrder, SellerOrderItem, Shipment
 
 
 def recalc_seller_order_totals(seller_order: SellerOrder) -> SellerOrder:

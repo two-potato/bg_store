@@ -1,117 +1,87 @@
-# Architecture
+# Servio Architecture
 
-## Overview
+## System Shape
 
-Servio is a monorepo with three main runtime surfaces:
+Servio is a modular monolith built on Django with sidecar services:
 
-- `backend/`: Django application, REST API, shopfront pages, Celery, admin, integrations.
-- `bot/`: Telegram bot and internal notification HTTP service.
-- `deploy/`: operational configs such as nginx, Prometheus, Grafana, and related infra.
+- `backend/`: Django apps, Celery tasks, API, storefront HTML
+- `bot/`: FastAPI + aiogram notification and Telegram flows
+- `services/search-api/`: FastAPI search contract service (platform extraction, stage 1)
+- `services/recommendation-api/`: FastAPI recommendation contract service (platform extraction, stage 1)
+- `deploy/`: Nginx, Prometheus, Loki, Grafana, Alertmanager, GlitchTip
 
-At runtime the local stack is typically:
+Business source-of-truth stays in Django. New search/recommendation FastAPI services are introduced as additive bridge targets (`django-inline` fallback stays default) to support controlled migration.
 
-- `nginx` terminates HTTP and forwards requests to Django.
-- `backend` serves the HTML storefront, DRF API, admin, and background task entrypoints.
-- `db` stores transactional data.
-- `redis` is used for caching, Celery broker, and ephemeral coordination.
-- `opensearch` serves catalog search and live-search autocomplete.
-- `bot` delivers Telegram notifications and WebApp-related interactions.
+## Core Domains
 
-## Backend Domains
+- `core`: shared runtime helpers, middleware, idempotency, notifications
+- `users`: account UI, seller cabinet, profile and auth-adjacent flows
+- `commerce`: legal entities, addresses, company workspace
+- `catalog`: taxonomy, products, reviews, documents, offers, inventories
+- `orders`: order lifecycle, payments, seller splits, claims, support
+- `promotions`: discounting and coupon redemption
+- `shopfront`: storefront UX, search, recommendations, cart, checkout
 
-### `catalog`
+## Shopfront Structure
 
-Catalog stores brands, categories, products, collections, tags, and seller offers. It is the source of truth for:
+`shopfront` is the most complex domain and should follow these boundaries:
 
-- storefront product listings
-- catalog API
-- search indexing
-- merchandising collections and promo flags
+- `shopfront/views/`: thin HTTP adapters only
+- `shopfront/searching/`: search backend, fallback strategy, attribution, observability
+- `shopfront/recommendation/`: candidate retrieval, ranking, attribution, observability
+- `shopfront/*_service.py`: orchestration that can be unit-tested without HTTP
+- `shopfront/context_processors.py`: lightweight runtime config and shared page state
 
-### `commerce`
+Current service boundaries introduced in this cycle:
 
-Commerce covers company-side entities:
+- `catalog_page_service.py`: catalog filtering, search integration, facets, pagination, SEO context
+- `checkout_orchestration_service.py`: checkout submit orchestration and payment bootstrap
+- `saved_list_service.py`: saved lists, favorites, subscriptions, saved searches
+- `product_detail_service.py` and `store_detail_service.py`: PDP and storefront composition
+- `pages_service.py`: brand/category/collection page composition
 
-- legal entities
-- delivery addresses
-- memberships and membership requests
-- company approval and moderation flows
+## Request Flow Examples
 
-This domain powers B2B checkout and access control around company-owned data.
+### Catalog
 
-### `orders`
+1. `CatalogView` parses request into `CatalogRequestParams`
+2. `CatalogPageService` applies filters, search provider ranking and fallback logic
+3. Selectors build optimized querysets (`select_related/prefetch_related`)
+4. Service composes facets, pagination and SEO payload
+5. View renders full page or grid-append fragment
 
-Orders model checkout and downstream fulfillment state:
+### Checkout
 
-- order creation via API and shopfront
-- FSM-based status transitions
-- seller splits and seller orders
-- shipment metadata
-- internal approve/reject flows
+1. `CheckoutSubmitView` delegates to `CheckoutSubmissionService`
+2. Submission parsing, cart normalization and order creation happen in service layer
+3. Transaction finalizes totals, discounts and seller splits
+4. Search/recommendation attribution feedback is queued via Celery after commit
+5. View returns redirect or payment panel fragment (HTMX)
 
-### `shopfront`
+## Operational Dependencies
 
-Shopfront contains the HTML storefront and supporting application services:
+- PostgreSQL: primary transactional store
+- Redis: cache, Celery broker/result backend
+- OpenSearch: catalog/search retrieval
+- Celery worker + beat: async and scheduled jobs
 
-- page views and HTMX endpoints
-- search orchestration
-- recommendations
-- checkout helpers
-- review flows
+## Current Engineering Rules
 
-It is intentionally service-heavy because a lot of behavior is UI-facing but still business-critical.
+- Keep views thin; move orchestration into services
+- Prefer ORM + selectors with `select_related/prefetch_related`
+- Add explicit observability for search, checkout, payments, and seller ops
+- Keep legacy import compatibility during package moves until tests are updated
 
-### `users`
+## Architecture Decisions
 
-Users manages auth-adjacent behavior:
+- ADR index: `docs/adr/README.md`
+- `0001`: modular shopfront boundaries
+- `0002`: ML dependencies moved to optional extras
 
-- Django user model and profile
-- Telegram WebApp auth bridge
-- role metadata
+## Current Hot Spots
 
-### `core`
+- `backend/shopfront/views/catalog.py`
+- `backend/shopfront/views/checkout_flow.py`
+- `backend/users/views/helpers.py`
 
-Core contains cross-cutting infrastructure:
-
-- logging
-- middleware
-- PDF rendering
-- notifications
-- shared base models
-
-## Search Architecture
-
-Search has two layers:
-
-1. `shopfront/search.py`
-   This is the low-level OpenSearch client. It builds payloads, executes HTTP calls, normalizes responses, and caches live-search bundles.
-
-2. `shopfront/search_service.py`
-   This is the orchestration layer. It selects providers, rewrites queries, collects fallback candidates from the database, and reranks merged results.
-
-This split is deliberate:
-
-- infra-specific behavior stays isolated
-- views do not know about OpenSearch internals
-- fallback behavior remains testable
-
-## Request Flow
-
-For a typical storefront request:
-
-1. `nginx` routes the request to Django.
-2. middleware attaches request context and request id.
-3. a Django view or DRF viewset handles the request.
-4. domain services are called as needed.
-5. optional integrations are triggered:
-   - OpenSearch for search
-   - bot service for Telegram notifications
-   - Celery for background work
-
-## Operational Notes
-
-- API schema is generated with `drf-spectacular`.
-- Swagger UI is available at `/api/docs/`.
-- Redoc is available at `/api/redoc/`.
-- Product search requires a populated OpenSearch index.
-- Docker images do not bind-mount the whole backend source into the runtime container, so code changes often require rebuild or explicit file sync.
+These files should be treated as refactor candidates first when complexity grows again.

@@ -11,7 +11,7 @@ from django.utils import timezone
 from catalog.models import Product
 from orders.models import OrderItem
 from shopfront.models import FavoriteProduct, PersistentCart, RecommendationEvent, RecentlyViewedProduct
-from shopfront.recommendation_service import cart_recommendations, checkout_recommendations, product_detail_recommendations, product_section_context
+from shopfront.recommendation.service import cart_recommendations, checkout_recommendations, product_detail_recommendations, product_section_context
 
 
 class Command(BaseCommand):

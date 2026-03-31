@@ -1,5 +1,22 @@
 {% if tags %}
 <div class="chips-scroll catalog-tags-strip -mx-3 px-3 md:mx-0 md:px-0 mb-4">
+  <div class="catalog-tags-strip__head">
+    <div class="catalog-tags-strip__copy">
+      <div class="catalog-tags-strip__title">Быстрые теги</div>
+      <div class="catalog-tags-strip__note">Показываем только самые полезные теги, чтобы не перегружать выдачу.</div>
+    </div>
+    {% if tags|length > 8 %}
+      <details class="catalog-tags-strip__more">
+        <summary>Все теги ({{ tags|length }})</summary>
+        <div class="catalog-tags-strip__expanded">
+          {% for t in tags %}
+            <a class="tag-chip-2026 whitespace-nowrap {% if request.GET.tag|default:'' == t.slug or request.GET.tag_slug == t.slug %}is-active{% endif %}"
+               href="/catalog/?tag={{ t.slug }}{% if querystring_base %}&{{ querystring_base|safe }}{% endif %}">{{ t.name }}</a>
+          {% endfor %}
+        </div>
+      </details>
+    {% endif %}
+  </div>
   <div class="carousel-neo carousel-neo--tags"
        style="display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:.5rem;">
     <button type="button" class="carousel-neo__nav is-prev" data-carousel-prev="catalog-tags" aria-label="Прокрутить теги влево">
@@ -12,8 +29,10 @@
          data-carousel-track
          style="display:flex;flex-wrap:nowrap;gap:.5rem;min-width:0;overflow-x:auto;overflow-y:hidden;white-space:nowrap;scrollbar-width:none;">
       {% for t in tags %}
-        <a class="tag-chip-2026 whitespace-nowrap {% if request.GET.tag|default:'' == t.slug or request.GET.tag_slug == t.slug %}is-active{% endif %}"
-           href="/catalog/?tag={{ t.slug }}{% if querystring_base %}&{{ querystring_base|safe }}{% endif %}">{{ t.name }}</a>
+        {% if forloop.counter <= 8 or request.GET.tag|default:'' == t.slug or request.GET.tag_slug == t.slug %}
+          <a class="tag-chip-2026 whitespace-nowrap {% if request.GET.tag|default:'' == t.slug or request.GET.tag_slug == t.slug %}is-active{% endif %}"
+             href="/catalog/?tag={{ t.slug }}{% if querystring_base %}&{{ querystring_base|safe }}{% endif %}">{{ t.name }}</a>
+        {% endif %}
       {% endfor %}
     </div>
     <button type="button" class="carousel-neo__nav is-next" data-carousel-next="catalog-tags" aria-label="Прокрутить теги вправо">

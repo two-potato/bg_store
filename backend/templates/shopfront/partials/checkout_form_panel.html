@@ -2,15 +2,43 @@
   {% if checkout_error_tracking_payload %}
     <script type="application/json" data-analytics-payload>{{ checkout_error_tracking_payload|safe }}</script>
   {% endif %}
-  <div class="card bg-base-100">
+  <div class="card bg-base-100 checkout-form-2026__sticky">
     <div class="card-body">
-    <h2 class="text-sm font-semibold">Данные для заказа</h2>
+    <div class="checkout-form-2026__summary">
+      <div>
+        <div class="checkout-form-2026__summary-label">К оформлению</div>
+        <div class="checkout-form-2026__summary-total">{{ total }} ₽</div>
+        <div class="checkout-form-2026__summary-meta">{{ items|length }} поз. · {{ seller_count }} поставщик{% if seller_count == 1 %}{% else %}ов{% endif %}</div>
+      </div>
+      {% if profile_discount_amount > 0 or coupon_discount_amount > 0 %}
+        <div class="checkout-form-2026__summary-savings">
+          Экономия
+          <strong>{{ profile_discount_amount|add:coupon_discount_amount }} ₽</strong>
+        </div>
+      {% endif %}
+    </div>
+    <h2 class="text-sm font-semibold">Реквизиты и доставка</h2>
     {% if checkout_error %}
       <div class="alert alert-warning text-sm">{{ checkout_error }}</div>
     {% endif %}
     {% if seller_count > 1 %}
       <div class="alert alert-warning text-sm">
-        Корзина мультивендорная: после внедрения split logic этот заказ сможет автоматически делиться по поставщикам и SLA.
+        Корзина мультивендорная: после внедрения логики разделения этот заказ сможет автоматически делиться по поставщикам и SLA.
+      </div>
+    {% endif %}
+    {% if company_snapshots %}
+      <div class="rounded-2xl border border-base-200/80 bg-base-200/30 p-3 text-sm">
+        <div class="font-semibold mb-1">Документы и invoice-flow</div>
+        <ul class="grid gap-1 text-base-content/70">
+          {% for row in company_snapshots %}
+            <li>
+              {{ row.company.display_name|default:row.company.legal_entity.name }}:
+              invoice {{ row.company.invoice_email|default:"по умолчанию" }},
+              оплата {{ row.company.preferred_payment_method|default:"invoice" }}
+              {% if row.company.payment_comment %}· {{ row.company.payment_comment }}{% endif %}
+            </li>
+          {% endfor %}
+        </ul>
       </div>
     {% endif %}
     <form method="post"
@@ -29,6 +57,7 @@
           <li>Проверьте юрлицо или контактное лицо.</li>
           <li>Доставка и остатки будут подтверждены после создания заказа.</li>
           <li>Повторное нажатие не создаст дубль заказа.</li>
+          <li>Черновик закупки можно сохранить через списки закупок и передать коллегам по share-link.</li>
         </ul>
       </div>
       <div>
@@ -48,7 +77,7 @@
         </div>
         {% if not is_authenticated_checkout %}
           <div class="text-xs text-base-content/60 mt-1">
-            Гостевой checkout доступен для физических лиц. Для B2B-заказа войдите в аккаунт компании.
+            Гостевое оформление доступно для физических лиц. Для B2B-заказа войдите в аккаунт компании.
           </div>
         {% endif %}
       </div>
@@ -70,18 +99,18 @@
             <label class="label cursor-pointer gap-2">
               <input class="radio radio-sm" type="radio" name="payment_method" value="mir_card"
                      {% if form_data.payment_method == "mir_card" %}checked{% endif %}>
-              <span class="label-text">Карта МИР (sandbox)</span>
+              <span class="label-text">Карта МИР (тестовый режим)</span>
             </label>
             <label class="label cursor-pointer gap-2">
               <input class="radio radio-sm" type="radio" name="payment_method" value="online_card"
                      {% if form_data.payment_method == "online_card" %}checked{% endif %}>
-              <span class="label-text">Онлайн-оплата (sandbox)</span>
+              <span class="label-text">Онлайн-оплата (тестовый режим)</span>
             </label>
           {% endif %}
         </div>
         {% if not demo_payments_enabled %}
           <div class="text-xs text-base-content/60 mt-1">
-            Карточные sandbox-платежи отключены в этом окружении. Доступны только наличные и счёт.
+            Тестовые карточные платежи отключены в этом окружении. Доступны только наличные и счёт.
           </div>
         {% endif %}
       </div>
@@ -207,6 +236,7 @@
               {% if not items %}disabled{% endif %}>
         Оформить
       </button>
+      <a class="btn btn-outline lg:w-full" href="/lists/" hx-boost="false">Открыть procurement drafts</a>
     </form>
     </div>
   </div>

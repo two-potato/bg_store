@@ -1,6 +1,10 @@
 import pytest
 
-from shopfront.catalog_selectors import category_descendant_ids, category_option_rows
+from shopfront.catalog_selectors import (
+    category_descendant_ids,
+    category_option_rows,
+    resolve_category_filter,
+)
 from catalog.models import Category
 
 
@@ -29,3 +33,22 @@ def test_category_option_rows_preserves_depth_labels():
     assert rows[0]["name"] == "Root"
     assert rows[1]["depth"] == 1
     assert rows[1]["name"] == "Child"
+
+
+def test_resolve_category_filter_supports_slug_path_from_cached_rows():
+    root = Category.objects.create(name="Coffee", slug="coffee")
+    child = Category.objects.create(name="Syrups", slug="syrups", parent=root)
+
+    resolved = resolve_category_filter("coffee/syrups", categories=[root, child])
+
+    assert resolved is not None
+    assert resolved.id == child.id
+
+
+def test_resolve_category_filter_supports_numeric_id():
+    category = Category.objects.create(name="Packaging", slug="packaging")
+
+    resolved = resolve_category_filter(str(category.id))
+
+    assert resolved is not None
+    assert resolved.id == category.id

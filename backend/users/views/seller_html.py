@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 from io import StringIO
+from datetime import timedelta
 
 from django.contrib import messages
 from django.db import transaction
@@ -45,7 +46,6 @@ from .helpers import (
     _sync_parent_order_status_from_seller_orders,
     _sync_seller_order_fulfillment_status,
     _visible_seller_orders_queryset,
-    log,
 )
 
 
@@ -369,9 +369,9 @@ def account_seller_home(request):
         messages.error(request, "Раздел доступен только пользователям с ролью 'Продавец'")
         return redirect("account_home")
 
-    from catalog.models import Product, SellerInventory
+    from catalog.models import Product, ProductQuestion, ProductReview, SellerInventory, SellerOffer
     from commerce.models import LegalEntityMembership
-    from orders.models import SellerOrder
+    from orders.models import Order, SellerOrder, Shipment
 
     store = getattr(request.user, "seller_store", None)
     form = SellerStoreForm(request.POST or None, request.FILES or None, instance=store, user=request.user)
@@ -384,6 +384,27 @@ def account_seller_home(request):
 
     memberships_qs = LegalEntityMembership.objects.filter(user=request.user)
     seller_orders_qs = SellerOrder.objects.filter(seller=request.user)
+    overdue_cutoff = timezone.now() - timedelta(hours=getattr(store, "sla_target_hours", 24) or 24)
+    stale_stock_cutoff = timezone.now() - timedelta(days=30)
+    products_qs = Product.objects.filter(seller=request.user)
+    active_offer_product_ids = set(
+        SellerOffer.objects.filter(seller=request.user, status=SellerOffer.Status.ACTIVE).values_list("product_id", flat=True)
+    )
+    products_without_offer_count = products_qs.exclude(id__in=active_offer_product_ids).count()
+    products_without_images_count = products_qs.filter(images__isnull=True).distinct().count()
+    products_without_documents_count = products_qs.filter(documents__isnull=True).distinct().count()
+    products_stale_stock_count = products_qs.filter(updated_at__lt=stale_stock_cutoff, stock_qty__gt=0).count()
+    unanswered_questions = ProductQuestion.objects.filter(product__seller=request.user, answered_at__isnull=True)
+    reviews_without_reply = ProductReview.objects.filter(product__seller=request.user).exclude(comments__user=request.user).distinct()
+    overdue_shipments = Shipment.objects.filter(
+        seller_order__seller=request.user,
+        status__in=[Shipment.Status.DRAFT, Shipment.Status.READY, Shipment.Status.ISSUE],
+        created_at__lt=overdue_cutoff,
+    )
+    invoice_mismatch_orders = seller_orders_qs.filter(
+        order__payment_method=Order.PaymentMethod.INVOICE,
+        order__status__in=[Order.Status.NEW, Order.Status.CONFIRMED, Order.Status.CHANGED],
+    ).distinct()
     seller_metrics = {
         "products_count": Product.objects.filter(seller=request.user).count(),
         "in_stock_count": Product.objects.filter(seller=request.user, stock_qty__gt=0).count(),
@@ -393,11 +414,47 @@ def account_seller_home(request):
         "low_inventory_count": SellerInventory.objects.filter(offer__seller=request.user, stock_qty__lte=5).count(),
         "gmv": seller_orders_qs.exclude(status=SellerOrder.Status.CANCELED).aggregate(total=Sum("total"))["total"] or 0,
         "claims_open_count": seller_orders_qs.filter(order__claims__status__in=["open", "in_review"]).distinct().count(),
+        "overdue_shipments_count": overdue_shipments.count(),
+        "unanswered_questions_count": unanswered_questions.count(),
+        "reviews_without_reply_count": reviews_without_reply.count(),
+        "invoice_mismatch_count": invoice_mismatch_orders.count(),
+        "products_without_images_count": products_without_images_count,
+        "products_without_documents_count": products_without_documents_count,
+        "products_without_offer_count": products_without_offer_count,
+        "products_stale_stock_count": products_stale_stock_count,
     }
     latest_products = Product.objects.filter(seller=request.user).select_related("brand", "category").order_by("-updated_at", "-id")[:8]
     latest_seller_orders = (
         SellerOrder.objects.select_related("order").prefetch_related("items").annotate(item_count=Count("items", distinct=True)).filter(seller=request.user).order_by("-created_at", "-id")[:8]
     )
+    latest_unanswered_questions = unanswered_questions.select_related("product", "user").order_by("-created_at", "-id")[:4]
+    latest_reviews_without_reply = reviews_without_reply.select_related("product", "user").order_by("-created_at", "-id")[:4]
+    quality_queue = [
+        {
+            "label": "Без фото",
+            "count": products_without_images_count,
+            "href": "/account/seller/products/add/",
+            "meta": "Карточки без доверительного медиа-слоя",
+        },
+        {
+            "label": "Без документов",
+            "count": products_without_documents_count,
+            "href": "/account/seller/products/add/",
+            "meta": "Сертификаты и спецификации не загружены",
+        },
+        {
+            "label": "Без активного оффера",
+            "count": products_without_offer_count,
+            "href": "/account/seller/offers/",
+            "meta": "Карточки не участвуют в выдаче как полноценные предложения",
+        },
+        {
+            "label": "Остатки устарели",
+            "count": products_stale_stock_count,
+            "href": "/account/seller/warehouses/",
+            "meta": "Пора обновить stock и ETA",
+        },
+    ]
     return render(
         request,
         "account/seller_home.html",
@@ -408,6 +465,9 @@ def account_seller_home(request):
             "seller_metrics": seller_metrics,
             "latest_products": latest_products,
             "latest_seller_orders": latest_seller_orders,
+            "latest_unanswered_questions": latest_unanswered_questions,
+            "latest_reviews_without_reply": latest_reviews_without_reply,
+            "quality_queue": quality_queue,
             "notifications": _notification_feed(request.user, limit=8),
             "account_section": "seller_home",
         },

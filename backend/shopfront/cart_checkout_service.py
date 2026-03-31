@@ -16,10 +16,12 @@ log = logging.getLogger("shopfront")
 
 
 def session_cart(request):
+    """Handle session cart."""
     return request.session.setdefault("cart", {})
 
 
 def profile_discount_percent(request) -> Decimal:
+    """Handle profile discount percent."""
     if not getattr(request, "user", None) or not request.user.is_authenticated:
         return Decimal("0.00")
     profile = getattr(request.user, "profile", None)
@@ -36,6 +38,7 @@ def profile_discount_percent(request) -> Decimal:
 
 
 def cart_summary(request):
+    """Handle cart summary."""
     cart = session_cart(request)
     product_ids: list[int] = []
     for raw_id in cart.keys():
@@ -129,6 +132,7 @@ def cart_summary(request):
 
 
 def cart_badge_context(request):
+    """Handle cart badge context."""
     cart = session_cart(request)
     cart_ctx = cart_summary(request)
     count = 0
@@ -141,6 +145,7 @@ def cart_badge_context(request):
 
 
 def checkout_company_snapshots(request, memberships):
+    """Handle checkout company snapshots."""
     snapshots = []
     for membership in memberships:
         company = ensure_company_workspace(membership.legal_entity)
@@ -158,18 +163,21 @@ def checkout_company_snapshots(request, memberships):
 
 
 def checkout_identity_defaults(request):
+    """Handle checkout identity defaults."""
     if not request.user.is_authenticated:
         return "", ""
     return request.user.get_full_name() or request.user.username or "", getattr(request.user, "email", "") or ""
 
 
 def checkout_addresses_queryset(request):
+    """Handle checkout addresses queryset."""
     if not request.user.is_authenticated:
         return DeliveryAddress.objects.none()
     return DeliveryAddress.objects.filter(legal_entity__members=request.user).order_by("legal_entity__name", "-is_default", "label")
 
 
 def checkout_cart_tracking_payload(cart_ctx, tracking_item_from_product) -> str:
+    """Handle checkout cart tracking payload."""
     if not cart_ctx["items"]:
         return "{}"
     return json.dumps(

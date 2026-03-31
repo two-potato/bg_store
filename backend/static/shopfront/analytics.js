@@ -27,6 +27,18 @@
     return typeof value === "string" ? value.trim() !== "" : !!value;
   }
 
+  function getCookie(name) {
+    var cookieName = name + "=";
+    var parts = (document.cookie || "").split(";");
+    for (var i = 0; i < parts.length; i += 1) {
+      var part = parts[i].trim();
+      if (part.indexOf(cookieName) === 0) {
+        return decodeURIComponent(part.slice(cookieName.length));
+      }
+    }
+    return "";
+  }
+
   function backendFeedbackAllowed(payload) {
     if (!payload || !payload.event) return false;
     return (
@@ -57,15 +69,12 @@
     if (!endpoint) return;
     var body = JSON.stringify(payload);
     try {
-      if (navigator.sendBeacon && typeof Blob !== "undefined") {
-        var ok = navigator.sendBeacon(endpoint, new Blob([body], { type: "application/json" }));
-        if (ok) return;
-      }
-    } catch (_) {}
-    try {
+      var headers = { "Content-Type": "application/json" };
+      var csrfToken = getCookie("csrftoken");
+      if (csrfToken) headers["X-CSRFToken"] = csrfToken;
       fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: headers,
         body: body,
         credentials: "same-origin",
         keepalive: true,

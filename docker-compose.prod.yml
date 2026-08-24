@@ -59,6 +59,12 @@ services:
       - -c
       - python:config.gunicorn
       - config.asgi:application
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -H 'Host: 24sparts.ru' http://127.0.0.1:8000/ready/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
 
   celery-worker:
     env_file:

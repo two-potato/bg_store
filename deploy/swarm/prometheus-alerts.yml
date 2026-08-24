@@ -1,0 +1,29 @@
+groups:
+  - name: infrastructure
+    rules:
+      - alert: SwarmExporterDown
+        expr: up{job=~"node-exporter|cadvisor"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Swarm monitoring target is down"
+          description: "{{ $labels.job }} target {{ $labels.instance }} has been unreachable for 5 minutes."
+
+      - alert: HostMemoryPressure
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host memory usage above 90%"
+          description: "Node {{ $labels.instance }} has sustained memory pressure for 10 minutes."
+
+      - alert: HostDiskSpaceLow
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) < 0.10
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host disk free space below 10%"
+          description: "Filesystem {{ $labels.mountpoint }} on {{ $labels.instance }} is nearly full."

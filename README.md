@@ -4,31 +4,38 @@ B2B marketplace monorepo on Django + HTMX with OpenSearch, Celery, Telegram bot 
 
 This README is the repository entrypoint. For current architecture and operational guidance, start with the source-of-truth docs listed below.
 
-
 ## Start Here
 
 - [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — current system architecture
 - [docs/BACKEND_GUIDE.md](./docs/BACKEND_GUIDE.md) — backend layering and placement rules
 - [docs/FRONTEND_ARCHITECTURE.md](./docs/FRONTEND_ARCHITECTURE.md) — storefront frontend/runtime model
 - [docs/LOCAL_DEVELOPMENT.md](./docs/LOCAL_DEVELOPMENT.md) — local dev workflow
-- [docs/DOCKER_GUIDE.md](./docs/DOCKER_GUIDE.md) — Docker stacks and compose layers
-- [docs/OPERATIONS_RUNBOOK_RU.md](./docs/OPERATIONS_RUNBOOK_RU.md) — deploy, rollback, backup, restore
-- [docs/FULL_PROJECT_AUDIT_RU_2026-03-20.md](./docs/FULL_PROJECT_AUDIT_RU_2026-03-20.md) — latest full audit and remediation status
+- [docs/DOCKER_GUIDE.md](./docs/DOCKER_GUIDE.md) — local Docker/Compose guidance
+- [docs/OPERATIONS_RUNBOOK_RU.md](./docs/OPERATIONS_RUNBOOK_RU.md) — production deploy, rollback, backup, restore
+- [deploy/swarm/README.md](./deploy/swarm/README.md) — two-node production Swarm bootstrap
+- [docs/PRODUCTION_READINESS.md](./docs/PRODUCTION_READINESS.md) — production release gates
 
 ## Repository Structure
 
-backend/ — Django backend, Celery, API
-bot/ — Telegram bot
-deploy/ — configs for monitoring, nginx, etc.
+- `backend/` — Django backend, Celery, API
+- `frontend/` — Next.js storefront foundation
+- `bot/` — Telegram bot services
+- `services/` — optional search/recommendation services
+- `deploy/` — reverse proxy, monitoring and Swarm production configuration
+- `scripts/` — operational and CI helper scripts
 
 ## Environment Variables
-- POSTGRES_DB
-- POSTGRES_USER
-- POSTGRES_PASSWORD
-- DJANGO_SECRET_KEY
-- TELEGRAM_BOT_TOKEN
-- GOOGLE_CLIENT_ID
-- GOOGLE_CLIENT_SECRET
+
+Core variables include:
+- `POSTGRES_DB`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `DJANGO_SECRET_KEY`
+- `TELEGRAM_BOT_TOKEN`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+
+See `backend/.env.example` for local development and `backend/.env.prod.example` for production.
 
 ## Quick Start (Dev)
 
@@ -50,102 +57,88 @@ Open:
 - API schema: http://localhost:8080/api/schema/
 - Metrics endpoint on nginx: http://localhost:8080/metrics
 
-If you start the metrics overlay too:
-
+If you start the local metrics overlay too:
 - Prometheus: http://localhost:9090
-- Grafana: http://localhost:3000  (admin / admin)
+- Grafana: http://localhost:3000
 - Alertmanager: http://localhost:9093
 - GlitchTip: http://localhost:18000
 
-Detailed reference:
+## Search
 
-- [backend/API.md](./backend/API.md)
-- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
-- [docs/BACKEND_GUIDE.md](./docs/BACKEND_GUIDE.md)
-- [docs/FRONTEND_ARCHITECTURE.md](./docs/FRONTEND_ARCHITECTURE.md)
-- [docs/LOCAL_DEVELOPMENT.md](./docs/LOCAL_DEVELOPMENT.md)
-- [docs/DOCKER_GUIDE.md](./docs/DOCKER_GUIDE.md)
-- [docs/OPERATIONS_RUNBOOK_RU.md](./docs/OPERATIONS_RUNBOOK_RU.md)
-- [CONTRIBUTING.md](./CONTRIBUTING.md)
-
-Search:
-- OpenSearch runs locally as `opensearch:9200` inside compose
-- Reindex products after first boot:
+OpenSearch runs locally as `opensearch:9200` inside Compose. Reindex products after first boot:
 
 ```bash
 docker compose exec backend python manage.py reindex_products_search
 ```
 
-## Self-Hosted Error Tracking
+## Self-Hosted Error Tracking (local)
 
-Local self-hosted Sentry-compatible tracking is available via GlitchTip.
-
-Start it:
+Local Sentry-compatible tracking is available via GlitchTip:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.metrics.yml up -d glitchtip
 ```
 
-Open:
-- GlitchTip: http://localhost:18000
-
-Then set `SENTRY_DSN` in `backend/.env`, `bot/.env`, or other service env files to the DSN of your GlitchTip project.
+Then configure `SENTRY_DSN` in the relevant local env files.
 
 ## Tests
 
-Backend tests and lint now run in a dedicated dockerized service with dev dependencies and access to the compose network.
-
-Full suite with the repo coverage gate:
+Full backend suite with repository coverage gate:
 
 ```bash
 make test
 ```
 
-Targeted run without the global `pytest.ini` coverage threshold:
+Targeted run without the global coverage threshold:
 
 ```bash
 make test-fast TEST_ARGS="tests/test_shopfront_views.py -k catalog_filter"
 ```
 
-Lint in the same dev image:
+Lint:
 
 ```bash
 make lint
 ```
 
-## Workflow: Dev -> Prod
+## Branch and Release Workflow
 
-1. Вся разработка идет в ветке `dev`.
-2. В `dev` запускается GitHub CI (tests/lint).
-3. В `main` попадаем только через PR из `dev`.
-4. `main` автоматически деплоится в production через `.github/workflows/deploy.yml`.
+1. Active development is integrated through `dev`.
+2. `CI` and `Security Audit` validate production candidates.
+3. The production candidate branch must contain the current `dev` history.
+4. Production deployment is explicit: run **Deploy Production Swarm** manually or push an approved `prod-*` tag.
+5. Production deploys immutable GHCR images by commit SHA to the two-node Docker Swarm.
 
-Рекомендуется включить branch protection:
-- для `main`: required checks = `CI`, запрет прямого push;
-- для `dev`: required checks = `CI` (по желанию команды).
-- PR template: `.github/PULL_REQUEST_TEMPLATE.md`
-- Release checklist: `.github/RELEASE_CHECKLIST.md`
+Production is **not** deployed automatically on every feature-branch push.
 
-## Google OAuth (real login)
+## Production
+
+Production for `24sparts.ru` uses Docker Swarm, not the local Compose overlay.
+
+Start here:
+
+```text
+deploy/swarm/README.md
+docs/OPERATIONS_RUNBOOK_RU.md
+docs/PRODUCTION_READINESS.md
+```
+
+The production topology is one manager/core node and one worker node; application images are built by GitHub Actions and deployed by exact commit SHA.
+
+## Google OAuth (local setup)
 
 1. Create OAuth 2.0 Client ID in Google Cloud Console.
-2. Add Authorized redirect URIs:
+2. Add local Authorized redirect URIs:
    - `http://localhost:8080/account/social/google/login/callback/`
    - `http://localhost:8000/account/social/google/login/callback/`
-3. Put credentials into `backend/.env`:
-   - `GOOGLE_CLIENT_ID=...`
-   - `GOOGLE_CLIENT_SECRET=...`
+3. Put credentials into `backend/.env`.
 4. Rebuild/restart backend:
+
 ```bash
 docker compose build backend
 docker compose up -d backend nginx
 ```
 
-## Production (example)
-```bash
-# set strong secrets in .env
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-```
-
 ## Codespaces
-Open repo in Codespaces, then the same commands as above.
+
+Open the repository in Codespaces and use the local development commands above.

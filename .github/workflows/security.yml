@@ -2,7 +2,7 @@ name: Security Audit
 
 on:
   push:
-    branches: [dev, main]
+    branches: [dev, main, codex/all-local-changes-20260331-110158]
   pull_request:
     branches: [dev, main]
   schedule:
@@ -11,9 +11,10 @@ on:
 
 jobs:
   python-audit:
-    name: Python Dependency Audit
+    name: Python Dependency Audit (${{ matrix.project }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         project:
           - backend
@@ -46,8 +47,14 @@ jobs:
         run: ./.venv/bin/pip-audit
 
   npm-audit:
-    name: NPM Production Audit
+    name: NPM Production Audit (${{ matrix.project }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - .
+          - frontend
 
     steps:
       - name: Checkout
@@ -58,9 +65,14 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
 
       - name: Install dependencies
+        working-directory: ${{ matrix.project }}
         run: npm ci
 
       - name: Run production dependency audit
+        working-directory: ${{ matrix.project }}
         run: npm audit --omit=dev

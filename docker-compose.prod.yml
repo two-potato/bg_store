@@ -2,7 +2,7 @@ services:
   frontend:
     environment:
       NODE_ENV: production
-      SITE_URL: "${SITE_URL:-https://potatofarm.ru}"
+      SITE_URL: "${SITE_URL:-https://24sparts.ru}"
 
   backend:
     env_file:
@@ -43,8 +43,8 @@ services:
       RECOMMENDATION_SERVICE_CANARY_PERCENT: "${RECOMMENDATION_SERVICE_CANARY_PERCENT:-0}"
       RECOMMENDATION_SERVICE_ROLLOUT_LABEL: "${RECOMMENDATION_SERVICE_ROLLOUT_LABEL:-recommendation-service}"
       RECOMMENDATION_SERVICE_OBSERVABILITY_LABEL: "${RECOMMENDATION_SERVICE_OBSERVABILITY_LABEL:-recommendation-service}"
-      GUNICORN_WORKERS: "8"
-      GUNICORN_TIMEOUT: "180"
+      GUNICORN_WORKERS: "${GUNICORN_WORKERS:-4}"
+      GUNICORN_TIMEOUT: "${GUNICORN_TIMEOUT:-180}"
     depends_on:
       - db
       - redis

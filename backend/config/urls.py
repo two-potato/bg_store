@@ -1,14 +1,14 @@
-from django.contrib import admin
-from django.urls import path, include
-from django.http import JsonResponse
 from django.conf import settings
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
+from django.contrib import admin
+from django.urls import include, path
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
-def health(_): return JsonResponse({"ok": True})
+from core.views.system import liveness_view, readiness_view
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("health/", health),
+    path("health/", liveness_view),
+    path("ready/", readiness_view),
     path("metrics", include("core.metrics_urls")),
     path("api/users/", include("users.urls")),
     path("account/", include("users.urls_html")),

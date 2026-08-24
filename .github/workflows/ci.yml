@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ dev, main ]
+    branches: [ dev, main, codex/all-local-changes-20260331-110158 ]
   pull_request:
     branches: [ dev, main ]
 
@@ -33,7 +33,6 @@ jobs:
           --health-cmd "redis-cli ping || exit 1" --health-interval=10s --health-timeout=5s --health-retries=5
 
     env:
-      # Django / DB env
       POSTGRES_DB: shop
       POSTGRES_USER: shop
       POSTGRES_PASSWORD: shop
@@ -49,6 +48,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Production candidate must contain current dev
+        if: github.ref == 'refs/heads/codex/all-local-changes-20260331-110158'
+        run: |
+          git fetch origin dev
+          if ! git merge-base --is-ancestor origin/dev HEAD; then
+            echo "Production candidate is behind dev. Merge dev before deployment." >&2
+            git log --oneline HEAD..origin/dev | head -50 >&2
+            exit 1
+          fi
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -71,8 +82,7 @@ jobs:
 
       - name: Install backend deps (dev)
         working-directory: backend
-        run: |
-          uv sync --no-cache
+        run: uv sync --no-cache
 
       - name: Install legacy storefront deps
         run: npm ci
@@ -97,8 +107,7 @@ jobs:
 
       - name: Run tests with coverage
         working-directory: backend
-        run: |
-          ./.venv/bin/python -m pytest
+        run: ./.venv/bin/python -m pytest
 
       - name: Production settings preflight
         working-directory: backend
@@ -112,17 +121,14 @@ jobs:
           TELEGRAM_BOT_TOKEN: ci-telegram-token
           ALLOWED_HOSTS: servio.test,www.servio.test
           CSRF_TRUSTED_ORIGINS: https://servio.test,https://www.servio.test
-        run: |
-          ./.venv/bin/python manage.py check --deploy --fail-level WARNING
+        run: ./.venv/bin/python manage.py check --deploy --fail-level WARNING
 
       - name: Check deploy-compose drift
-        run: |
-          python scripts/check_deploy_compose_drift.py
+        run: python scripts/check_deploy_compose_drift.py
 
       - name: Enforce 100% coverage for views
         working-directory: backend
-        run: |
-          python ../scripts/check_views_coverage.py coverage.xml
+        run: python ../scripts/check_views_coverage.py coverage.xml
 
       - name: Upload coverage artifact
         if: always()
@@ -132,8 +138,35 @@ jobs:
           path: backend/coverage.xml
 
       - name: Ruff (lint)
+        run: backend/.venv/bin/python -m ruff check .
+
+      - name: Validate Swarm deployment assets
         run: |
-          backend/.venv/bin/python -m ruff check .
+          set -euo pipefail
+          for script in \
+            scripts/swarm_bootstrap_manager.sh \
+            scripts/swarm_bootstrap_worker.sh \
+            scripts/swarm_deploy.sh \
+            scripts/swarm_healthcheck.sh \
+            scripts/swarm_rollback.sh \
+            scripts/swarm_backup_postgres.sh \
+            scripts/install_swarm_backup_cron.sh \
+            scripts/check_migration_safety.sh; do
+            bash -n "$script"
+          done
+          printf 'DJANGO_SECRET_KEY=ci\nPOSTGRES_DB=shop\nPOSTGRES_USER=shop\nPOSTGRES_PASSWORD=shop\nINTERNAL_TOKEN=ci\nORDER_APPROVE_SECRET=ci\nMETRICS_TOKEN=ci\nTELEGRAM_BOT_TOKEN=ci\nALLOWED_HOSTS=24sparts.ru\nCSRF_TRUSTED_ORIGINS=https://24sparts.ru\nGRAFANA_ADMIN_PASSWORD=ci\n' > "$RUNNER_TEMP/prod.env"
+          printf 'TELEGRAM_BOT_TOKEN=ci\nINTERNAL_TOKEN=ci\n' > "$RUNNER_TEMP/bot.env"
+          cp "$RUNNER_TEMP/bot.env" "$RUNNER_TEMP/bot-notify.env"
+          IMAGE_TAG=ci \
+          PROD_ENV_FILE="$RUNNER_TEMP/prod.env" \
+          PROD_BOT_ENV_FILE="$RUNNER_TEMP/bot.env" \
+          PROD_BOT_NOTIFY_ENV_FILE="$RUNNER_TEMP/bot-notify.env" \
+          GRAFANA_ADMIN_PASSWORD=ci \
+          docker stack config -c deploy/swarm/stack.yml >/dev/null
+
+      - name: Check migration safety against dev
+        if: github.ref == 'refs/heads/codex/all-local-changes-20260331-110158'
+        run: BASE_REF=origin/dev scripts/check_migration_safety.sh
 
       - name: Browser smoke
         env:
@@ -169,8 +202,7 @@ jobs:
           VISUAL_BASELINE_DIR: tests/visual-baselines/storefront
           VISUAL_CURRENT_DIR: output/playwright/current
           VISUAL_DIFF_DIR: output/playwright/diff
-        run: |
-          npm run visual:check
+        run: npm run visual:check
 
       - name: Upload browser smoke artifacts
         if: always()

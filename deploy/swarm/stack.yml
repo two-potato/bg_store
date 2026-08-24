@@ -1,0 +1,269 @@
+version: "3.9"
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+x-core-deploy: &core-deploy
+  placement:
+    constraints:
+      - node.labels.servio.role == core
+  restart_policy:
+    condition: on-failure
+    delay: 5s
+    max_attempts: 5
+    window: 60s
+  update_config:
+    parallelism: 1
+    delay: 10s
+    order: start-first
+    failure_action: rollback
+    monitor: 30s
+  rollback_config:
+    parallelism: 1
+    delay: 5s
+    order: stop-first
+
+services:
+  frontend:
+    image: ${IMAGE_PREFIX:-ghcr.io/two-potato/servio}-frontend:${IMAGE_TAG:?IMAGE_TAG is required}
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      SITE_URL: "${SITE_URL:-https://24sparts.ru}"
+      BACKEND_API_URL: "http://backend:8000/api"
+    networks:
+      - public
+      - backend
+    deploy: *core-deploy
+    logging: *default-logging
+
+  backend:
+    image: ${IMAGE_PREFIX:-ghcr.io/two-potato/servio}-backend:${IMAGE_TAG:?IMAGE_TAG is required}
+    env_file:
+      - ${PROD_ENV_FILE:-/opt/servio/shared/.env.prod}
+    environment:
+      DEBUG: "0"
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+      CACHE_BACKEND: redis
+      POSTGRES_HOST: db
+      REDIS_URL: redis://redis:6379/0
+      CACHE_URL: redis://redis:6379/1
+      OPENSEARCH_URL: http://opensearch:9200
+      BOT_BASE_URL: http://bot:8080
+      BOT_NOTIFY_URL: http://bot-notify:8080
+      GUNICORN_WORKERS: "${GUNICORN_WORKERS:-6}"
+      GUNICORN_TIMEOUT: "${GUNICORN_TIMEOUT:-180}"
+    command:
+      - sh
+      - -lc
+      - >-
+        until /app/.venv/bin/python manage.py migrate --noinput;
+        do echo 'Waiting for DB...'; sleep 2; done;
+        exec /app/.venv/bin/gunicorn config.asgi:application -c config/gunicorn.py
+    networks:
+      - backend
+      - public
+    volumes:
+      - staticfiles:/app/staticfiles
+      - media:/app/media
+    deploy: *core-deploy
+    logging: *default-logging
+
+  celery-worker:
+    image: ${IMAGE_PREFIX:-ghcr.io/two-potato/servio}-backend:${IMAGE_TAG:?IMAGE_TAG is required}
+    env_file:
+      - ${PROD_ENV_FILE:-/opt/servio/shared/.env.prod}
+    environment:
+      POSTGRES_HOST: db
+      REDIS_URL: redis://redis:6379/0
+      CACHE_URL: redis://redis:6379/1
+      OPENSEARCH_URL: http://opensearch:9200
+    command: ["python", "-m", "celery", "-A", "config.celery", "worker", "-l", "INFO"]
+    networks:
+      - backend
+    deploy:
+      placement:
+        constraints:
+          - node.labels.servio.role == worker
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      update_config:
+        parallelism: 1
+        order: stop-first
+        failure_action: rollback
+    logging: *default-logging
+
+  celery-beat:
+    image: ${IMAGE_PREFIX:-ghcr.io/two-potato/servio}-backend:${IMAGE_TAG:?IMAGE_TAG is required}
+    env_file:
+      - ${PROD_ENV_FILE:-/opt/servio/shared/.env.prod}
+    environment:
+      POSTGRES_HOST: db
+      REDIS_URL: redis://redis:6379/0
+      CACHE_URL: redis://redis:6379/1
+      OPENSEARCH_URL: http://opensearch:9200
+    command: ["python", "-m", "celery", "-A", "config.celery", "beat", "-l", "INFO", "--schedule", "/tmp/celerybeat-schedule"]
+    networks:
+      - backend
+    deploy: *core-deploy
+    logging: *default-logging
+
+  bot:
+    image: ${IMAGE_PREFIX:-ghcr.io/two-potato/servio}-bot:${IMAGE_TAG:?IMAGE_TAG is required}
+    env_file:
+      - ${PROD_BOT_ENV_FILE:-/opt/servio/shared/.env.bot}
+    environment:
+      BACKEND_URL: http://backend:8000
+      TWA_WEBAPP_URL: https://24sparts.ru/twa/
+    command: ["python", "-m", "uvicorn", "app.main_shop:app", "--host", "0.0.0.0", "--port", "8080"]
+    networks:
+      - backend
+    deploy: *core-deploy
+    logging: *default-logging
+
+  bot-notify:
+    image: ${IMAGE_PREFIX:-ghcr.io/two-potato/servio}-bot:${IMAGE_TAG:?IMAGE_TAG is required}
+    env_file:
+      - ${PROD_BOT_NOTIFY_ENV_FILE:-/opt/servio/shared/.env.bot-notify}
+    environment:
+      BACKEND_URL: http://backend:8000
+    command: ["python", "-m", "uvicorn", "app.main_notify:app", "--host", "0.0.0.0", "--port", "8080"]
+    networks:
+      - backend
+    deploy: *core-deploy
+    logging: *default-logging
+
+  search-api:
+    image: ${IMAGE_PREFIX:-ghcr.io/two-potato/servio}-search-api:${IMAGE_TAG:?IMAGE_TAG is required}
+    environment:
+      SERVICE_NAME: search-api
+      SERVICE_PORT: "8010"
+      BACKEND_BASE_URL: http://backend:8000
+      BACKEND_HEALTH_URL: http://backend:8000/health/
+      BACKEND_INTERNAL_TOKEN: "${INTERNAL_TOKEN:-internal-token}"
+    networks:
+      - backend
+    deploy:
+      replicas: 0
+      <<: *core-deploy
+    logging: *default-logging
+
+  recommendation-api:
+    image: ${IMAGE_PREFIX:-ghcr.io/two-potato/servio}-recommendation-api:${IMAGE_TAG:?IMAGE_TAG is required}
+    environment:
+      SERVICE_NAME: recommendation-api
+      SERVICE_PORT: "8011"
+      BACKEND_API_URL: http://backend:8000/api
+      BACKEND_BASE_URL: http://backend:8000
+      BACKEND_HEALTH_URL: http://backend:8000/health/
+      BACKEND_INTERNAL_TOKEN: "${INTERNAL_TOKEN:-internal-token}"
+    networks:
+      - backend
+    deploy:
+      replicas: 0
+      <<: *core-deploy
+    logging: *default-logging
+
+  db:
+    image: postgres:16
+    env_file:
+      - ${PROD_ENV_FILE:-/opt/servio/shared/.env.prod}
+    command: ["postgres", "-c", "max_connections=400", "-c", "shared_buffers=512MB"]
+    networks:
+      - backend
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    deploy:
+      placement:
+        constraints:
+          - node.labels.servio.role == core
+      restart_policy:
+        condition: on-failure
+    logging: *default-logging
+
+  redis:
+    image: redis:7
+    command: ["redis-server", "--appendonly", "yes"]
+    networks:
+      - backend
+    volumes:
+      - redisdata:/data
+    deploy:
+      placement:
+        constraints:
+          - node.labels.servio.role == core
+      restart_policy:
+        condition: on-failure
+    logging: *default-logging
+
+  opensearch:
+    image: opensearchproject/opensearch:2.19.1
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: "${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-ServioOpenSearchLocal123!}"
+      bootstrap.memory_lock: "true"
+      OPENSEARCH_JAVA_OPTS: "${OPENSEARCH_JAVA_OPTS:--Xms512m -Xmx512m}"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    networks:
+      - backend
+    volumes:
+      - opensearchdata:/usr/share/opensearch/data
+    deploy:
+      placement:
+        constraints:
+          - node.labels.servio.role == core
+      restart_policy:
+        condition: on-failure
+    logging: *default-logging
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - target: 80
+        published: 80
+        protocol: tcp
+        mode: host
+      - target: 443
+        published: 443
+        protocol: tcp
+        mode: host
+    networks:
+      - public
+      - backend
+    volumes:
+      - ${SWARM_NGINX_CONF:-/opt/servio/current/deploy/swarm/nginx.conf}:/etc/nginx/nginx.conf:ro
+      - ${LETSENCRYPT_DIR:-/opt/servio/shared/letsencrypt}:/etc/letsencrypt:ro
+      - ${CERTBOT_WWW_DIR:-/opt/servio/shared/certbot-www}:/var/www/certbot:ro
+      - staticfiles:/staticfiles:ro
+      - media:/media:ro
+    deploy: *core-deploy
+    logging: *default-logging
+
+networks:
+  public:
+    driver: overlay
+    attachable: false
+  backend:
+    driver: overlay
+    attachable: false
+
+volumes:
+  pgdata:
+    name: servio_pgdata
+  redisdata:
+    name: servio_redisdata
+  opensearchdata:
+    name: servio_opensearchdata
+  staticfiles:
+    name: servio_staticfiles
+  media:
+    name: servio_media

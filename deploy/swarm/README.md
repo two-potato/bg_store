@@ -4,83 +4,84 @@ Production domain: `24sparts.ru`.
 
 ## Nodes
 
-- Core/manager: `sergey@188.225.37.132`, 4 CPU / 8 GB RAM.
+- Core/manager: `sergey@188.225.37.132`, private IPv4 `192.168.0.4`, 4 CPU / 8 GB RAM.
 - Worker: `root@[2a03:6f01:1:2::2:13c7]`, private IPv4 `192.168.0.5`, 2 CPU / 2 GB RAM.
-- Cluster transport must use the private `192.168.0.0/24` network.
-
-The manager private IPv4 is intentionally not hard-coded. Determine it on the manager with:
-
-```bash
-ip -4 -br addr
-```
-
-Use that address as `MANAGER_ADDR` below.
+- Cluster transport uses only `192.168.0.0/24`.
 
 ## 1. Docker and firewall
 
-Install Docker Engine on both nodes. The SSH user used by GitHub Actions (`sergey`) must be able to run Docker without sudo.
+Install Docker Engine on both nodes. The GitHub Actions deploy user `sergey` must run Docker without sudo:
 
-Between the two private addresses allow only:
+```bash
+id sergey
+docker info
+```
 
-- `2377/tcp`
-- `7946/tcp`
-- `7946/udp`
-- `4789/udp`
+If necessary, as root:
 
-Do not expose those Swarm ports to the public Internet.
+```bash
+usermod -aG docker sergey
+```
 
-The core node additionally needs public `80/tcp`, `443/tcp` and SSH.
+Then log in again before testing Docker access.
 
-## 2. Clone the deployment repository on the manager
+Allow between `192.168.0.4` and `192.168.0.5` only:
+
+- `2377/tcp` — Swarm manager control plane
+- `7946/tcp` and `7946/udp` — node discovery
+- `4789/udp` — overlay VXLAN
+
+Do not expose those ports publicly. The manager additionally exposes SSH, `80/tcp` and `443/tcp`.
+
+## 2. Clone the production candidate on the manager
 
 ```bash
 sudo mkdir -p /opt/servio
 sudo chown -R sergey:sergey /opt/servio
 git clone -b codex/all-local-changes-20260331-110158 https://github.com/two-potato/servio.git /opt/servio/current
 cd /opt/servio/current
-chmod +x scripts/swarm_*.sh
+chmod +x scripts/swarm_*.sh scripts/check_migration_safety.sh scripts/install_swarm_backup_cron.sh
 ```
 
 ## 3. Initialize the manager
 
-Example only; replace `192.168.0.X` with the manager's real private IPv4:
-
 ```bash
 cd /opt/servio/current
-MANAGER_ADDR=192.168.0.X WORKER_ADDR=192.168.0.5 ./scripts/swarm_bootstrap_manager.sh
+MANAGER_ADDR=192.168.0.4 WORKER_ADDR=192.168.0.5 ./scripts/swarm_bootstrap_manager.sh
 ```
 
-The script prints the worker join token/command.
+The script validates that `192.168.0.4` exists locally, initializes Swarm, labels the manager `servio.role=core`, creates core storage and prints the worker join token.
 
 ## 4. Join the worker
 
-On `192.168.0.5`:
+On `192.168.0.5`, place `scripts/swarm_bootstrap_worker.sh` or clone the repository and run:
 
 ```bash
-MANAGER_ADDR=192.168.0.X \
+MANAGER_ADDR=192.168.0.4 \
+WORKER_ADDR=192.168.0.5 \
 SWARM_WORKER_TOKEN='SWMTKN-1-...' \
 ./scripts/swarm_bootstrap_worker.sh
 ```
 
-The worker only needs the bootstrap script for this one-time step. It may also be joined directly with the `docker swarm join ...` command printed by the manager.
-
-Then rerun on the manager so the worker gets its placement label:
+Then rerun on the manager:
 
 ```bash
-MANAGER_ADDR=192.168.0.X WORKER_ADDR=192.168.0.5 ./scripts/swarm_bootstrap_manager.sh
+MANAGER_ADDR=192.168.0.4 WORKER_ADDR=192.168.0.5 ./scripts/swarm_bootstrap_manager.sh
 ```
 
 Verify:
 
 ```bash
 docker node ls
-docker node inspect self --pretty
-docker node ls -q | xargs -n1 docker node inspect --format '{{.Description.Hostname}} {{.Status.Addr}} {{.Spec.Labels}}'
+docker node ls -q | xargs -n1 docker node inspect \
+  --format '{{.Description.Hostname}} {{.Status.Addr}} {{.Status.State}} {{.Spec.Labels}}'
 ```
+
+Expected: exactly one Ready manager/core and one Ready worker.
 
 ## 5. Production environment files
 
-Create on the manager:
+Create only on the manager:
 
 ```text
 /opt/servio/shared/.env.prod
@@ -96,46 +97,81 @@ bot/.env.example
 bot/.env.notify.example
 ```
 
-At minimum replace all `replace-*` / `change-me` values and configure the Telegram credentials you actually use.
-
-The Django production file must contain:
+`swarm_deploy.sh` fails closed if required production values are empty or still use placeholders. Required application/infrastructure secrets include:
 
 ```dotenv
+DJANGO_SECRET_KEY=<strong random secret>
+POSTGRES_DB=shop
+POSTGRES_USER=shop
+POSTGRES_PASSWORD=<strong random password>
+INTERNAL_TOKEN=<strong random token>
+ORDER_APPROVE_SECRET=<strong random token>
+METRICS_TOKEN=<strong random token>
+TELEGRAM_BOT_TOKEN=<real token>
+OPENSEARCH_INITIAL_ADMIN_PASSWORD=<strong random password>
+GRAFANA_ADMIN_PASSWORD=<strong random password>
 ALLOWED_HOSTS=24sparts.ru,www.24sparts.ru
 CSRF_TRUSTED_ORIGINS=https://24sparts.ru,https://www.24sparts.ru
 POSTGRES_HOST=db
 REDIS_URL=redis://redis:6379/0
+CACHE_URL=redis://redis:6379/1
 OPENSEARCH_URL=http://opensearch:9200
 ```
 
-The bot file should use:
+Bot settings:
 
 ```dotenv
 BACKEND_URL=http://backend:8000
 TWA_WEBAPP_URL=https://24sparts.ru/twa/
 ```
 
-Protect the files:
+Protect them:
 
 ```bash
 chmod 600 /opt/servio/shared/.env.*
 ```
 
-## 6. DNS
+## 6. DNS and TLS
 
-Point `24sparts.ru` to the public address of the core node:
+Required:
 
 ```text
 24sparts.ru -> 188.225.37.132
 ```
 
-Add `www.24sparts.ru` only if you intend to use it. Initial automatic certificate issuance is for `24sparts.ru` itself.
+If `www.24sparts.ru` resolves, the deploy script automatically includes it in the same Let's Encrypt certificate. nginx and Django are already configured for both names.
 
-## 7. GitHub Actions configuration
+Certificate state is kept under:
 
-The workflow `.github/workflows/deploy.yml` builds application images and pushes them to GHCR using the repository `GITHUB_TOKEN`, then deploys the exact commit SHA to the manager.
+```text
+/opt/servio/shared/letsencrypt
+/opt/servio/shared/letsencrypt-lib
+/opt/servio/shared/certbot-www
+```
 
-Repository Actions permissions must permit package writes.
+## 7. GitHub Actions and release policy
+
+Normal pushes to `codex/all-local-changes-20260331-110158` run CI and security checks but **do not deploy production**.
+
+Production deployment runs only via:
+
+- manual **Deploy Production Swarm** (`workflow_dispatch`), selecting the production-candidate branch; or
+- a tag matching `prod-*` created from the verified candidate SHA.
+
+The deploy workflow has its own mandatory verification job before GHCR publication. It checks:
+
+- current `dev` is an ancestor of the candidate;
+- backend pytest suite;
+- Django `check --deploy --fail-level WARNING`;
+- Ruff;
+- legacy storefront build;
+- Next.js typecheck + production build;
+- migration safety;
+- shell syntax of production scripts;
+- `docker stack config` rendering;
+- Playwright browser smoke.
+
+Only after that gate passes are immutable SHA-tagged images pushed to GHCR and deployed.
 
 Required repository secrets:
 
@@ -145,69 +181,153 @@ PROD_SSH_PORT=22
 PROD_SSH_USER=sergey
 PROD_SSH_PRIVATE_KEY=<private deploy key>
 PROD_APP_DIR=/opt/servio/current
-LETSENCRYPT_EMAIL=<real email for Let's Encrypt>
+LETSENCRYPT_EMAIL=<real Let's Encrypt email>
 ```
 
-The corresponding public SSH key must be in `/home/sergey/.ssh/authorized_keys` on the manager.
+Repository Actions permissions must allow package writes. The public half of `PROD_SSH_PRIVATE_KEY` must be in `/home/sergey/.ssh/authorized_keys` on the manager.
 
-## 8. First deployment
+## 8. Release lifecycle
 
-Push to:
+The manager receives the exact Git SHA. The deployment script:
 
-```text
-codex/all-local-changes-20260331-110158
+1. validates two Ready Swarm nodes and placement labels;
+2. validates production secrets;
+3. checks changed Django migrations for rollback-sensitive operations;
+4. validates/renews TLS;
+5. pulls the backend image before entering the maintenance phase;
+6. starts stateful infrastructure while application replicas are paused;
+7. waits for PostgreSQL, Redis and OpenSearch health;
+8. runs `manage.py migrate --plan` in a one-off release container;
+9. applies `manage.py migrate --noinput` once;
+10. runs `collectstatic` once;
+11. rolls out application services;
+12. waits for Swarm convergence and Docker healthchecks;
+13. verifies `https://24sparts.ru/health/`;
+14. records current/previous SHA only after success.
+
+Normal backend startup never runs migrations.
+
+### Migration policy
+
+Production schema changes must follow **expand/contract** compatibility. The deployment gate blocks migrations containing conservative rollback-risk markers (`RemoveField`, `DeleteModel`, `RunSQL`, `RunPython`, `RenameField`, `RenameModel`) unless an operator explicitly reviews them and sets:
+
+```bash
+ALLOW_RISKY_MIGRATIONS=1
 ```
 
-or run **Deploy Production Swarm** through `workflow_dispatch`.
+Do not use that override as a routine bypass.
 
-The workflow builds and pushes:
+## 9. Health and placement
 
-```text
-ghcr.io/two-potato/servio-backend:<git-sha>
-ghcr.io/two-potato/servio-frontend:<git-sha>
-ghcr.io/two-potato/servio-bot:<git-sha>
-ghcr.io/two-potato/servio-search-api:<git-sha>
-ghcr.io/two-potato/servio-recommendation-api:<git-sha>
+Public readiness:
+
+```bash
+curl -fsS https://24sparts.ru/health/
 ```
 
-The manager then runs `scripts/swarm_deploy.sh` and deploys stack `servio` with `--with-registry-auth`.
+This is **not** a static nginx response. nginx proxies it to Django `/ready/`, which checks PostgreSQL and the configured cache.
 
-## 9. Verify placement and health
+Proxy-only liveness:
 
-On the manager:
+```bash
+curl -fsS https://24sparts.ru/nginx-health
+```
+
+Cluster checks:
 
 ```bash
 docker node ls
 docker stack services servio
-docker stack ps servio
-curl -fsS https://24sparts.ru/health/
+docker stack ps servio --no-trunc
 ```
 
 Expected placement:
 
-- `servio_celery-worker` on the node labeled `servio.role=worker` (`192.168.0.5`).
-- PostgreSQL, Redis, OpenSearch, nginx, backend, frontend, Celery beat and bots on `servio.role=core`.
+- `servio_celery-worker`, Prometheus, Grafana and Alertmanager on `servio.role=worker` (`192.168.0.5`).
+- PostgreSQL, Redis, OpenSearch, nginx, Django backend, frontend, Celery beat and bots on `servio.role=core` (`192.168.0.4`).
+- node-exporter and cAdvisor run globally on both nodes.
+- search/recommendation API services default to `0` replicas until explicitly enabled.
 
-Search/recommendation sidecar services are built but start at `0` replicas until their rollout modes are explicitly enabled.
+The monitoring services are internal-only by default. Access Grafana through an SSH tunnel or add an authenticated reverse-proxy route later; do not expose port 3000 directly to the Internet.
 
-## 10. Rollback
+## 10. PostgreSQL backup to the worker
 
-A successful deployment writes:
+Backups are Swarm-aware; do not use the legacy Compose backup script for this deployment.
+
+First configure key-based SSH **from `sergey` on the manager to `root@192.168.0.5`** (or override `REMOTE_BACKUP_HOST` with a dedicated backup user). Verify non-interactively:
+
+```bash
+sudo -u sergey ssh -o BatchMode=yes root@192.168.0.5 true
+```
+
+Create the worker destination:
+
+```bash
+ssh root@192.168.0.5 'mkdir -p /opt/servio/backups/postgres && chmod 700 /opt/servio/backups/postgres'
+```
+
+Manual backup test on the manager:
+
+```bash
+cd /opt/servio/current
+./scripts/swarm_backup_postgres.sh
+```
+
+The script performs `pg_dump`, gzip integrity validation, atomic rename, 14-day local retention and off-node copy to `192.168.0.5`.
+
+Install daily backup at 02:10:
+
+```bash
+cd /opt/servio/current
+sudo RUN_USER=sergey ./scripts/install_swarm_backup_cron.sh
+```
+
+Regularly test restoration into a disposable PostgreSQL instance. A backup that has never been restored is merely an optimistic file collection.
+
+## 11. Rollback
+
+Successful releases write:
 
 ```text
 .deploy/current-sha
 .deploy/previous-sha
 ```
 
-Rollback on the manager:
+Code rollback:
 
 ```bash
 cd /opt/servio/current
 LETSENCRYPT_EMAIL='your@email.example' ./scripts/swarm_rollback.sh
 ```
 
-Swarm service-level update failures also use `failure_action: rollback` for stateless application services.
+Rollback deliberately uses `SKIP_MIGRATIONS=1`: it restores the previous immutable application image but **does not reverse database migrations**. That is why expand/contract schema compatibility is mandatory.
+
+## 12. Release checklist
+
+Before the first real release:
+
+```bash
+# manager
+docker node ls
+docker info
+
+test -f /opt/servio/shared/.env.prod
+test -f /opt/servio/shared/.env.bot
+test -f /opt/servio/shared/.env.bot-notify
+
+# worker/off-node backup path
+sudo -u sergey ssh -o BatchMode=yes root@192.168.0.5 true
+
+# DNS
+getent ahosts 24sparts.ru
+
+# branch must include dev
+git fetch origin dev
+git merge-base --is-ancestor origin/dev HEAD
+```
+
+Then ensure CI and Security Audit are green for the candidate SHA and trigger **Deploy Production Swarm** manually.
 
 ## Notes
 
-The initial nginx routing intentionally matches the current production behavior: `/` is served by Django. The Next.js frontend service is deployed and available inside the cluster, but public routing is not switched to it as part of the infrastructure migration.
+The first Swarm release intentionally keeps `/` routed to the existing Django storefront. The Next.js frontend is built and deployed inside the cluster but is not switched to public traffic during the infrastructure migration.

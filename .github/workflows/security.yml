@@ -32,11 +32,11 @@ jobs:
       - name: Install uv
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Export locked production dependencies
+      - name: Export production dependencies
         working-directory: ${{ matrix.project }}
-        run: uv export --frozen --no-dev --no-hashes --format requirements-txt --output-file "$RUNNER_TEMP/${{ matrix.project }}-requirements.txt"
+        run: uv export --no-dev --no-hashes --format requirements-txt --output-file "$RUNNER_TEMP/${{ matrix.project }}-requirements.txt"
 
       - name: Run pip-audit
         run: uvx --from pip-audit pip-audit -r "$RUNNER_TEMP/${{ matrix.project }}-requirements.txt"

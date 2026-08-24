@@ -49,6 +49,16 @@ if [[ "$(docker info --format '{{.Swarm.ControlAvailable}}')" != "true" ]]; then
   echo "This script must run on a Swarm manager" >&2
   exit 2
 fi
+
+ready_nodes="$(docker node ls --filter status=ready --format '{{.ID}}' | wc -l | tr -d ' ')"
+core_nodes="$(docker node ls -q | xargs -r docker node inspect --format '{{if eq (index .Spec.Labels "servio.role") "core"}}{{.ID}}{{end}}' | grep -c . || true)"
+worker_nodes="$(docker node ls -q | xargs -r docker node inspect --format '{{if eq (index .Spec.Labels "servio.role") "worker"}}{{.ID}}{{end}}' | grep -c . || true)"
+if (( ready_nodes < 2 || core_nodes < 1 || worker_nodes < 1 )); then
+  echo "Swarm topology is not ready: ready=$ready_nodes core=$core_nodes worker=$worker_nodes" >&2
+  docker node ls >&2 || true
+  exit 2
+fi
+
 for file in "$PROD_ENV_FILE" "$PROD_BOT_ENV_FILE" "$PROD_BOT_NOTIFY_ENV_FILE" "$STACK_FILE"; do
   if [[ ! -f "$file" ]]; then
     echo "Required file is missing: $file" >&2
@@ -62,10 +72,10 @@ set -a
 source "$PROD_ENV_FILE"
 set +a
 
-required_prod_vars=(DJANGO_SECRET_KEY POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD INTERNAL_TOKEN ORDER_APPROVE_SECRET METRICS_TOKEN TELEGRAM_BOT_TOKEN ALLOWED_HOSTS CSRF_TRUSTED_ORIGINS GRAFANA_ADMIN_PASSWORD)
+required_prod_vars=(DJANGO_SECRET_KEY POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD INTERNAL_TOKEN ORDER_APPROVE_SECRET METRICS_TOKEN TELEGRAM_BOT_TOKEN ALLOWED_HOSTS CSRF_TRUSTED_ORIGINS OPENSEARCH_INITIAL_ADMIN_PASSWORD GRAFANA_ADMIN_PASSWORD)
 for name in "${required_prod_vars[@]}"; do
   value="${!name:-}"
-  if [[ -z "$value" || "$value" == replace-* || "$value" == "change-me" || "$value" == "dev" || "$value" == "dev-secret" || "$value" == "change-me-before-production" ]]; then
+  if [[ -z "$value" || "$value" == replace-* || "$value" == "change-me" || "$value" == "dev" || "$value" == "dev-secret" || "$value" == "change-me-before-production" || "$value" == "ServioOpenSearchLocal123!" ]]; then
     echo "Unsafe or missing production variable: $name" >&2
     exit 2
   fi
@@ -100,12 +110,24 @@ for domain in "${cert_domains[@]}"; do
   cert_args+=("-d" "$domain")
 done
 
+needs_certificate=0
 if [[ ! -f "$cert_path" ]]; then
+  needs_certificate=1
+else
+  for domain in "${cert_domains[@]}"; do
+    if ! openssl x509 -in "$cert_path" -noout -text 2>/dev/null | grep -Fq "DNS:$domain"; then
+      needs_certificate=1
+      break
+    fi
+  done
+fi
+
+if [[ "$needs_certificate" == "1" ]]; then
   if [[ -z "$LETSENCRYPT_EMAIL" ]]; then
-    echo "LETSENCRYPT_EMAIL is required for first certificate issuance" >&2
+    echo "LETSENCRYPT_EMAIL is required for certificate issuance" >&2
     exit 2
   fi
-  log "Issuing TLS certificate for ${cert_domains[*]}"
+  log "Issuing/updating TLS certificate for ${cert_domains[*]}"
   if docker service inspect "${STACK_NAME}_nginx" >/dev/null 2>&1; then
     docker service scale "${STACK_NAME}_nginx=0" >/dev/null
   fi
@@ -114,7 +136,8 @@ if [[ ! -f "$cert_path" ]]; then
     -v "$LETSENCRYPT_DIR:/etc/letsencrypt" \
     -v "$LETSENCRYPT_LIB_DIR:/var/lib/letsencrypt" \
     certbot/certbot:latest certonly \
-      --standalone --non-interactive --agree-tos \
+      --standalone --non-interactive --agree-tos --expand \
+      --cert-name "$LETSENCRYPT_DOMAIN" \
       --email "$LETSENCRYPT_EMAIL" \
       "${cert_args[@]}"
 else
@@ -122,14 +145,17 @@ else
     -v "$LETSENCRYPT_DIR:/etc/letsencrypt" \
     -v "$LETSENCRYPT_LIB_DIR:/var/lib/letsencrypt" \
     -v "$CERTBOT_WWW_DIR:/var/www/certbot" \
-    certbot/certbot:latest renew --webroot -w /var/www/certbot --quiet || true
+    certbot/certbot:latest renew --webroot -w /var/www/certbot --quiet
 fi
 
-export IMAGE_TAG IMAGE_PREFIX PROD_ENV_FILE PROD_BOT_ENV_FILE PROD_BOT_NOTIFY_ENV_FILE LETSENCRYPT_DIR CERTBOT_WWW_DIR
+export IMAGE_TAG IMAGE_PREFIX PROD_ENV_FILE PROD_BOT_ENV_FILE PROD_BOT_NOTIFY_ENV_FILE LETSENCRYPT_DIR CERTBOT_WWW_DIR OPENSEARCH_INITIAL_ADMIN_PASSWORD GRAFANA_ADMIN_PASSWORD
 export SWARM_NGINX_CONF="${SWARM_NGINX_CONF:-$ROOT_DIR/deploy/swarm/nginx.conf}"
 
 log "Validating rendered stack"
 docker stack config -c "$STACK_FILE" >/dev/null
+
+log "Pulling release image before maintenance phase"
+docker pull "${IMAGE_PREFIX}-backend:${IMAGE_TAG}" >/dev/null
 
 log "Deploying infrastructure/release phase with application replicas paused"
 BACKEND_REPLICAS=0 \

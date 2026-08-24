@@ -2,8 +2,8 @@ name: Deploy Production Swarm
 
 on:
   push:
-    branches:
-      - codex/all-local-changes-20260331-110158
+    tags:
+      - 'prod-*'
   workflow_dispatch:
 
 concurrency:

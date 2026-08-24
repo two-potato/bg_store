@@ -2,90 +2,160 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Run Servio as a two-node Docker Swarm stack and deploy immutable GHCR images automatically from GitHub Actions.
+**Goal:** Raise the `codex/all-local-changes-20260331-110158` branch to production-grade deployment readiness on a two-node Docker Swarm cluster with gated CI/CD, dependency-aware health checks, safe release migrations, rollback, remote backups, and baseline observability.
 
-**Architecture:** `188.225.37.132` is the single Swarm manager/core node and public ingress for `24sparts.ru`; `192.168.0.5` is the worker. GitHub Actions builds SHA-tagged application images in GHCR, then SSHes to the manager and performs `docker stack deploy --with-registry-auth`.
+**Architecture:** `188.225.37.132` / `192.168.0.4` is the single Swarm manager/core node and public ingress for `24sparts.ru`; `192.168.0.5` is the worker. GitHub Actions must run the application verification suite before publishing SHA-tagged images to GHCR and invoking a controlled release phase on the manager. Stateful services stay pinned to core; asynchronous work and observability run on the worker with explicit resource limits.
 
-**Tech Stack:** Docker Engine, Docker Swarm, Docker Stack/Compose v3, GHCR, GitHub Actions, nginx, Django/Gunicorn, Celery, PostgreSQL, Redis, OpenSearch.
+**Tech Stack:** Docker Engine, Docker Swarm, Docker Stack/Compose v3, GHCR, GitHub Actions, nginx, Django/Gunicorn, Celery, PostgreSQL 16, Redis 7, OpenSearch 2.19.1, Prometheus, Grafana, Alertmanager.
 
 **Spec:** `docs/superpowers/specs/2026-08-24-two-node-swarm-deployment-design.md`
 
 ## Global Constraints
 
-- Production domain is `24sparts.ru`.
-- Swarm manager is `188.225.37.132` and uses a private `192.168.0.0/24` address for cluster traffic.
-- Worker private address is `192.168.0.5`.
+- Production domain is `24sparts.ru`; `www.24sparts.ru` is supported only when DNS exists and must be included in the same certificate.
+- Swarm manager private address is `192.168.0.4`; worker private address is `192.168.0.5`.
 - Stateful services remain pinned to the core node.
 - GitHub Actions builds and pushes immutable SHA-tagged images; production hosts do not build application images during deploy.
+- A production deploy may not run before backend tests, production settings checks, Ruff, frontend typecheck/build, deployment validation, and browser smoke succeed.
+- Database migrations execute as a distinct release phase; application containers never run `migrate` in their normal startup command.
+- Public health used by CI must proxy to dependency-aware Django readiness, not a static nginx response.
+- Destructive migration operations require an explicit override and must not silently enter production.
 - Swarm ports 2377/tcp, 7946/tcp+udp and 4789/udp are restricted to the private network.
+- PostgreSQL backups must be copied off the manager to `192.168.0.5`.
 
 ---
 
-### Task 1: Production Swarm Stack
+### Task 1: Dependency-aware application health
 
 **Files:**
-- Create: `deploy/swarm/stack.yml`
-- Create: `deploy/swarm/nginx.conf`
+- Modify: `backend/core/views/system.py`
+- Modify: `backend/config/urls.py`
+- Modify: `backend/tests/test_health_and_metrics.py`
+- Modify: `deploy/swarm/nginx.conf`
 
 **Interfaces:**
-- Consumes: existing Dockerfiles and production environment variables.
-- Produces: stack `servio`; overlay networks `servio_public`, `servio_backend`; core/worker placement constraints.
+- Produces: `/health/` liveness and `/ready/` dependency readiness; public `/health/` is routed by nginx to Django `/ready/`.
 
-- [ ] Define services using `${IMAGE_TAG}` and `${IMAGE_PREFIX}` image references.
-- [ ] Pin PostgreSQL, Redis, OpenSearch, nginx, backend, frontend, beat and bots to `node.labels.servio.role == core`.
-- [ ] Pin Celery worker to `node.labels.servio.role == worker`.
-- [ ] Add rolling update/restart policies and persistent named volumes.
-- [ ] Configure nginx for `24sparts.ru`, TLS and Swarm service DNS.
-- [ ] Validate stack syntax with `docker stack config -c deploy/swarm/stack.yml` on a Docker host.
+- [x] Add tests for healthy readiness, database failure and cache failure.
+- [x] Implement readiness checks against the configured Django database and cache.
+- [x] Expose `/ready/` independently from liveness.
+- [ ] Route production nginx `/health/` to backend `/ready/` and expose a separate `/nginx-health` static probe.
 
-### Task 2: Swarm Bootstrap and Deployment Scripts
+### Task 2: Production Swarm stack hardening
 
 **Files:**
-- Create: `scripts/swarm_bootstrap_manager.sh`
-- Create: `scripts/swarm_bootstrap_worker.sh`
-- Create: `scripts/swarm_deploy.sh`
-- Create: `scripts/swarm_healthcheck.sh`
-- Create: `scripts/swarm_rollback.sh`
+- Modify: `deploy/swarm/stack.yml`
+- Create: `deploy/swarm/prometheus.yml`
+- Create: `deploy/swarm/alertmanager.yml`
+- Create: `deploy/swarm/grafana-datasources.yml`
 
 **Interfaces:**
-- Consumes: private manager address, worker join token, `${IMAGE_TAG}`, `/opt/servio/shared/.env.prod`.
-- Produces: initialized cluster, node labels, stack rollout, `.deploy/current-sha`, `.deploy/previous-sha`.
+- Produces: healthchecked services, explicit replica controls, memory/CPU limits, and a worker observability baseline.
 
-- [ ] Make bootstrap scripts idempotent where Docker permits.
-- [ ] Validate required env/files before deploying.
-- [ ] Deploy with `docker stack deploy --with-registry-auth --prune`.
-- [ ] Wait for required replicas and HTTPS health endpoint.
-- [ ] Record current/previous SHA only after a successful rollout.
-- [ ] Implement rollback by redeploying the recorded previous SHA.
-- [ ] Run `bash -n` on every shell script.
+- [ ] Remove migration execution from backend startup.
+- [ ] Add container healthchecks for backend, PostgreSQL, Redis, OpenSearch and bots.
+- [ ] Add explicit resource limits/reservations for the 4/8 core and 2/2 worker.
+- [ ] Add Prometheus, Grafana, Alertmanager and global node-exporter services with worker placement where appropriate.
+- [ ] Keep search/recommendation sidecars disabled until explicitly enabled.
 
-### Task 3: GitHub Actions CI/CD
+### Task 3: Safe migration and release phase
 
 **Files:**
+- Modify: `scripts/swarm_deploy.sh`
+- Create: `scripts/check_migration_safety.sh`
+
+**Interfaces:**
+- Consumes: current/previous deployment SHA and production env.
+- Produces: preflight validation, migration plan, one-off migration execution, static collection, rollout and recorded deployment metadata.
+
+- [ ] Reject destructive migration patterns unless `ALLOW_RISKY_MIGRATIONS=1` is explicitly provided.
+- [ ] Validate production env placeholders before touching the stack.
+- [ ] Wait for stateful dependencies before running migrations.
+- [ ] Execute `manage.py migrate --plan` and `manage.py migrate --noinput` in a one-off release container.
+- [ ] Run `collectstatic` in the release container.
+- [ ] Only mark a SHA successful after application readiness passes.
+
+### Task 4: CI gate before image publication/deploy
+
+**Files:**
+- Modify: `.github/workflows/ci.yml`
 - Modify: `.github/workflows/deploy.yml`
 
 **Interfaces:**
-- Consumes: GitHub token/packages permission plus `PROD_SSH_*`, `PROD_APP_DIR` secrets.
-- Produces: GHCR images tagged with commit SHA and a remote Swarm rollout.
+- Produces: deployment branch receives the same verification as dev/main; deploy workflow has a verification job that must succeed before build/push/deploy.
 
-- [ ] Trigger production workflow on `codex/all-local-changes-20260331-110158` and manual dispatch.
-- [ ] Validate shell/YAML deployment assets before image publication.
-- [ ] Login to GHCR and build/push backend, frontend, bot, search-api and recommendation-api images.
-- [ ] SSH to the manager, fetch/reset the exact commit SHA, and invoke `scripts/swarm_deploy.sh` with `IMAGE_TAG=${{ github.sha }}`.
-- [ ] Use workflow concurrency to prevent overlapping production deployments.
+- [ ] Include `codex/all-local-changes-20260331-110158` in CI triggers.
+- [ ] Run backend tests, production settings check, Ruff, frontend typecheck/build and browser smoke before publish/deploy.
+- [ ] Validate shell syntax and `docker stack config` using temporary env files.
+- [ ] Add a branch drift guard requiring current `dev` to be an ancestor of the production candidate.
+- [ ] Build/push images only after verification succeeds.
 
-### Task 4: Production Domain Defaults and Operations Documentation
+### Task 5: Swarm-aware PostgreSQL backup and off-node copy
 
 **Files:**
-- Modify: `backend/.env.prod.example`
-- Create: `deploy/swarm/README.md`
+- Create: `scripts/swarm_backup_postgres.sh`
+- Create: `scripts/install_swarm_backup_cron.sh`
 
 **Interfaces:**
-- Consumes: actual server topology and GitHub secret names.
-- Produces: exact bootstrap commands and deployment prerequisites.
+- Consumes: `servio_db` task, `/opt/servio/shared/.env.prod`, SSH access to `root@192.168.0.5`.
+- Produces: compressed local dump, retention cleanup, remote copy and freshness marker.
 
-- [ ] Change production example hosts/origins to `24sparts.ru`.
-- [ ] Document manager and worker bootstrap commands.
-- [ ] Document required GitHub repository secrets/permissions.
-- [ ] Document GHCR login requirement, production env path, TLS directory and rollback command.
-- [ ] Document verification commands: `docker node ls`, `docker stack services servio`, `docker stack ps servio`, and HTTPS health check.
+- [ ] Locate the active PostgreSQL task without Docker Compose.
+- [ ] Run `pg_dump` inside the task and gzip atomically.
+- [ ] Copy completed dumps to the worker and enforce retention locally and remotely.
+- [ ] Install a daily cron entry and preserve the existing freshness-check contract.
+
+### Task 6: TLS and domain consistency
+
+**Files:**
+- Modify: `scripts/swarm_deploy.sh`
+- Modify: `backend/.env.prod.example`
+- Modify: `deploy/swarm/README.md`
+
+**Interfaces:**
+- Produces: certificate SANs match configured production hosts.
+
+- [ ] Detect whether `www.24sparts.ru` resolves before requesting it.
+- [ ] Issue/renew a certificate covering every configured public host that resolves.
+- [ ] Keep nginx and Django host/origin defaults aligned.
+
+### Task 7: Rollback and deployment diagnostics
+
+**Files:**
+- Modify: `scripts/swarm_healthcheck.sh`
+- Modify: `scripts/swarm_rollback.sh`
+- Modify: `deploy/swarm/README.md`
+
+**Interfaces:**
+- Produces: readiness-based rollout verification, task diagnostics on failure, code rollback to previous immutable image.
+
+- [ ] Verify required replicas and Docker health status where available.
+- [ ] Query real public Django readiness through nginx.
+- [ ] Print stack/service/task diagnostics on failure.
+- [ ] Document that schema rollback is not automatic and production migrations follow expand/contract compatibility.
+
+### Task 8: Synchronize production candidate with dev
+
+**Files:**
+- Git history only.
+
+**Interfaces:**
+- Consumes: current `dev` head.
+- Produces: production candidate containing all current dev fixes plus Swarm hardening.
+
+- [ ] Merge `dev` into `codex/all-local-changes-20260331-110158` without discarding production hardening.
+- [ ] Resolve conflicts explicitly if GitHub cannot perform the merge automatically.
+- [ ] Re-run comparison and confirm the candidate is no longer behind `dev`.
+
+### Task 9: Verification and release readiness review
+
+**Files:**
+- All files above.
+
+**Interfaces:**
+- Produces: evidence-backed release readiness rating.
+
+- [ ] Run/inspect CI for the final candidate SHA.
+- [ ] Verify shell syntax, stack rendering, image builds and application tests.
+- [ ] Review the final diff for critical/important deployment defects.
+- [ ] Do not claim production readiness until verification evidence is available.

@@ -1,6 +1,14 @@
 from .base import *  # noqa: F403,F401
 import os
+
 DEBUG = False
+
+# Keep production API metadata consistent with the active public domain even
+# when API docs are temporarily enabled for an operational/debug session.
+SPECTACULAR_SETTINGS = {
+    **SPECTACULAR_SETTINGS,  # noqa: F405
+    "SERVERS": [{"url": "https://24sparts.ru", "description": "Production"}],
+}
 
 # Security hardening for production
 SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "31536000"))

@@ -18,6 +18,9 @@
     <div class="checkout-focus-2026__eyebrow">Оформление</div>
     <h1 class="checkout-focus-2026__title">Оформление заказа без лишнего шума</h1>
     <p class="checkout-focus-2026__subtitle">Сначала проверьте состав заказа, реквизиты и доставку. Все сопутствующие предложения вынесены в отдельный свернутый блок ниже.</p>
+    {% if not is_authenticated_checkout %}
+      <p class="checkout-focus-2026__subtitle">Гостевой checkout доступен для физических лиц без регистрации. Для B2B-заказа войдите в аккаунт компании.</p>
+    {% endif %}
   </div>
   <div class="checkout-focus-2026__trust">
     <article class="checkout-focus-2026__trust-item">

@@ -1,5 +1,5 @@
 [project]
-name = "bad-guys-bot"
+name = "servio-bot"
 version = "1.0.0"
 requires-python = ">=3.12"
 dependencies = [
@@ -12,5 +12,5 @@ dependencies = [
   "sentry-sdk[fastapi]>=2.18,<3",
 ]
 
-[tool.uv]
-dev-dependencies = ["pytest", "ruff", "mypy"]
+[dependency-groups]
+dev = ["pytest", "ruff", "mypy"]

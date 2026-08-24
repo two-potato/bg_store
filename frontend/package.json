@@ -2,6 +2,9 @@
   "name": "servio-storefront",
   "private": true,
   "version": "0.1.0",
+  "engines": {
+    "node": ">=20.20.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

@@ -1,5 +1,5 @@
 [project]
-name = "bad-guys-backend"
+name = "servio-backend"
 version = "1.0.0"
 requires-python = ">=3.12"
 dependencies = [
@@ -30,5 +30,5 @@ dependencies = [
 [project.optional-dependencies]
 ml = ["scikit-learn>=1.5,<1.8"]
 
-[tool.uv]
-dev-dependencies = ["pytest", "pytest-django", "pytest-cov", "ruff", "mypy"]
+[dependency-groups]
+dev = ["pytest", "pytest-django", "pytest-cov", "ruff", "mypy"]

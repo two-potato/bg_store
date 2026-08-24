@@ -20,7 +20,10 @@ if (( ${#migration_files[@]} == 0 )); then
   exit 0
 fi
 
-risky_pattern='migrations\.(RemoveField|DeleteModel|RunSQL|RunPython|RenameField|RenameModel)\b'
+# Conservative gate for operations that commonly break code-only rollback.
+# AlterField is intentionally not blanket-blocked because many safe index/default/nullability
+# changes use it; reviewers still inspect `migrate --plan` before release.
+risky_pattern='migrations\.(RemoveField|DeleteModel|RunSQL|RunPython|RenameField|RenameModel)[[:space:]]*\('
 risky=0
 for file in "${migration_files[@]}"; do
   [[ -f "$file" ]] || continue

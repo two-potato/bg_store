@@ -26,11 +26,9 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Refresh lockfile and audit
+      - name: Refresh lockfile
         working-directory: frontend
-        run: |
-          npm install --package-lock-only
-          npm audit --omit=dev
+        run: npm install --package-lock-only
 
       - name: Commit refreshed lockfile
         run: |

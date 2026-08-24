@@ -34,17 +34,12 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Sync project environment
+      - name: Export locked production dependencies
         working-directory: ${{ matrix.project }}
-        run: uv sync --no-cache
-
-      - name: Install pip-audit
-        working-directory: ${{ matrix.project }}
-        run: ./.venv/bin/python -m pip install pip-audit
+        run: uv export --frozen --no-dev --no-hashes --format requirements-txt --output-file "$RUNNER_TEMP/${{ matrix.project }}-requirements.txt"
 
       - name: Run pip-audit
-        working-directory: ${{ matrix.project }}
-        run: ./.venv/bin/pip-audit
+        run: uvx --from pip-audit pip-audit -r "$RUNNER_TEMP/${{ matrix.project }}-requirements.txt"
 
   npm-audit:
     name: NPM Production Audit (${{ matrix.project }})

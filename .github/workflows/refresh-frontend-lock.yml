@@ -6,15 +6,22 @@ on:
       - codex/all-local-changes-20260331-110158
     paths:
       - frontend/package.json
+  pull_request:
+    branches:
+      - dev
+    paths:
+      - frontend/package.json
+      - .github/workflows/refresh-frontend-lock.yml
 
 permissions:
   contents: write
 
 jobs:
   refresh-lock:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout branch
+      - name: Checkout production candidate branch
         uses: actions/checkout@v4
         with:
           ref: codex/all-local-changes-20260331-110158

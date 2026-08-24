@@ -4,7 +4,7 @@ from .models import Brand, Series, Category, Collection, Product, ProductImage, 
 
 
 @extend_schema_serializer(
-    examples=[OpenApiExample("Brand", value={"id": 1, "name": "Complaex Signature", "slug": "complaex-signature"}, response_only=True)]
+    examples=[OpenApiExample("Brand", value={"id": 1, "name": "Servio Signature", "slug": "servio-signature"}, response_only=True)]
 )
 class BrandSerializer(serializers.ModelSerializer):
     photo = serializers.SerializerMethodField()
@@ -12,7 +12,7 @@ class BrandSerializer(serializers.ModelSerializer):
     categories_count = serializers.IntegerField(read_only=True)
     collections_count = serializers.IntegerField(read_only=True)
 
-    def get_photo(self, obj):
+    def get_photo(self, obj) -> str:
         photo = getattr(obj, "photo", None)
         if not photo:
             return ""
@@ -37,7 +37,7 @@ class BrandSerializer(serializers.ModelSerializer):
         ]
 
 @extend_schema_serializer(
-    examples=[OpenApiExample("Series", value={"id": 1, "name": "Night Shift", "brand": {"id": 1, "name": "Complaex Signature"}}, response_only=True)]
+    examples=[OpenApiExample("Series", value={"id": 1, "name": "Night Shift", "brand": {"id": 1, "name": "Servio Signature"}}, response_only=True)]
 )
 class SeriesSerializer(serializers.ModelSerializer):
     brand = BrandSerializer(read_only=True)
@@ -54,7 +54,7 @@ class CategorySerializer(serializers.ModelSerializer):
     full_slug_path = serializers.CharField(read_only=True)
     product_count = serializers.IntegerField(read_only=True)
 
-    def get_photo(self, obj):
+    def get_photo(self, obj) -> str:
         photo = getattr(obj, "photo", None)
         if not photo:
             return ""
@@ -110,7 +110,7 @@ class CollectionSerializer(serializers.ModelSerializer):
     photo = serializers.SerializerMethodField()
     products_count = serializers.IntegerField(read_only=True)
 
-    def get_photo(self, obj):
+    def get_photo(self, obj) -> str:
         photo = getattr(obj, "photo", None)
         if not photo:
             return ""
@@ -147,7 +147,7 @@ class CountrySerializer(serializers.ModelSerializer):
         fields = ["id", "name", "iso_code"]
 
 @extend_schema_serializer(
-    examples=[OpenApiExample("Product image", value={"url": "https://complaexbar.ru/media/products/10000001.png", "alt": "Тарелка для подачи", "is_primary": True, "ordering": 0}, response_only=True)]
+    examples=[OpenApiExample("Product image", value={"url": "https://24sparts.ru/media/products/10000001.png", "alt": "Тарелка для подачи", "is_primary": True, "ordering": 0}, response_only=True)]
 )
 class ProductImageSerializer(serializers.ModelSerializer):
     class Meta:
@@ -170,10 +170,10 @@ class TagSerializer(serializers.ModelSerializer):
                 "id": 1,
                 "sku": "10000001",
                 "slug": "night-shift-plate",
-                "manufacturer_sku": "CBR-10000001",
+                "manufacturer_sku": "SRV-10000001",
                 "name": "Тарелка для подачи Night Shift 21 см",
-                "brand": {"id": 1, "name": "Complaex Signature"},
-                "series": {"id": 1, "name": "Night Shift", "brand": {"id": 1, "name": "Complaex Signature"}},
+                "brand": {"id": 1, "name": "Servio Signature"},
+                "series": {"id": 1, "name": "Night Shift", "brand": {"id": 1, "name": "Servio Signature"}},
                 "category": 1,
                 "country_of_origin": "Италия",
                 "material": "фарфор",
@@ -195,8 +195,8 @@ class TagSerializer(serializers.ModelSerializer):
                 "flavor": "без вкусового акцента",
                 "composition": "Рабочий материал: фарфор.",
                 "shelf_life": "12 месяцев",
-                "attributes": {"Проект": "complaexbar.ru"},
-                "images": [{"url": "https://complaexbar.ru/media/products/10000001.png", "alt": "Тарелка", "is_primary": True, "ordering": 0}],
+                "attributes": {"Проект": "24sparts.ru"},
+                "images": [{"url": "https://24sparts.ru/media/products/10000001.png", "alt": "Тарелка", "is_primary": True, "ordering": 0}],
                 "tags": [{"id": 1, "name": "Посуда для подачи", "slug": "catalog-tag"}],
                 "seller": "horeca_manager",
             },

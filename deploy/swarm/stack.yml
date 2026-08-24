@@ -6,25 +6,31 @@ x-logging: &default-logging
     max-size: "20m"
     max-file: "5"
 
-x-core-deploy: &core-deploy
-  placement:
-    constraints:
-      - node.labels.servio.role == core
-  restart_policy:
-    condition: on-failure
-    delay: 5s
-    max_attempts: 5
-    window: 60s
-  update_config:
-    parallelism: 1
-    delay: 10s
-    order: start-first
-    failure_action: rollback
-    monitor: 30s
-  rollback_config:
-    parallelism: 1
-    delay: 5s
-    order: stop-first
+x-core-placement: &core-placement
+  constraints:
+    - node.labels.servio.role == core
+
+x-worker-placement: &worker-placement
+  constraints:
+    - node.labels.servio.role == worker
+
+x-restart: &restart
+  condition: on-failure
+  delay: 5s
+  max_attempts: 8
+  window: 120s
+
+x-update: &update
+  parallelism: 1
+  delay: 10s
+  order: start-first
+  failure_action: rollback
+  monitor: 45s
+
+x-rollback: &rollback
+  parallelism: 1
+  delay: 5s
+  order: stop-first
 
 services:
   frontend:
@@ -34,10 +40,20 @@ services:
       PORT: "3000"
       SITE_URL: "${SITE_URL:-https://24sparts.ru}"
       BACKEND_API_URL: "http://backend:8000/api"
-    networks:
-      - public
-      - backend
-    deploy: *core-deploy
+    networks: [public, backend]
+    deploy:
+      replicas: ${FRONTEND_REPLICAS:-1}
+      placement: *core-placement
+      restart_policy: *restart
+      update_config: *update
+      rollback_config: *rollback
+      resources:
+        reservations:
+          cpus: "0.25"
+          memory: 192M
+        limits:
+          cpus: "0.75"
+          memory: 512M
     logging: *default-logging
 
   backend:
@@ -54,22 +70,32 @@ services:
       OPENSEARCH_URL: http://opensearch:9200
       BOT_BASE_URL: http://bot:8080
       BOT_NOTIFY_URL: http://bot-notify:8080
-      GUNICORN_WORKERS: "${GUNICORN_WORKERS:-6}"
+      GUNICORN_WORKERS: "${GUNICORN_WORKERS:-4}"
       GUNICORN_TIMEOUT: "${GUNICORN_TIMEOUT:-180}"
-    command:
-      - sh
-      - -lc
-      - >-
-        until /app/.venv/bin/python manage.py migrate --noinput;
-        do echo 'Waiting for DB...'; sleep 2; done;
-        exec /app/.venv/bin/gunicorn config.asgi:application -c config/gunicorn.py
-    networks:
-      - backend
-      - public
+    command: ["sh", "-lc", "exec /app/.venv/bin/gunicorn config.asgi:application -c config/gunicorn.py"]
+    networks: [backend, public]
     volumes:
       - staticfiles:/app/staticfiles
       - media:/app/media
-    deploy: *core-deploy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/ready/ >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      replicas: ${BACKEND_REPLICAS:-1}
+      placement: *core-placement
+      restart_policy: *restart
+      update_config: *update
+      rollback_config: *rollback
+      resources:
+        reservations:
+          cpus: "0.50"
+          memory: 512M
+        limits:
+          cpus: "2.00"
+          memory: 1536M
     logging: *default-logging
 
   celery-worker:
@@ -81,20 +107,25 @@ services:
       REDIS_URL: redis://redis:6379/0
       CACHE_URL: redis://redis:6379/1
       OPENSEARCH_URL: http://opensearch:9200
-    command: ["python", "-m", "celery", "-A", "config.celery", "worker", "-l", "INFO"]
-    networks:
-      - backend
+    command: ["python", "-m", "celery", "-A", "config.celery", "worker", "-l", "INFO", "--concurrency", "${CELERY_WORKER_CONCURRENCY:-2}"]
+    networks: [backend]
     deploy:
-      placement:
-        constraints:
-          - node.labels.servio.role == worker
-      restart_policy:
-        condition: on-failure
-        delay: 5s
+      replicas: ${CELERY_WORKER_REPLICAS:-1}
+      placement: *worker-placement
+      restart_policy: *restart
       update_config:
         parallelism: 1
         order: stop-first
         failure_action: rollback
+        monitor: 45s
+      rollback_config: *rollback
+      resources:
+        reservations:
+          cpus: "0.35"
+          memory: 256M
+        limits:
+          cpus: "1.00"
+          memory: 768M
     logging: *default-logging
 
   celery-beat:
@@ -107,9 +138,20 @@ services:
       CACHE_URL: redis://redis:6379/1
       OPENSEARCH_URL: http://opensearch:9200
     command: ["python", "-m", "celery", "-A", "config.celery", "beat", "-l", "INFO", "--schedule", "/tmp/celerybeat-schedule"]
-    networks:
-      - backend
-    deploy: *core-deploy
+    networks: [backend]
+    deploy:
+      replicas: ${CELERY_BEAT_REPLICAS:-1}
+      placement: *core-placement
+      restart_policy: *restart
+      update_config: *update
+      rollback_config: *rollback
+      resources:
+        reservations:
+          cpus: "0.10"
+          memory: 96M
+        limits:
+          cpus: "0.30"
+          memory: 256M
     logging: *default-logging
 
   bot:
@@ -120,9 +162,26 @@ services:
       BACKEND_URL: http://backend:8000
       TWA_WEBAPP_URL: https://24sparts.ru/twa/
     command: ["python", "-m", "uvicorn", "app.main_shop:app", "--host", "0.0.0.0", "--port", "8080"]
-    networks:
-      - backend
-    deploy: *core-deploy
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health >/dev/null || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      replicas: ${BOT_REPLICAS:-1}
+      placement: *core-placement
+      restart_policy: *restart
+      update_config: *update
+      rollback_config: *rollback
+      resources:
+        reservations:
+          cpus: "0.10"
+          memory: 96M
+        limits:
+          cpus: "0.35"
+          memory: 256M
     logging: *default-logging
 
   bot-notify:
@@ -132,9 +191,26 @@ services:
     environment:
       BACKEND_URL: http://backend:8000
     command: ["python", "-m", "uvicorn", "app.main_notify:app", "--host", "0.0.0.0", "--port", "8080"]
-    networks:
-      - backend
-    deploy: *core-deploy
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health >/dev/null || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      replicas: ${BOT_NOTIFY_REPLICAS:-1}
+      placement: *core-placement
+      restart_policy: *restart
+      update_config: *update
+      rollback_config: *rollback
+      resources:
+        reservations:
+          cpus: "0.10"
+          memory: 96M
+        limits:
+          cpus: "0.35"
+          memory: 256M
     logging: *default-logging
 
   search-api:
@@ -143,13 +219,19 @@ services:
       SERVICE_NAME: search-api
       SERVICE_PORT: "8010"
       BACKEND_BASE_URL: http://backend:8000
-      BACKEND_HEALTH_URL: http://backend:8000/health/
+      BACKEND_HEALTH_URL: http://backend:8000/ready/
       BACKEND_INTERNAL_TOKEN: "${INTERNAL_TOKEN:-internal-token}"
-    networks:
-      - backend
+    networks: [backend]
     deploy:
-      replicas: 0
-      <<: *core-deploy
+      replicas: ${SEARCH_API_REPLICAS:-0}
+      placement: *core-placement
+      restart_policy: *restart
+      update_config: *update
+      rollback_config: *rollback
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 384M
     logging: *default-logging
 
   recommendation-api:
@@ -159,45 +241,70 @@ services:
       SERVICE_PORT: "8011"
       BACKEND_API_URL: http://backend:8000/api
       BACKEND_BASE_URL: http://backend:8000
-      BACKEND_HEALTH_URL: http://backend:8000/health/
+      BACKEND_HEALTH_URL: http://backend:8000/ready/
       BACKEND_INTERNAL_TOKEN: "${INTERNAL_TOKEN:-internal-token}"
-    networks:
-      - backend
+    networks: [backend]
     deploy:
-      replicas: 0
-      <<: *core-deploy
+      replicas: ${RECOMMENDATION_API_REPLICAS:-0}
+      placement: *core-placement
+      restart_policy: *restart
+      update_config: *update
+      rollback_config: *rollback
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 384M
     logging: *default-logging
 
   db:
     image: postgres:16
     env_file:
       - ${PROD_ENV_FILE:-/opt/servio/shared/.env.prod}
-    command: ["postgres", "-c", "max_connections=400", "-c", "shared_buffers=512MB"]
-    networks:
-      - backend
+    command: ["postgres", "-c", "max_connections=300", "-c", "shared_buffers=512MB"]
+    networks: [backend]
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-shop} -d $${POSTGRES_DB:-shop} || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     deploy:
-      placement:
-        constraints:
-          - node.labels.servio.role == core
-      restart_policy:
-        condition: on-failure
+      replicas: 1
+      placement: *core-placement
+      restart_policy: *restart
+      resources:
+        reservations:
+          cpus: "0.50"
+          memory: 512M
+        limits:
+          cpus: "1.50"
+          memory: 1536M
     logging: *default-logging
 
   redis:
     image: redis:7
-    command: ["redis-server", "--appendonly", "yes"]
-    networks:
-      - backend
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    networks: [backend]
     volumes:
       - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
     deploy:
-      placement:
-        constraints:
-          - node.labels.servio.role == core
-      restart_policy:
-        condition: on-failure
+      replicas: 1
+      placement: *core-placement
+      restart_policy: *restart
+      resources:
+        reservations:
+          cpus: "0.10"
+          memory: 128M
+        limits:
+          cpus: "0.50"
+          memory: 384M
     logging: *default-logging
 
   opensearch:
@@ -213,16 +320,26 @@ services:
       memlock:
         soft: -1
         hard: -1
-    networks:
-      - backend
+    networks: [backend]
     volumes:
       - opensearchdata:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9200/_cluster/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     deploy:
-      placement:
-        constraints:
-          - node.labels.servio.role == core
-      restart_policy:
-        condition: on-failure
+      replicas: 1
+      placement: *core-placement
+      restart_policy: *restart
+      resources:
+        reservations:
+          cpus: "0.40"
+          memory: 768M
+        limits:
+          cpus: "1.50"
+          memory: 1536M
     logging: *default-logging
 
   nginx:
@@ -236,16 +353,132 @@ services:
         published: 443
         protocol: tcp
         mode: host
-    networks:
-      - public
-      - backend
+    networks: [public, backend]
     volumes:
       - ${SWARM_NGINX_CONF:-/opt/servio/current/deploy/swarm/nginx.conf}:/etc/nginx/nginx.conf:ro
       - ${LETSENCRYPT_DIR:-/opt/servio/shared/letsencrypt}:/etc/letsencrypt:ro
       - ${CERTBOT_WWW_DIR:-/opt/servio/shared/certbot-www}:/var/www/certbot:ro
       - staticfiles:/staticfiles:ro
       - media:/media:ro
-    deploy: *core-deploy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/nginx-health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    deploy:
+      replicas: 1
+      placement: *core-placement
+      restart_policy: *restart
+      update_config: *update
+      rollback_config: *rollback
+      resources:
+        reservations:
+          cpus: "0.05"
+          memory: 32M
+        limits:
+          cpus: "0.35"
+          memory: 192M
+    logging: *default-logging
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d", "--storage.tsdb.path=/prometheus"]
+    configs:
+      - source: prometheus_config
+        target: /etc/prometheus/prometheus.yml
+    volumes:
+      - prometheusdata:/prometheus
+    networks: [monitoring]
+    deploy:
+      replicas: ${MONITORING_REPLICAS:-1}
+      placement: *worker-placement
+      restart_policy: *restart
+      resources:
+        reservations:
+          cpus: "0.10"
+          memory: 160M
+        limits:
+          cpus: "0.40"
+          memory: 384M
+    logging: *default-logging
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    configs:
+      - source: alertmanager_config
+        target: /etc/alertmanager/alertmanager.yml
+    networks: [monitoring]
+    deploy:
+      replicas: ${MONITORING_REPLICAS:-1}
+      placement: *worker-placement
+      restart_policy: *restart
+      resources:
+        reservations:
+          cpus: "0.05"
+          memory: 48M
+        limits:
+          cpus: "0.20"
+          memory: 128M
+    logging: *default-logging
+
+  grafana:
+    image: grafana/grafana:12.4.0
+    environment:
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-change-me-before-production}"
+    configs:
+      - source: grafana_datasources
+        target: /etc/grafana/provisioning/datasources/datasources.yml
+    volumes:
+      - grafanadata:/var/lib/grafana
+    networks: [monitoring]
+    deploy:
+      replicas: ${MONITORING_REPLICAS:-1}
+      placement: *worker-placement
+      restart_policy: *restart
+      resources:
+        reservations:
+          cpus: "0.10"
+          memory: 128M
+        limits:
+          cpus: "0.35"
+          memory: 320M
+    logging: *default-logging
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    volumes:
+      - /:/host:ro,rslave
+    networks: [monitoring]
+    deploy:
+      mode: global
+      restart_policy: *restart
+      resources:
+        limits:
+          cpus: "0.10"
+          memory: 96M
+    logging: *default-logging
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.2
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    networks: [monitoring]
+    deploy:
+      mode: global
+      restart_policy: *restart
+      resources:
+        limits:
+          cpus: "0.20"
+          memory: 160M
     logging: *default-logging
 
 networks:
@@ -253,6 +486,9 @@ networks:
     driver: overlay
     attachable: false
   backend:
+    driver: overlay
+    attachable: true
+  monitoring:
     driver: overlay
     attachable: false
 
@@ -267,3 +503,15 @@ volumes:
     name: servio_staticfiles
   media:
     name: servio_media
+  prometheusdata:
+    name: servio_prometheusdata
+  grafanadata:
+    name: servio_grafanadata
+
+configs:
+  prometheus_config:
+    file: ./prometheus.yml
+  alertmanager_config:
+    file: ./alertmanager.yml
+  grafana_datasources:
+    file: ./grafana-datasources.yml

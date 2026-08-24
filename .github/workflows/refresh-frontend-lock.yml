@@ -1,0 +1,46 @@
+name: Refresh Frontend Lockfile
+
+on:
+  push:
+    branches:
+      - codex/all-local-changes-20260331-110158
+    paths:
+      - frontend/package.json
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: codex/all-local-changes-20260331-110158
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Refresh lockfile and audit
+        working-directory: frontend
+        run: |
+          npm install --package-lock-only
+          npm audit --omit=dev
+
+      - name: Commit refreshed lockfile
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- frontend/package-lock.json; then
+            echo 'Lockfile already current.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/package-lock.json
+          git commit -m 'chore: refresh frontend security lockfile'
+          git push origin HEAD:codex/all-local-changes-20260331-110158

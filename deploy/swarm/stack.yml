@@ -386,6 +386,8 @@ services:
     configs:
       - source: prometheus_config
         target: /etc/prometheus/prometheus.yml
+      - source: prometheus_alerts
+        target: /etc/prometheus/alerts.yml
     volumes:
       - prometheusdata:/prometheus
     networks: [monitoring]
@@ -407,7 +409,7 @@ services:
     configs:
       - source: alertmanager_config
         target: /etc/alertmanager/alertmanager.yml
-    networks: [monitoring]
+    networks: [monitoring, backend]
     deploy:
       replicas: ${MONITORING_REPLICAS:-1}
       placement: *worker-placement
@@ -511,6 +513,8 @@ volumes:
 configs:
   prometheus_config:
     file: ./prometheus.yml
+  prometheus_alerts:
+    file: ./prometheus-alerts.yml
   alertmanager_config:
     file: ./alertmanager.yml
   grafana_datasources:

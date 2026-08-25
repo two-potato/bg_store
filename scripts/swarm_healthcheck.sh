@@ -7,7 +7,7 @@ TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-360}"
 POLL_SECONDS="${POLL_SECONDS:-5}"
 REQUIRE_MONITORING="${REQUIRE_MONITORING:-1}"
 
-required_services=(backend frontend celery-worker celery-beat bot bot-notify db redis opensearch nginx)
+required_services=(backend frontend celery-worker celery-beat bot bot-notify search-api recommendation-api db redis opensearch nginx)
 if [[ "$REQUIRE_MONITORING" == "1" ]]; then
   required_services+=(prometheus alertmanager grafana node-exporter cadvisor)
 fi
@@ -16,7 +16,7 @@ start_ts="$(date +%s)"
 print_diagnostics() {
   docker stack services "$STACK_NAME" >&2 || true
   docker stack ps "$STACK_NAME" --no-trunc >&2 || true
-  for service in backend db redis opensearch nginx; do
+  for service in backend search-api recommendation-api db redis opensearch nginx; do
     container="$(docker ps --filter "label=com.docker.swarm.service.name=${STACK_NAME}_${service}" --format '{{.ID}}' | head -n1)"
     if [[ -n "$container" ]]; then
       echo "--- ${STACK_NAME}_${service} logs ---" >&2
@@ -56,7 +56,7 @@ while true; do
 
   if [[ "$all_ready" == "1" ]]; then
     core_healthy=1
-    for service in backend db redis opensearch nginx; do
+    for service in backend search-api recommendation-api db redis opensearch nginx; do
       if ! local_container_healthy "$service"; then
         core_healthy=0
         break

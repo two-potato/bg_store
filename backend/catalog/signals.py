@@ -13,15 +13,21 @@ def _invalidate(*keys: str) -> None:
     cache.delete_many(list(keys))
 
 
+def _invalidate_product_list_cache() -> None:
+    _invalidate("shopfront:home:product_ids:v1:12")
+
+
 @receiver(post_save, sender=Product)
 def product_post_save(sender, instance: Product, **kwargs) -> None:
-    """Schedule a product upsert in OpenSearch after the transaction commits."""
+    """Invalidate product caches and schedule an OpenSearch upsert after commit."""
+    _invalidate_product_list_cache()
     transaction.on_commit(lambda: upsert_product_in_search.delay(product_id=instance.id))
 
 
 @receiver(post_delete, sender=Product)
 def product_post_delete(sender, instance: Product, **kwargs) -> None:
-    """Schedule a product delete in OpenSearch after the transaction commits."""
+    """Invalidate product caches and schedule an OpenSearch delete after commit."""
+    _invalidate_product_list_cache()
     transaction.on_commit(lambda: delete_product_from_search.delay(product_id=instance.id))
 
 
@@ -46,7 +52,7 @@ def invalidate_tag_caches(**kwargs) -> None:
 
 @receiver([post_save, post_delete], sender=ProductImage)
 def invalidate_product_image_caches(**kwargs) -> None:
-    _invalidate("shopfront:home:product_ids:v1:12")
+    _invalidate_product_list_cache()
 
 
 @receiver([post_save, post_delete], sender=ProductReview)

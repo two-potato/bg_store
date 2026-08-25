@@ -19,6 +19,7 @@ urlpatterns = [
     path("api/", include("search_api.urls")),
     path("api/", include("recommendation_api.urls")),
     path("api/internal/", include("shopfront.api.internal_urls")),
+    path("", include("storefront_api.urls")),
 ]
 
 if settings.ENABLE_API_DOCS:

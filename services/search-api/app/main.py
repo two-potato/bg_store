@@ -5,123 +5,152 @@ import os
 import httpx
 from fastapi import FastAPI, HTTPException, Query
 
+SERVICE_NAME = os.getenv("SERVICE_NAME", "search-api")
+SERVICE_VERSION = os.getenv("SERVICE_VERSION", "1.0.0")
 
-def _base_url() -> str:
-    return str(os.getenv("BACKEND_BASE_URL", "http://backend:8000")).strip().rstrip("/")
+SEMANTIC_QUERY_REWRITES = {
+    "одноразка": "одноразовая посуда",
+    "хозка": "расходные материалы",
+    "барный сироп": "сироп для бара",
+    "кофе для эспрессо": "зерновой кофе эспрессо",
+    "упаковка на вынос": "takeaway упаковка",
+}
+SEARCH_SYNONYMS = {
+    "сиропы": "сироп",
+    "стаканы": "стакан",
+    "бокалы": "бокал",
+    "кофе зерно": "кофе",
+    "салфетки": "салфетка",
+    "одноразка": "одноразовая посуда",
+}
+
+app = FastAPI(title="Servio search-api", version=SERVICE_VERSION, docs_url="/docs", redoc_url="/redoc", openapi_url="/openapi.json")
+
+
+def _opensearch_url() -> str:
+    return os.getenv("OPENSEARCH_URL", "http://opensearch:9200").strip().rstrip("/")
+
+
+def _index() -> str:
+    return os.getenv("OPENSEARCH_PRODUCTS_INDEX", "products").strip()
 
 
 def _timeout() -> float:
-    return float(os.getenv("BACKEND_TIMEOUT_SECONDS", "2.0"))
+    return float(os.getenv("OPENSEARCH_TIMEOUT_SECONDS", "0.8"))
 
 
-def _ready_timeout() -> float:
-    return float(os.getenv("BACKEND_READY_TIMEOUT_SECONDS", "3.0"))
+def _normalize(query: str) -> str:
+    return " ".join((query or "").strip().lower().split())
 
 
-def _service_port() -> int:
-    return int(os.getenv("SERVICE_PORT", "8010"))
+def _rewrite(query: str) -> str:
+    rewritten = _normalize(query)
+    for source, target in SEMANTIC_QUERY_REWRITES.items():
+        if source in rewritten:
+            rewritten = rewritten.replace(source, target).strip()
+    return rewritten
 
 
-def _internal_token() -> str:
-    return str(os.getenv("BACKEND_INTERNAL_TOKEN", "change-me")).strip()
+def _corrections(query: str, limit: int) -> list[str]:
+    normalized = _normalize(query)
+    result: list[str] = []
+    alias = SEARCH_SYNONYMS.get(normalized)
+    rewritten = _rewrite(normalized)
+    for candidate in (alias, rewritten):
+        if candidate and candidate != normalized and candidate not in result:
+            result.append(candidate)
+    return result[:limit]
 
 
-SERVICE_NAME = os.getenv("SERVICE_NAME", "search-api")
-SERVICE_VERSION = os.getenv("SERVICE_VERSION", "0.2.0")
-PLATFORM_UPSTREAM_MODE = os.getenv("PLATFORM_UPSTREAM_MODE", "django-inline")
-PLATFORM_SHADOW_ENABLED = os.getenv("PLATFORM_SHADOW_ENABLED", "0")
-PLATFORM_SHADOW_SURFACES = os.getenv("PLATFORM_SHADOW_SURFACES", "")
-PLATFORM_CANARY_ENABLED = os.getenv("PLATFORM_CANARY_ENABLED", "0")
-PLATFORM_CANARY_SURFACES = os.getenv("PLATFORM_CANARY_SURFACES", "")
-PLATFORM_CANARY_PERCENT = os.getenv("PLATFORM_CANARY_PERCENT", "0")
-PLATFORM_ROLLOUT_LABEL = os.getenv("PLATFORM_ROLLOUT_LABEL", "search-service")
-PLATFORM_OBSERVABILITY_LABEL = os.getenv("PLATFORM_OBSERVABILITY_LABEL", "search-service")
+def _payload(query: str, limit: int, country_limit: int) -> dict[str, object]:
+    normalized = _normalize(query)
+    rewritten = _rewrite(query)
+    effective = rewritten or normalized
+    return {
+        "size": max(1, limit),
+        "query": {
+            "bool": {
+                "should": [
+                    {"multi_match": {"query": effective, "fields": ["name^6", "sku^5", "manufacturer_sku^4", "barcode^4", "brand^4", "series^3", "store_name^4", "seller_username^3", "category^3", "country_of_origin^3", "tags^2", "material^2", "purpose^2", "flavor^2", "description^2", "store_description^2"], "type": "most_fields", "operator": "or", "fuzziness": "AUTO"}},
+                    {"prefix": {"name": {"value": effective, "boost": 9}}},
+                    {"prefix": {"brand": {"value": effective, "boost": 6}}},
+                    {"prefix": {"category": {"value": effective, "boost": 6}}},
+                    {"term": {"sku.keyword": {"value": query, "boost": 12}}},
+                    {"term": {"manufacturer_sku.keyword": {"value": query, "boost": 10}}},
+                    {"term": {"barcode.keyword": {"value": query, "boost": 10}}},
+                ],
+                "minimum_should_match": 1,
+            }
+        },
+        "suggest": {"query_suggest": {"prefix": effective, "completion": {"field": "suggest", "size": max(6, min(10, limit)), "skip_duplicates": True}}},
+        "aggs": {"country_suggestions_scope": {"filter": {"prefix": {"country_of_origin_keyword": effective}}, "aggs": {"country_suggestions": {"terms": {"field": "country_of_origin.keyword", "size": max(1, country_limit), "order": {"_count": "desc"}}}}}},
+    }
 
-app = FastAPI(
-    title="Servio search-api",
-    version=SERVICE_VERSION,
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
-)
 
-
-def _proxy(path: str, *, params: dict[str, object], timeout: float | None = None) -> dict:
-    headers = {"X-Internal-Token": _internal_token()}
-    with httpx.Client(timeout=timeout or _timeout()) as client:
-        response = client.get(f"{_base_url()}{path}", params=params, headers=headers)
-        response.raise_for_status()
-        payload = response.json()
-    if not isinstance(payload, dict) or not payload.get("ok"):
-        raise HTTPException(status_code=503, detail="backend inline search payload malformed")
-    payload["service_source"] = "search-api"
-    return payload
+def _search(query: str, limit: int, country_limit: int) -> dict[str, object]:
+    normalized = _normalize(query)
+    rewritten = _rewrite(query)
+    if not normalized:
+        return {"product_ids": [], "suggestions": [], "countries": [], "effective_query": "", "rewritten_query": "", "rewrite_kind": ""}
+    try:
+        with httpx.Client(timeout=_timeout()) as client:
+            response = client.post(f"{_opensearch_url()}/{_index()}/_search", json=_payload(query, limit, country_limit))
+            response.raise_for_status()
+            data = response.json()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"opensearch unavailable: {type(exc).__name__}") from exc
+    ids: list[int] = []
+    for hit in data.get("hits", {}).get("hits", []):
+        source = hit.get("_source") or {}
+        raw_id = source.get("id", hit.get("_id"))
+        try:
+            ids.append(int(raw_id))
+        except (TypeError, ValueError):
+            continue
+    suggestions: list[str] = []
+    seen: set[str] = set()
+    for entry in data.get("suggest", {}).get("query_suggest", []):
+        for option in entry.get("options", []):
+            text = " ".join(str(option.get("text") or "").split())
+            key = text.casefold()
+            if text and key not in seen:
+                seen.add(key)
+                suggestions.append(text)
+    buckets = data.get("aggregations", {}).get("country_suggestions_scope", {}).get("country_suggestions", {}).get("buckets", [])
+    countries = [str(item.get("key")) for item in buckets if item.get("key")][:country_limit]
+    return {
+        "product_ids": ids[:limit],
+        "suggestions": suggestions,
+        "countries": countries,
+        "effective_query": rewritten or normalized,
+        "rewritten_query": rewritten if rewritten != normalized else "",
+        "rewrite_kind": "semantic_rewrite" if rewritten != normalized else "",
+    }
 
 
 @app.get("/health")
 def health() -> dict[str, object]:
-    return {
-        "ok": True,
-        "service": SERVICE_NAME,
-        "port": _service_port(),
-        "backend_base_url": _base_url(),
-        "rollout": {
-            "mode": PLATFORM_UPSTREAM_MODE,
-            "shadow_enabled": PLATFORM_SHADOW_ENABLED == "1",
-            "shadow_surfaces": [item for item in PLATFORM_SHADOW_SURFACES.split(",") if item],
-            "canary_enabled": PLATFORM_CANARY_ENABLED == "1",
-            "canary_surfaces": [item for item in PLATFORM_CANARY_SURFACES.split(",") if item],
-            "canary_percent": int(PLATFORM_CANARY_PERCENT or "0"),
-            "label": PLATFORM_ROLLOUT_LABEL,
-            "observability_label": PLATFORM_OBSERVABILITY_LABEL,
-        },
-    }
+    return {"ok": True, "service": SERVICE_NAME, "version": SERVICE_VERSION}
 
 
 @app.get("/ready")
 def ready() -> dict[str, object]:
     try:
-        _proxy(
-            "/api/internal/search/suggestions/",
-            params={"q": "ready", "limit": 1, "country_limit": 0, "user_id": 0},
-            timeout=_ready_timeout(),
-        )
+        with httpx.Client(timeout=max(1.0, _timeout())) as client:
+            response = client.get(_opensearch_url())
+            response.raise_for_status()
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"backend internal search unavailable: {exc}") from exc
+        raise HTTPException(status_code=503, detail=f"opensearch unavailable: {type(exc).__name__}") from exc
     return {"ok": True, "service": SERVICE_NAME}
 
 
 @app.get("/v1/search/query")
-def search_query(
-    q: str = Query(default="", max_length=200),
-    limit: int = Query(default=24, ge=1, le=64),
-    country_limit: int = Query(default=6, ge=0, le=24),
-    request_id: str = Query(default="", max_length=128),
-    user_id: int = Query(default=0, ge=0),
-) -> dict[str, object]:
-    params = {
-        "q": q,
-        "limit": limit,
-        "country_limit": country_limit,
-        "request_id": request_id,
-        "user_id": user_id,
-    }
-    return _proxy("/api/internal/search/query/", params=params)
+def search_query(q: str = Query(default="", max_length=200), limit: int = Query(default=24, ge=1, le=64), country_limit: int = Query(default=6, ge=0, le=24), request_id: str = Query(default="", max_length=128), user_id: int = Query(default=0, ge=0)) -> dict[str, object]:
+    bundle = _search(q, limit, country_limit)
+    return {"ok": True, "query": q, "provider": "opensearch", **bundle, "corrections": _corrections(q, min(6, limit)), "facets": {}, "source": "opensearch", "request_id": request_id, "user_id": user_id}
 
 
 @app.get("/v1/search/suggestions")
-def search_suggestions(
-    q: str = Query(default="", max_length=200),
-    limit: int = Query(default=10, ge=1, le=32),
-    country_limit: int = Query(default=6, ge=0, le=24),
-    request_id: str = Query(default="", max_length=128),
-    user_id: int = Query(default=0, ge=0),
-) -> dict[str, object]:
-    params = {
-        "q": q,
-        "limit": limit,
-        "country_limit": country_limit,
-        "request_id": request_id,
-        "user_id": user_id,
-    }
-    return _proxy("/api/internal/search/suggestions/", params=params)
+def search_suggestions(q: str = Query(default="", max_length=200), limit: int = Query(default=10, ge=1, le=32), country_limit: int = Query(default=6, ge=0, le=24), request_id: str = Query(default="", max_length=128), user_id: int = Query(default=0, ge=0)) -> dict[str, object]:
+    bundle = _search(q, limit, country_limit)
+    return {"ok": True, "query": q, "provider": "opensearch", "effective_query": bundle["effective_query"], "rewritten_query": bundle["rewritten_query"], "rewrite_kind": bundle["rewrite_kind"], "suggestions": bundle["suggestions"][:limit], "corrections": _corrections(q, min(6, limit)), "countries": bundle["countries"], "source": "opensearch", "request_id": request_id, "user_id": user_id}

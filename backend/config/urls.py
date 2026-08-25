@@ -11,6 +11,8 @@ urlpatterns = [
     path("ready/", readiness_view),
     path("metrics", include("core.metrics_urls")),
     path("api/users/", include("users.urls")),
+    # Backend compatibility only. Public /account/* traffic is routed to Next.js by nginx.
+    path("account/", include("users.urls_html")),
     path("api/commerce/", include("commerce.urls_public")),
     path("api/commerce/", include("commerce.urls_admin")),
     path("api/catalog/", include("catalog.urls")),

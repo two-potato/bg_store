@@ -11,14 +11,12 @@ urlpatterns = [
     path("ready/", readiness_view),
     path("metrics", include("core.metrics_urls")),
     path("api/users/", include("users.urls")),
-    path("account/", include("users.urls_html")),
     path("api/commerce/", include("commerce.urls_public")),
     path("api/commerce/", include("commerce.urls_admin")),
     path("api/catalog/", include("catalog.urls")),
     path("api/orders/", include("orders.urls")),
     path("api/", include("search_api.urls")),
     path("api/", include("recommendation_api.urls")),
-    path("api/internal/", include("shopfront.api.internal_urls")),
     path("", include("storefront_api.urls")),
 ]
 

@@ -6,15 +6,13 @@ from django.db.models import Prefetch
 
 from catalog.models import Product
 from catalog.offer_service import active_offer_queryset, apply_offer_snapshot
-from shopfront.recommendation.attribution_service import (
+
+from .cart_attribution import (
     clear_cart_recommendation_attribution,
-    remove_cart_item_recommendation_attribution,
-)
-from shopfront.searching.attribution import (
     clear_cart_search_attribution,
+    remove_cart_item_recommendation_attribution,
     remove_cart_item_search_attribution,
 )
-
 from .cart_store import persist_cart_for_user
 
 

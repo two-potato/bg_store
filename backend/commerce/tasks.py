@@ -75,3 +75,9 @@ def sync_company_workspace_on_membership_change_task(self, membership_id: int) -
 def reindex_products_on_seller_store_change_task(self, seller_id: int) -> None:
     """Schedule reindex of all seller products after seller-store changes."""
     reindex_products_for_seller.delay(seller_id=seller_id)
+
+
+# Transitional registration: commerce is installed and autodiscovered by Celery,
+# so importing the legacy module keeps existing task names alive while their
+# implementation is moved out of the former storefront package.
+from shopfront import tasks as _legacy_shopfront_tasks  # noqa: E402,F401

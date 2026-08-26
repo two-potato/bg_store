@@ -14,27 +14,27 @@ app.autodiscover_tasks()
 
 app.conf.beat_schedule = {
     "recommendations-refresh-popularity-hourly": {
-        "task": "shopfront.tasks.refresh_recommendation_popularity",
+        "task": "legacy_shopfront_state.tasks.refresh_recommendation_popularity",
         "schedule": crontab(minute=15),
         "args": ("7d", 60),
     },
     "recommendations-refresh-affinities-nightly": {
-        "task": "shopfront.tasks.refresh_recommendation_affinities",
+        "task": "legacy_shopfront_state.tasks.refresh_recommendation_affinities",
         "schedule": crontab(minute=20, hour=2),
         "args": (24,),
     },
     "recommendations-refresh-user-affinity-nightly": {
-        "task": "shopfront.tasks.refresh_recommendation_user_affinity",
+        "task": "legacy_shopfront_state.tasks.refresh_recommendation_user_affinity",
         "schedule": crontab(minute=35, hour=2),
         "args": (12,),
     },
     "recommendations-refresh-replenishment-nightly": {
-        "task": "shopfront.tasks.refresh_recommendation_replenishment",
+        "task": "legacy_shopfront_state.tasks.refresh_recommendation_replenishment",
         "schedule": crontab(minute=45, hour=2),
         "args": (24,),
     },
     "recommendations-refresh-sets-hourly": {
-        "task": "shopfront.tasks.refresh_recommendation_sets",
+        "task": "legacy_shopfront_state.tasks.refresh_recommendation_sets",
         "schedule": crontab(minute=25),
         "args": (8,),
     },

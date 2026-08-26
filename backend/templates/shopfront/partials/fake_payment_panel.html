@@ -1,7 +1,7 @@
 <div id="checkout-form-block">
   <div class="card bg-base-100">
     <div class="card-body">
-      <h2 class="text-lg font-semibold">Тестовый эквайринг</h2>
+      <h2 class="text-lg font-semibold">{{ payment_mode_title|default:"Тестовый эквайринг" }}</h2>
       <p class="text-sm text-base-content/70">Заказ #{{ order.id }} · Платеж {{ payment.provider_payment_id }}</p>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2 text-sm">
@@ -13,7 +13,7 @@
 
       {% if payment.status == "processing" %}
       <div class="alert alert-info text-sm mt-3">
-        Тестовый webhook запланирован: через 2 секунды платеж автоматически перейдет в успешный.
+        Платёжный webhook запланирован: через 2 секунды платёж автоматически перейдет в успешный.
       </div>
       <div
         hx-post="{{ payment_event_url }}"

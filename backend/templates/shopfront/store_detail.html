@@ -22,7 +22,7 @@
         </div>
       </div>
       <div class="store-page-2026__hero-actions">
-        <a class="btn btn-sm btn-outline" href="/sellers/{{ store.owner.profile.slug }}/" hx-boost="false">Профиль продавца</a>
+        <a class="btn btn-sm btn-outline" href="/vendors/{{ store.owner.profile.slug }}/" hx-boost="false">Профиль продавца</a>
         <a class="btn btn-sm btn-primary" href="/catalog/?seller={{ store.owner.id }}" hx-boost="false">Все товары поставщика</a>
       </div>
     </div>
@@ -32,6 +32,23 @@
     <h2>Товары магазина</h2>
     <p>Всего позиций: {{ products|length }}</p>
   </div>
+  {% if trust_metrics %}
+    <section class="page-2026__card store-page-2026__trust">
+      <div class="page-2026__header">
+        <h2>Trust layer магазина</h2>
+        <p>Показываем explainable seller metrics до входа в checkout.</p>
+      </div>
+      <div class="store-page-2026__trust-grid">
+        {% for metric in trust_metrics %}
+          <article class="store-page-2026__trust-card">
+            <div class="store-page-2026__trust-label">{{ metric.label }}</div>
+            <strong>{{ metric.value }}</strong>
+            <span>{{ metric.detail }}</span>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
   {% include "shopfront/components/product_grid.html" with products=products %}
 
   <section id="store-reviews" class="page-2026__card mt-6">
@@ -41,7 +58,7 @@
     </div>
 
     {% if request.user.is_authenticated %}
-      <form action="/stores/{{ store.slug }}/review/" method="post" class="grid gap-3 mb-5">
+      <form action="/vendors/{{ store.slug }}/review/" method="post" class="grid gap-3 mb-5">
         {% csrf_token %}
         <div class="flex flex-wrap gap-2">
           {% for value in "12345" %}
@@ -57,7 +74,7 @@
                   placeholder="Опишите опыт работы с магазином: скорость ответа, качество поставки, упаковка, коммуникация">{{ store_user_review.text|default:"" }}</textarea>
         <div class="flex flex-wrap gap-2">
           {% if store_user_review %}
-            <button class="btn btn-outline btn-sm" formaction="/stores/{{ store.slug }}/review/delete/" formmethod="post">Удалить отзыв</button>
+            <button class="btn btn-outline btn-sm" formaction="/vendors/{{ store.slug }}/review/delete/" formmethod="post">Удалить отзыв</button>
           {% endif %}
           <button class="btn btn-primary btn-sm" type="submit">Сохранить отзыв</button>
         </div>

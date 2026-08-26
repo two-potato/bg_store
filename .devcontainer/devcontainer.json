@@ -1,5 +1,5 @@
 {
-  "name": "Bad Guys Shop",
+  "name": "Servio",
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {}

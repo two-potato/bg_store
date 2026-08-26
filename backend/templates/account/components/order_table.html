@@ -1,4 +1,4 @@
-{% load tz %}
+{% load tz static seo_extras %}
 <div class="account-orders-2026">
   {% for o in orders %}
     <article class="account-orders-2026__card">
@@ -21,10 +21,10 @@
             {% with img=it.product.prefetched_images.0 %}
               {% if img %}
                 <img class="order-thumbs-2026__img"
-                     src="{{ img.url }}"
+                     src="{{ img.public_url }}"
                      alt="{{ it.name }}"
                      loading="lazy"
-                     data-fallback-src="/media/user_photos/image017.jpg">
+                     data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}">
               {% else %}
                 <span class="order-thumbs-2026__img order-thumbs-2026__fallback">•</span>
               {% endif %}
@@ -59,6 +59,13 @@
            hx-select="#account-main-content"
            hx-swap="outerHTML"
            hx-push-url="true">Открыть заказ</a>
+        <form method="post" action="/account/orders/{{ o.id }}/reorder/">
+          {% csrf_token %}
+          <button class="account-2026__panel-link" type="submit">Buy again</button>
+        </form>
+        {% if o.payment_method == "invoice" %}
+          <a class="account-2026__panel-link" href="/account/orders/{{ o.id }}/invoice/" hx-boost="false">Invoice</a>
+        {% endif %}
       </div>
     </article>
   {% endfor %}

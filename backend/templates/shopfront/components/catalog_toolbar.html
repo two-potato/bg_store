@@ -1,4 +1,4 @@
-<div class="mb-2">
+<div class="catalog-toolbar-shell" id="catalog-toolbar">
   <form method="get" class="catalog-toolbar catalog-toolbar--neo2026 catalog-toolbar--single-row">
     <details class="catalog-filter-dropdown" data-filter-dropdown>
       <summary class="catalog-filter-dropdown__summary">
@@ -18,23 +18,31 @@
         <div class="catalog-filter-dropdown__grid">
           <label>
             <span>Категория</span>
-            <select class="select select-bordered select-sm w-full catalog-select-2026" name="category">
-              <option value="">Любая</option>
-              {% for c in category_rows %}
-                <option value="{{ c.slug }}" {% if request.GET.category|default:'' == c.slug or request.GET.category|default:'' == c.id|stringformat:"s" %}selected{% endif %}>{{ c.label }}</option>
-              {% endfor %}
-            </select>
+            <div class="catalog-autocomplete" data-catalog-autocomplete data-kind="category" data-endpoint="{% url 'catalog_filter_suggestions' %}">
+              <input type="hidden" name="category" value="{{ request.GET.category|default:'' }}" data-autocomplete-value>
+              <input class="input input-bordered input-sm w-full catalog-select-2026"
+                     type="search"
+                     value="{% if sel_category %}{{ sel_category.name }}{% endif %}"
+                     placeholder="Начните вводить категорию"
+                     autocomplete="off"
+                     spellcheck="false"
+                     data-autocomplete-input>
+              <div class="catalog-autocomplete__menu hidden" data-autocomplete-menu role="listbox" aria-label="Подсказки категорий"></div>
+            </div>
           </label>
           <label>
             <span>Бренд</span>
-            <select class="select select-bordered select-sm w-full catalog-select-2026" name="brand">
-              <option value="">Любой</option>
-              {% for b in brands %}
-                <option value="{{ b.id }}" {% if request.GET.brand|default:'' == b.id|stringformat:"s" %}selected{% endif %}>
-                  {{ b.name }}{% for facet in facet_brand_options %}{% if facet.id == b.id %} · {{ facet.count }}{% endif %}{% endfor %}
-                </option>
-              {% endfor %}
-            </select>
+            <div class="catalog-autocomplete" data-catalog-autocomplete data-kind="brand" data-endpoint="{% url 'catalog_filter_suggestions' %}">
+              <input type="hidden" name="brand" value="{{ request.GET.brand|default:'' }}" data-autocomplete-value>
+              <input class="input input-bordered input-sm w-full catalog-select-2026"
+                     type="search"
+                     value="{% if sel_brand %}{{ sel_brand.name }}{% endif %}"
+                     placeholder="Начните вводить бренд"
+                     autocomplete="off"
+                     spellcheck="false"
+                     data-autocomplete-input>
+              <div class="catalog-autocomplete__menu hidden" data-autocomplete-menu role="listbox" aria-label="Подсказки брендов"></div>
+            </div>
           </label>
           <label>
             <span>Поставщик</span>
@@ -47,12 +55,17 @@
           </label>
           <label>
             <span>Тег</span>
-            <select class="select select-bordered select-sm w-full catalog-select-2026" name="tag">
-              <option value="">Любой</option>
-              {% for t in tags %}
-                <option value="{{ t.id }}" {% if request.GET.tag|default:'' == t.id|stringformat:"s" %}selected{% endif %}>{{ t.name }}</option>
-              {% endfor %}
-            </select>
+            <div class="catalog-autocomplete" data-catalog-autocomplete data-kind="tag" data-endpoint="{% url 'catalog_filter_suggestions' %}">
+              <input type="hidden" name="tag" value="{{ request.GET.tag|default:'' }}" data-autocomplete-value>
+              <input class="input input-bordered input-sm w-full catalog-select-2026"
+                     type="search"
+                     value="{% if sel_tag %}{{ sel_tag.name }}{% endif %}"
+                     placeholder="Начните вводить тег"
+                     autocomplete="off"
+                     spellcheck="false"
+                     data-autocomplete-input>
+              <div class="catalog-autocomplete__menu hidden" data-autocomplete-menu role="listbox" aria-label="Подсказки тегов"></div>
+            </div>
           </label>
           <label>
             <span>Поиск</span>
@@ -92,7 +105,7 @@
 
     <div class="catalog-toolbar__meta">
       <span class="catalog-toolbar__meta-label">Сортировка</span>
-      <span class="catalog-toolbar__meta-hint">Быстрые сценарии как в маркетплейсе</span>
+      <span class="catalog-toolbar__meta-hint">Управляйте выдачей одним рядом</span>
     </div>
 
     <div class="catalog-toolbar__pills" role="group" aria-label="Сортировка каталога">

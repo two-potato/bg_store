@@ -13,15 +13,40 @@
   <a class="link" href="/">Главная</a> / <span>Оформление заказа</span>
 </nav>
 
-<div class="grid grid-cols-1 lg:grid-cols-5 gap-3">
+<section class="checkout-focus-2026">
+  <div class="checkout-focus-2026__copy">
+    <div class="checkout-focus-2026__eyebrow">Оформление</div>
+    <h1 class="checkout-focus-2026__title">Оформление заказа без лишнего шума</h1>
+    <p class="checkout-focus-2026__subtitle">Сначала проверьте состав заказа, реквизиты и доставку. Все сопутствующие предложения вынесены в отдельный свернутый блок ниже.</p>
+    {% if not is_authenticated_checkout %}
+      <p class="checkout-focus-2026__subtitle">Гостевой checkout доступен для физических лиц без регистрации. Для B2B-заказа войдите в аккаунт компании.</p>
+    {% endif %}
+  </div>
+  <div class="checkout-focus-2026__trust">
+    <article class="checkout-focus-2026__trust-item">
+      <strong>Документы</strong>
+      <span>Счет, статусы и история заказа сохраняются после оформления.</span>
+    </article>
+    <article class="checkout-focus-2026__trust-item">
+      <strong>НДС и условия</strong>
+      <span>Цена, скидки и комментарии к закупке фиксируются в одном заказе.</span>
+    </article>
+    <article class="checkout-focus-2026__trust-item">
+      <strong>Безопасная отправка</strong>
+      <span>Идемпотентный submit защищает от дублей при повторном нажатии.</span>
+    </article>
+  </div>
+</section>
+
+<div class="grid grid-cols-1 lg:grid-cols-5 gap-3 checkout-focus-2026__grid">
   <div class="lg:col-span-3">
     <div class="card bg-base-100">
       <div class="card-body">
-        <h1 class="text-lg font-semibold mb-3">Корзина</h1>
+        <h2 class="text-lg font-semibold mb-3">Состав заказа</h2>
         {% if items %}
           {% if seller_count > 1 %}
             <div class="alert alert-info text-sm mb-3">
-              В заказе участвуют {{ seller_count }} поставщика. Сейчас заказ оформляется единым объектом, но UI уже готов к будущему split-order/split-shipment.
+              В заказе участвуют {{ seller_count }} поставщика. Сейчас заказ оформляется единым объектом, но интерфейс уже подготовлен к будущему разделению по поставщикам и отгрузкам.
             </div>
           {% endif %}
           <ul class="divide-y">
@@ -62,6 +87,26 @@
             <div class="font-semibold">Итого</div>
             <div class="font-semibold">{{ total }} ₽</div>
           </div>
+          {% if company_snapshots %}
+            <div class="checkout-company-policy mt-4">
+              <div class="checkout-company-policy__title">Guided buying и policy hints</div>
+              <div class="checkout-company-policy__grid">
+                {% for row in company_snapshots %}
+                  <article class="checkout-company-policy__item">
+                    <strong>{{ row.company.display_name|default:row.company.legal_entity.name }}</strong>
+                    <span>Платёж: {{ row.company.preferred_payment_method|default:"invoice" }}</span>
+                    <span>
+                      {% if row.policy.is_enabled %}
+                        auto-approve до {{ row.policy.auto_approve_below }} ₽ · {{ row.policy.required_approvals_count }} approval
+                      {% else %}
+                        политика согласования отключена
+                      {% endif %}
+                    </span>
+                  </article>
+                {% endfor %}
+              </div>
+            </div>
+          {% endif %}
         {% else %}
           <div class="text-base-content/60">Корзина пуста</div>
         {% endif %}
@@ -73,5 +118,12 @@
     {% include "shopfront/partials/checkout_form_panel.html" %}
   </div>
 </div>
-{% include "shopfront/components/recommendation_section.html" with products=checkout_recommendations title="Последний шанс усилить заказ" subtitle="Cross-sell блок перед оплатой для роста AOV без усложнения checkout." recommendation_source="checkout_cross_sell" tracking_payload=checkout_recommendations_tracking_payload %}
+{% if checkout_recommendations %}
+  <details class="checkout-cross-sell-2026">
+    <summary>Добавить сопутствующие товары к заказу</summary>
+    <div class="checkout-cross-sell-2026__body">
+      {% include "shopfront/components/recommendation_section.html" with products=checkout_recommendations title="Последний шанс усилить заказ" subtitle="Блок сопутствующих товаров вынесен из критического пути: открыть его можно только по запросу." recommendation_source="checkout_cross_sell" tracking_payload=checkout_recommendations_tracking_payload %}
+    </div>
+  </details>
+{% endif %}
 {% endblock %}

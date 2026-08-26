@@ -1,11 +1,37 @@
+import json
+import logging
+
 from django import forms
 from django.contrib.auth import get_user_model
-import logging
-from .models import UserProfile
+
+from catalog.models import (
+    Product,
+    ProductDocument,
+    ProductQuestion,
+    ProductReviewComment,
+    SellerInventory,
+    SellerOffer,
+    Series,
+    StockMovement,
+)
+from commerce.models import (
+    Company,
+    CompanyContact,
+    CompanyMembership,
+    DeliveryAddress,
+    LegalEntityMembership,
+    SellerStore,
+)
 from commerce.validators import validate_inn
-from commerce.models import DeliveryAddress, LegalEntityMembership, SellerStore
-import json
-from catalog.models import Product, Series
+from orders.models import OrderClaim, OrderSupportTicket
+
+from .models import UserProfile
+from .upload_validation import (
+    validate_csv_upload,
+    validate_http_url,
+    validate_product_image_upload,
+    validate_product_image_urls,
+)
 
 User = get_user_model()
 log = logging.getLogger("users")
@@ -103,6 +129,23 @@ class ProfileForm(forms.ModelForm):
             user.email = email
             user.save(update_fields=["email"])
         return profile
+
+
+class NotificationPreferencesForm(forms.ModelForm):
+    class Meta:
+        model = UserProfile
+        fields = [
+            "notify_email_orders",
+            "notify_email_marketing",
+            "notify_telegram_orders",
+            "notify_telegram_marketing",
+        ]
+        labels = {
+            "notify_email_orders": "Email: статусы заказов и документы",
+            "notify_email_marketing": "Email: маркетинг и подборки",
+            "notify_telegram_orders": "Telegram: статусы заказов",
+            "notify_telegram_marketing": "Telegram: маркетинговые уведомления",
+        }
 
 
 class LegalEntityRequestForm(forms.Form):
@@ -214,12 +257,15 @@ class AddressForm(forms.ModelForm):
 class SellerStoreForm(forms.ModelForm):
     class Meta:
         model = SellerStore
-        fields = ["name", "description", "legal_entity", "photo"]
+        fields = ["name", "description", "legal_entity", "photo", "sla_target_hours", "commission_rate", "moderation_note"]
         labels = {
             "name": "Название магазина",
             "description": "Описание магазина",
             "legal_entity": "Юрлицо",
             "photo": "Аватар магазина",
+            "sla_target_hours": "SLA, часов",
+            "commission_rate": "Комиссия маркетплейса, %",
+            "moderation_note": "Заметка модерации",
         }
 
     def __init__(self, *args, **kwargs):
@@ -228,6 +274,9 @@ class SellerStoreForm(forms.ModelForm):
         if user is not None:
             entity_ids = LegalEntityMembership.objects.filter(user=user).values_list("legal_entity_id", flat=True)
             self.fields["legal_entity"].queryset = self.fields["legal_entity"].queryset.filter(id__in=entity_ids)
+        for field_name in ("description", "photo", "sla_target_hours", "commission_rate", "moderation_note"):
+            if field_name in self.fields:
+                self.fields[field_name].required = False
 
 
 class SellerProductCreateForm(forms.ModelForm):
@@ -267,6 +316,7 @@ class SellerProductCreateForm(forms.ModelForm):
             "stock_qty",
             "min_order_qty",
             "lead_time_days",
+            "publication_status",
             "is_new",
             "is_promo",
             "description",
@@ -287,6 +337,7 @@ class SellerProductCreateForm(forms.ModelForm):
             "stock_qty": "Остаток",
             "min_order_qty": "Минимальный заказ",
             "lead_time_days": "Срок поставки, дней",
+            "publication_status": "Статус публикации",
             "is_new": "Новинка",
             "is_promo": "Акция",
             "description": "Описание",
@@ -304,6 +355,8 @@ class SellerProductCreateForm(forms.ModelForm):
         }.items():
             self.fields[name].required = False
             self.fields[name].initial = initial
+        self.fields["publication_status"].required = False
+        self.fields["publication_status"].initial = Product.PublicationStatus.PUBLISHED
         if self.instance.pk and self.instance.attributes:
             self.fields["attributes_json"].initial = json.dumps(self.instance.attributes, ensure_ascii=False, indent=2)
 
@@ -321,7 +374,14 @@ class SellerProductCreateForm(forms.ModelForm):
 
     def clean_image_urls(self):
         raw = self.cleaned_data.get("image_urls") or ""
-        return [line.strip() for line in raw.splitlines() if line.strip()]
+        return validate_product_image_urls([line.strip() for line in raw.splitlines() if line.strip()])
+
+    def clean(self):
+        cleaned = super().clean()
+        uploads = self.files.getlist("image_files")
+        for upload in uploads:
+            validate_product_image_upload(upload)
+        return cleaned
 
     def save(self, commit=True):
         product: Product = super().save(commit=False)
@@ -332,3 +392,262 @@ class SellerProductCreateForm(forms.ModelForm):
             product.save()
             self.save_m2m()
         return product
+
+
+class SellerProductImportForm(forms.Form):
+    csv_file = forms.FileField(label="CSV файл")
+
+    def clean_csv_file(self):
+        upload = self.cleaned_data["csv_file"]
+        return validate_csv_upload(upload)
+
+
+class SellerProductBulkActionForm(forms.Form):
+    ACTION_CHOICES = (
+        ("set_promo_on", "Включить промо"),
+        ("set_promo_off", "Выключить промо"),
+        ("set_new_on", "Пометить как новинка"),
+        ("set_new_off", "Снять новинку"),
+        ("add_stock", "Изменить остаток"),
+        ("set_lead_time", "Установить ETA"),
+        ("set_draft", "В черновик"),
+        ("set_published", "Опубликовать"),
+        ("set_archived", "В архив"),
+    )
+
+    action = forms.ChoiceField(choices=ACTION_CHOICES)
+    stock_delta = forms.IntegerField(required=False, label="Delta остатка")
+    lead_time_days = forms.IntegerField(required=False, min_value=0, label="ETA")
+
+    def clean(self):
+        cleaned = super().clean()
+        action = cleaned.get("action")
+        if action == "add_stock" and cleaned.get("stock_delta") is None:
+            raise forms.ValidationError("Для изменения остатка нужен delta")
+        if action == "set_lead_time" and cleaned.get("lead_time_days") is None:
+            raise forms.ValidationError("Для ETA нужно число дней")
+        return cleaned
+
+
+class SellerOfferForm(forms.ModelForm):
+    class Meta:
+        model = SellerOffer
+        fields = [
+            "product",
+            "offer_title",
+            "price",
+            "min_order_qty",
+            "lead_time_days",
+            "status",
+            "warehouse_source",
+        ]
+        labels = {
+            "product": "Товар",
+            "offer_title": "Название оффера",
+            "price": "Цена оффера",
+            "min_order_qty": "Минимальный заказ",
+            "lead_time_days": "Lead time, дней",
+            "status": "Статус",
+            "warehouse_source": "Источник склада",
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop("user", None)
+        super().__init__(*args, **kwargs)
+        self.fields["product"].queryset = Product.objects.select_related("brand", "seller").order_by("name", "id")
+        self.fields["min_order_qty"].required = False
+        self.fields["lead_time_days"].required = False
+
+    def save(self, commit=True):
+        offer: SellerOffer = super().save(commit=False)
+        if self.user is not None:
+            offer.seller = self.user
+            store = getattr(self.user, "seller_store", None)
+            if store is not None:
+                offer.seller_store = store
+        if commit:
+            offer.save()
+        return offer
+
+
+class SellerInventoryForm(forms.ModelForm):
+    class Meta:
+        model = SellerInventory
+        fields = [
+            "warehouse_name",
+            "warehouse_code",
+            "stock_qty",
+            "reserved_qty",
+            "incoming_qty",
+            "eta_days",
+            "is_primary",
+        ]
+        labels = {
+            "warehouse_name": "Склад",
+            "warehouse_code": "Код склада",
+            "stock_qty": "Остаток",
+            "reserved_qty": "Резерв",
+            "incoming_qty": "В пути",
+            "eta_days": "ETA, дней",
+            "is_primary": "Основной склад",
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        stock_qty = int(cleaned.get("stock_qty") or 0)
+        reserved_qty = int(cleaned.get("reserved_qty") or 0)
+        if reserved_qty > stock_qty:
+            raise forms.ValidationError("Резерв не может быть больше остатка")
+        return cleaned
+
+
+class InventoryAdjustmentForm(forms.Form):
+    inventory_id = forms.IntegerField(widget=forms.HiddenInput)
+    field_type = forms.ChoiceField(label="Поле", choices=StockMovement.FieldType.choices)
+    delta = forms.IntegerField(label="Изменение")
+    reason = forms.CharField(label="Причина", max_length=255, required=False)
+
+
+class SellerQuestionAnswerForm(forms.ModelForm):
+    class Meta:
+        model = ProductQuestion
+        fields = ["answer_text", "is_public"]
+        labels = {
+            "answer_text": "Ответ продавца",
+            "is_public": "Показывать вопрос публично",
+        }
+
+
+class SellerReviewReplyForm(forms.ModelForm):
+    class Meta:
+        model = ProductReviewComment
+        fields = ["text"]
+        labels = {"text": "Ответ продавца"}
+
+
+class CompanyMemberInviteForm(forms.Form):
+    identifier = forms.CharField(label="Username или email", max_length=255)
+    role = forms.ChoiceField(label="Роль", choices=CompanyMembership.Role.choices)
+    approval_limit = forms.DecimalField(label="Лимит согласования", max_digits=12, decimal_places=2, required=False, min_value=0)
+    is_default_approver = forms.BooleanField(label="Default approver", required=False)
+
+    def clean_identifier(self):
+        return (self.cleaned_data.get("identifier") or "").strip()
+
+
+class CompanyMemberUpdateForm(forms.Form):
+    role = forms.ChoiceField(label="Роль", choices=CompanyMembership.Role.choices)
+    approval_limit = forms.DecimalField(label="Лимит согласования", max_digits=12, decimal_places=2, required=False, min_value=0)
+    is_default_approver = forms.BooleanField(label="Default approver", required=False)
+
+
+class ApprovalPolicyForm(forms.Form):
+    is_enabled = forms.BooleanField(label="Включить согласование", required=False)
+    auto_approve_below = forms.DecimalField(label="Автосогласование до", max_digits=12, decimal_places=2, required=False, min_value=0)
+    require_approver_role = forms.BooleanField(label="Требовать роль approver", required=False)
+    require_comment = forms.BooleanField(label="Комментарий обязателен", required=False)
+    required_approvals_count = forms.IntegerField(label="Сколько согласований нужно", min_value=1, required=False)
+    max_pending_hours = forms.IntegerField(label="SLA pending, часов", min_value=1, required=False)
+
+
+class CompanySettingsForm(forms.ModelForm):
+    class Meta:
+        model = Company
+        fields = [
+            "display_name",
+            "procurement_email",
+            "procurement_phone",
+            "invoice_email",
+            "preferred_payment_method",
+            "payment_comment",
+            "is_active",
+        ]
+        labels = {
+            "display_name": "Название компании в кабинете",
+            "procurement_email": "Email закупок",
+            "procurement_phone": "Телефон закупок",
+            "invoice_email": "Email для счетов",
+            "preferred_payment_method": "Предпочитаемый способ оплаты",
+            "payment_comment": "Комментарий к реквизитам",
+            "is_active": "Компания активна",
+        }
+
+
+class CompanyContactForm(forms.ModelForm):
+    class Meta:
+        model = CompanyContact
+        fields = ["name", "email", "phone", "role", "is_default", "notes"]
+        labels = {
+            "name": "Имя контакта",
+            "email": "Email",
+            "phone": "Телефон",
+            "role": "Роль",
+            "is_default": "Контакт по умолчанию",
+            "notes": "Комментарий",
+        }
+
+
+class ProductDocumentForm(forms.ModelForm):
+    class Meta:
+        model = ProductDocument
+        fields = ["title", "kind", "file_url"]
+        labels = {
+            "title": "Название документа",
+            "kind": "Тип",
+            "file_url": "Ссылка на файл",
+        }
+
+    def clean_file_url(self):
+        return validate_http_url(self.cleaned_data.get("file_url") or "", field_label="Ссылка на файл")
+
+
+class OrderClaimForm(forms.ModelForm):
+    class Meta:
+        model = OrderClaim
+        fields = ["claim_type", "message"]
+        labels = {
+            "claim_type": "Тип обращения",
+            "message": "Описание проблемы",
+        }
+
+
+class OrderClaimUpdateForm(forms.ModelForm):
+    class Meta:
+        model = OrderClaim
+        fields = ["status", "seller_response", "resolution_comment"]
+        labels = {
+            "status": "Статус диспута",
+            "seller_response": "Ответ продавца",
+            "resolution_comment": "Финальное решение",
+        }
+
+
+class ShipmentCreateForm(forms.Form):
+    warehouse_name = forms.CharField(label="Склад", max_length=120, required=False)
+    delivery_method = forms.CharField(label="Способ доставки", max_length=120, required=False)
+
+
+class SellerOrderItemCancelForm(forms.Form):
+    seller_order_item_id = forms.IntegerField(widget=forms.HiddenInput)
+    cancel_qty = forms.IntegerField(min_value=1, label="Отменить количество")
+
+
+class OrderSupportTicketForm(forms.ModelForm):
+    class Meta:
+        model = OrderSupportTicket
+        fields = ["topic", "subject", "message"]
+        labels = {
+            "topic": "Тема обращения",
+            "subject": "Тема",
+            "message": "Описание",
+        }
+
+
+class OrderSupportTicketUpdateForm(forms.ModelForm):
+    class Meta:
+        model = OrderSupportTicket
+        fields = ["status", "resolution_comment"]
+        labels = {
+            "status": "Статус",
+            "resolution_comment": "Комментарий / решение",
+        }

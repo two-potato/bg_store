@@ -1,0 +1,216 @@
+{% extends "account/layout.html" %}
+{% load tz static seo_extras math_extras %}
+{% block account_main %}
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero compact">
+    <div class="account-2026__hero-title">Seller order #{{ seller_order.id }}</div>
+    <div class="account-2026__hero-sub">Fulfillment карточка продавца: статусы, shipment и buyer order context.</div>
+  </div>
+  {% if seller_order.shipments.all %}
+    <section class="account-2026__panel">
+      <div class="account-2026__timeline">
+        <div class="account-2026__timeline-item is-done"><strong>Order accepted</strong><span>{{ seller_order.get_status_display }}</span></div>
+        <div class="account-2026__timeline-item {% if seller_order.status == 'picking' or seller_order.status == 'shipped' or seller_order.status == 'delivered' %}is-done{% endif %}"><strong>Picking</strong><span>Комплектация и распределение по shipment</span></div>
+        <div class="account-2026__timeline-item {% if seller_order.status == 'shipped' or seller_order.status == 'delivered' %}is-done{% endif %}"><strong>Shipped</strong><span>Трекинг и carrier updates</span></div>
+        <div class="account-2026__timeline-item {% if seller_order.status == 'delivered' %}is-done{% endif %}"><strong>Delivered</strong><span>Подтверждение buyer order</span></div>
+      </div>
+    </section>
+  {% endif %}
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+    <section class="account-2026__panel lg:col-span-2">
+      <div class="account-2026__panel-head">
+        <h2 class="account-2026__panel-title">Позиции seller order</h2>
+        <a class="account-2026__panel-link" href="/account/seller/orders/" hx-boost="false">К списку seller orders</a>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table table-sm account-2026__table">
+          <thead>
+            <tr>
+              <th>Товар</th>
+              <th class="text-right">Цена</th>
+              <th class="text-right">Заказано</th>
+              <th class="text-right">Отменено</th>
+              <th class="text-right">К отгрузке</th>
+              <th class="text-right">Распределено</th>
+              <th class="text-right">Сумма</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in seller_order.items.all %}
+              <tr>
+                <td>
+                  <div class="flex items-center gap-2">
+                    {% with img=item.product.prefetched_images.0 %}
+                      {% if img %}
+                        <img src="{{ img.public_url }}" alt="{{ item.name }}" class="w-12 h-12 object-cover rounded-lg border border-[var(--b2b-border)]" data-fallback-src="{% static 'shopfront/product-placeholder.svg' %}">
+                      {% else %}
+                        <div class="w-12 h-12 rounded-lg border border-[var(--b2b-border)] bg-[#EEF2FF] grid place-items-center text-base-content/50">
+                          {% include "shopfront/icons/photo.svg" %}
+                        </div>
+                      {% endif %}
+                    {% endwith %}
+                    <span>{{ item.name }}</span>
+                  </div>
+                </td>
+                <td class="text-right">{{ item.price }} ₽</td>
+                <td class="text-right">{{ item.qty }}</td>
+                <td class="text-right">{{ item.canceled_qty }}</td>
+                <td class="text-right">{{ item.active_qty }}</td>
+                <td class="text-right">{{ allocation_maps.item_allocated|get_item:item.id|default:0 }}</td>
+                <td class="text-right">{{ item.active_qty|mul:item.price }} ₽</td>
+                <td class="text-right">
+                  {% if item.active_qty > allocation_maps.item_locked|get_item:item.id|default:0 %}
+                    <form method="post" action="/account/seller/orders/{{ seller_order.id }}/items/{{ item.id }}/cancel/" class="flex items-center justify-end gap-2">
+                      {% csrf_token %}
+                      <input type="hidden" name="seller_order_item_id" value="{{ item.id }}">
+                      <input class="input input-bordered input-xs w-16" type="number" name="cancel_qty" min="1" max="{{ item.active_qty }}">
+                      <button class="btn btn-xs btn-outline" type="submit">Отменить</button>
+                    </form>
+                  {% else %}
+                    <span class="text-xs text-base-content/50">Недоступно</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <aside class="account-2026__panel account-2026__panel--stack text-sm">
+      <div><span class="text-base-content/60">Buyer order:</span> #{{ seller_order.order_id }}</div>
+      <div><span class="text-base-content/60">Статус:</span> <b>{{ seller_order.get_status_display }}</b></div>
+      <div><span class="text-base-content/60">Итого:</span> {{ seller_order.total }} ₽</div>
+      <div><span class="text-base-content/60">Доставка:</span> {{ seller_order.order.get_delivery_method_display }}</div>
+      {% if seller_order.order.delivery_slot %}<div><span class="text-base-content/60">Таймслот:</span> {{ seller_order.order.delivery_slot }}</div>{% endif %}
+      <div><span class="text-base-content/60">Комментарий клиента:</span> {{ seller_order.customer_comment|default:"-" }}</div>
+
+      <div class="divider my-1"></div>
+      <div class="font-semibold">Изменить статус</div>
+      <form method="post" action="/account/seller/orders/{{ seller_order.id }}/status/" class="grid gap-2 mt-2">
+        {% csrf_token %}
+        <select class="select select-bordered w-full" name="status">
+          <option value="accepted">Accepted</option>
+          <option value="picking">Picking</option>
+          <option value="shipped">Shipped</option>
+          <option value="delivered">Delivered</option>
+          <option value="canceled">Canceled</option>
+        </select>
+        <button class="btn btn-primary btn-sm" type="submit">Сохранить статус</button>
+      </form>
+
+      <div class="divider my-1"></div>
+      <div class="font-semibold">Отгрузки</div>
+      <form method="post" action="/account/seller/orders/{{ seller_order.id }}/shipments/create/" class="rounded-2xl border border-dashed border-base-300 p-3 grid gap-2 mb-3">
+        {% csrf_token %}
+        <div class="text-xs text-base-content/70">Создать новую частичную отгрузку</div>
+        <input class="input input-bordered input-sm w-full" type="text" name="warehouse_name" placeholder="Склад">
+        <input class="input input-bordered input-sm w-full" type="text" name="delivery_method" placeholder="Способ доставки">
+        <button class="btn btn-primary btn-sm" type="submit">Новый shipment</button>
+      </form>
+      {% for shipment in seller_order.shipments.all %}
+        <form method="post" action="/account/seller/orders/{{ seller_order.id }}/shipments/{{ shipment.id }}/items/" class="rounded-2xl border border-base-200/80 p-3 grid gap-2 mb-3">
+          {% csrf_token %}
+          <div class="text-xs text-base-content/70">Состав shipment #{{ shipment.id }}</div>
+          <div class="overflow-x-auto">
+            <table class="table table-xs">
+              <thead>
+                <tr><th>SKU</th><th>Товар</th><th class="text-right">К отгрузке</th><th class="text-right">В этом shipment</th></tr>
+              </thead>
+              <tbody>
+                {% for item in seller_order.items.all %}
+                  <tr>
+                    <td>{{ item.product.sku }}</td>
+                    <td>{{ item.name }}</td>
+                    <td class="text-right">{{ item.active_qty }}</td>
+                    <td class="text-right">
+                      <input
+                        class="input input-bordered input-xs w-20 text-right"
+                        type="number"
+                        min="0"
+                        max="{{ item.active_qty }}"
+                        name="item_{{ item.id }}_qty"
+                        value="{{ allocation_maps.shipment_allocations|get_item:shipment.id|get_item:item.id|default:0 }}"
+                      >
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% if shipment.status == "in_transit" or shipment.status == "delivered" %}
+            <div class="text-xs text-base-content/50">Состав locked после отправки.</div>
+          {% else %}
+            <button class="btn btn-outline btn-sm" type="submit">Сохранить состав shipment</button>
+          {% endif %}
+        </form>
+        <form method="post" action="/account/seller/orders/{{ seller_order.id }}/shipments/{{ shipment.id }}/" class="rounded-2xl border border-base-200/80 p-3 grid gap-2 mb-3">
+          {% csrf_token %}
+          <div class="text-xs text-base-content/70">Shipment #{{ shipment.id }} · {{ shipment.get_status_display }}</div>
+          <input class="input input-bordered input-sm w-full" type="text" name="tracking_number" value="{{ shipment.tracking_number }}" placeholder="Трек-номер">
+          <input class="input input-bordered input-sm w-full" type="text" name="delivery_method" value="{{ shipment.delivery_method }}" placeholder="Способ доставки">
+          <input class="input input-bordered input-sm w-full" type="text" name="warehouse_name" value="{{ shipment.warehouse_name }}" placeholder="Склад">
+          <select class="select select-bordered select-sm w-full" name="status">
+            <option value="draft" {% if shipment.status == "draft" %}selected{% endif %}>Draft</option>
+            <option value="ready" {% if shipment.status == "ready" %}selected{% endif %}>Ready</option>
+            <option value="in_transit" {% if shipment.status == "in_transit" %}selected{% endif %}>In transit</option>
+            <option value="delivered" {% if shipment.status == "delivered" %}selected{% endif %}>Delivered</option>
+            <option value="issue" {% if shipment.status == "issue" %}selected{% endif %}>Issue</option>
+          </select>
+          <div class="text-xs text-base-content/60">
+            Позиции: {% for item in shipment.items.all %}{{ item.seller_order_item.name }} × {{ item.qty }}{% if not forloop.last %}, {% endif %}{% empty %}не распределены{% endfor %}
+          </div>
+          <button class="btn btn-outline btn-sm" type="submit">Обновить shipment</button>
+        </form>
+      {% empty %}
+        <div class="text-base-content/70">Отгрузок пока нет.</div>
+      {% endfor %}
+
+      {% if seller_order.order.support_tickets.all %}
+        <div class="divider my-1"></div>
+        <div class="font-semibold">Support tickets</div>
+        {% for ticket in seller_order.order.support_tickets.all %}
+          <form method="post" action="/account/seller/orders/{{ seller_order.id }}/support/{{ ticket.id }}/" class="rounded-2xl border border-base-200/80 p-3 grid gap-2 mb-3">
+            {% csrf_token %}
+            <div class="text-xs text-base-content/60">{{ ticket.created_at|date:"d.m.Y H:i" }} · {{ ticket.created_by }} · {{ ticket.get_topic_display }}</div>
+            <div class="font-medium">{{ ticket.subject }}</div>
+            <div class="text-sm">{{ ticket.message }}</div>
+            <select class="select select-bordered select-sm w-full" name="status">
+              {% for value, label in support_update_form.fields.status.choices %}
+                <option value="{{ value }}" {% if ticket.status == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <textarea class="textarea textarea-bordered w-full" name="resolution_comment" rows="2" placeholder="Комментарий продавца">{{ ticket.resolution_comment }}</textarea>
+            <button class="btn btn-outline btn-sm" type="submit">Обновить ticket</button>
+          </form>
+        {% endfor %}
+      {% endif %}
+
+      {% if seller_order.order.claims.all %}
+        <div class="divider my-1"></div>
+        <div class="font-semibold">Disputes / claims</div>
+        {% for claim in seller_order.order.claims.all %}
+          <form method="post" action="/account/seller/orders/{{ seller_order.id }}/claims/{{ claim.id }}/" class="rounded-2xl border border-base-200/80 p-3 grid gap-2 mb-3">
+            {% csrf_token %}
+            <div class="text-xs text-base-content/60">{{ claim.created_at|date:"d.m.Y H:i" }} · {{ claim.created_by }} · {{ claim.get_claim_type_display }}</div>
+            <div class="text-sm">{{ claim.message }}</div>
+            <select class="select select-bordered select-sm w-full" name="status">
+              {% for value, label in claim_update_form.fields.status.choices %}
+                <option value="{{ value }}" {% if claim.status == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <textarea class="textarea textarea-bordered w-full" name="seller_response" rows="2" placeholder="Позиция продавца">{{ claim.seller_response }}</textarea>
+            <textarea class="textarea textarea-bordered w-full" name="resolution_comment" rows="2" placeholder="Финальное решение">{{ claim.resolution_comment }}</textarea>
+            <button class="btn btn-outline btn-sm" type="submit">Обновить диспут</button>
+          </form>
+        {% endfor %}
+      {% endif %}
+
+      <div class="divider my-1"></div>
+      <a class="account-2026__panel-link" href="/account/orders/{{ seller_order.order_id }}/" hx-boost="false">Открыть buyer order</a>
+    </aside>
+  </div>
+</section>
+{% endblock %}

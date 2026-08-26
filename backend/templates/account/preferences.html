@@ -1,0 +1,19 @@
+{% extends "account/layout.html" %}
+{% block account_main %}
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero compact">
+    <div class="account-2026__hero-title">Preferences</div>
+    <div class="account-2026__hero-sub">Управление email и Telegram уведомлениями.</div>
+  </div>
+  <section class="account-2026__panel">
+    <form method="post" class="account-2026__form">
+      {% csrf_token %}
+      <label class="label cursor-pointer justify-start gap-2"><input type="checkbox" class="checkbox" name="notify_email_orders" {% if form.notify_email_orders.value %}checked{% endif %}><span class="label-text">Email: заказы и документы</span></label>
+      <label class="label cursor-pointer justify-start gap-2"><input type="checkbox" class="checkbox" name="notify_email_marketing" {% if form.notify_email_marketing.value %}checked{% endif %}><span class="label-text">Email: маркетинг</span></label>
+      <label class="label cursor-pointer justify-start gap-2"><input type="checkbox" class="checkbox" name="notify_telegram_orders" {% if form.notify_telegram_orders.value %}checked{% endif %}><span class="label-text">Telegram: заказы</span></label>
+      <label class="label cursor-pointer justify-start gap-2"><input type="checkbox" class="checkbox" name="notify_telegram_marketing" {% if form.notify_telegram_marketing.value %}checked{% endif %}><span class="label-text">Telegram: маркетинг</span></label>
+      <button class="btn btn-primary w-full" type="submit">Сохранить</button>
+    </form>
+  </section>
+</section>
+{% endblock %}

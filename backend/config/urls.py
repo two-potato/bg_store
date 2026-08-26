@@ -1,26 +1,30 @@
-from django.contrib import admin
-from django.urls import path, include
-from django.http import JsonResponse
 from django.conf import settings
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from django.contrib import admin
+from django.urls import include, path
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
-def health(_): return JsonResponse({"ok": True})
+from core.views.system import liveness_view, readiness_view
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("health/", health),
+    path("health/", liveness_view),
+    path("ready/", readiness_view),
     path("metrics", include("core.metrics_urls")),
     path("api/users/", include("users.urls")),
+    # Backend compatibility only. Public /account/* traffic is routed to Next.js by nginx.
     path("account/", include("users.urls_html")),
     path("api/commerce/", include("commerce.urls_public")),
     path("api/commerce/", include("commerce.urls_admin")),
     path("api/catalog/", include("catalog.urls")),
     path("api/orders/", include("orders.urls")),
-    path("", include("shopfront.urls")),
+    path("api/", include("search_api.urls")),
+    path("api/", include("recommendation_api.urls")),
+    path("", include("storefront_api.urls")),
 ]
 
 if settings.ENABLE_API_DOCS:
     urlpatterns += [
         path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
-        path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema")),
+        path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+        path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
     ]

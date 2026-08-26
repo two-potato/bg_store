@@ -21,10 +21,8 @@ async def start(message):
         resize_keyboard=True,
     )
     await message.answer("Добро пожаловать в магазин!", reply_markup=kb)
-    try:
+    if message.from_user is not None:
         log.info("bot_start_cmd", extra={"user_id": message.from_user.id if message.from_user else None})
-    except Exception:
-        pass
 
 
 register_common_http(app)

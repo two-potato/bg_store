@@ -48,18 +48,6 @@ on_deploy_error() {
 
 trap on_deploy_error ERR
 
-LEGACY_CORE_CONTAINERS="$(docker ps --format '{{.Names}}' | grep -E '^(bg-(nginx|db|redis|es|bot|bot-notify|bot-twa|celery|beat)$|bad-guys-shop-backend-1$)' | tr '
-' ' ' || true)"
-
-stop_legacy_core_stack() {
-  if [ -z "${LEGACY_CORE_CONTAINERS:-}" ]; then
-    log_step "No legacy bg core containers detected"
-    return
-  fi
-  log_step "Stopping legacy bg core stack: ${LEGACY_CORE_CONTAINERS}"
-  docker stop ${LEGACY_CORE_CONTAINERS} >/dev/null || true
-}
-
 mkdir -p "$ROOT_DIR/deploy/letsencrypt" "$ROOT_DIR/deploy/letsencrypt-lib" "$ROOT_DIR/deploy/certbot-www"
 
 compose_exec_backend() {
@@ -119,7 +107,7 @@ wait_for_service_health() {
 ensure_named_volumes() {
   local volumes=(
     "servio_pgdata"
-    "servio_esdata"
+    "servio_opensearchdata"
     "servio_redisdata"
     "servio_staticfiles"
   )
@@ -190,7 +178,7 @@ issue_or_renew_cert_standalone() {
 
 if [ ! -f "$LETSENCRYPT_CERT_PATH" ]; then
   log_step "TLS certificate not found, performing first-time issuance"
-  run_with_timeout 300 $COMPOSE_CORE up -d --build --remove-orphans db redis es bot bot-notify backend celery-worker celery-beat
+  run_with_timeout 300 $COMPOSE_CORE up -d --build --remove-orphans db redis opensearch bot bot-notify backend celery-worker celery-beat
   issue_or_renew_cert_standalone
 fi
 
@@ -207,8 +195,7 @@ fi
 
 log_step "Pulling/building and starting services"
 ensure_named_volumes
-stop_legacy_core_stack
-run_with_timeout 300 $COMPOSE_CORE up -d --build --remove-orphans
+run_with_timeout 300 $COMPOSE_FULL up -d --build --remove-orphans db redis opensearch bot bot-notify backend celery-worker celery-beat grafana nginx
 
 log_step "Waiting for core services"
 wait_for_service_health db 120
@@ -218,11 +205,11 @@ wait_for_service_health bot-notify 180
 wait_for_service_health backend 240
 
 log_step "Running migrations"
-run_with_timeout 300 $COMPOSE exec -T backend /app/.venv/bin/python manage.py migrate --noinput
+compose_exec_backend /app/.venv/bin/python manage.py migrate --noinput
 
 log_step "Restoring sellers/stores links when missing"
 if compose_exec_backend /app/.venv/bin/python manage.py help seed_sellers >/dev/null 2>&1; then
-  if ! run_with_timeout 300 $COMPOSE exec -T backend /app/.venv/bin/python manage.py seed_sellers; then
+  if ! compose_exec_backend /app/.venv/bin/python manage.py seed_sellers; then
     log_step "WARNING: seed_sellers failed, continuing deploy"
   fi
 else
@@ -230,62 +217,19 @@ else
 fi
 
 log_step "Clearing application cache"
-run_with_timeout 120 $COMPOSE exec -T backend /app/.venv/bin/python manage.py shell -c "from django.core.cache import cache; cache.clear()"
+compose_exec_backend /app/.venv/bin/python manage.py shell -c "from django.core.cache import cache; cache.clear()"
 
 log_step "Fixing staticfiles volume permissions"
 run_with_timeout 120 $COMPOSE exec -T --user root backend sh -lc "mkdir -p /app/staticfiles && chown -R app:app /app/staticfiles"
 
 log_step "Collecting static files"
-run_with_timeout 300 $COMPOSE exec -T backend /app/.venv/bin/python manage.py collectstatic --noinput --verbosity 0
-
-log_step "Reconciling runtime env for backend"
-python3 - <<'PY2'
-from pathlib import Path
-import os
-path = Path('backend/.env')
-text = path.read_text()
-updates = {}
-for key in ('POSTHOG_API_KEY', 'POSTHOG_HOST', 'CLARITY_PROJECT_ID', 'ANALYTICS_REQUIRE_CONSENT'):
-    value = os.getenv(key, '').strip()
-    if value:
-        updates[key] = value
-lines = text.splitlines()
-current = {}
-for line in lines:
-    if '=' in line and not line.lstrip().startswith('#'):
-        k, v = line.split('=', 1)
-        current[k] = v
-allowed = [item.strip() for item in current.get('ALLOWED_HOSTS', '').split(',') if item.strip()]
-for host in ('potatofarm.ru', 'www.potatofarm.ru', 'grafana.potatofarm.ru', 'backend'):
-    if host not in allowed:
-        allowed.append(host)
-updates['ALLOWED_HOSTS'] = ','.join(allowed)
-seen = set()
-out = []
-for line in lines:
-    replaced = False
-    for key, value in updates.items():
-        if line.startswith(key + '='):
-            out.append(f'{key}={value}')
-            seen.add(key)
-            replaced = True
-            break
-    if not replaced:
-        out.append(line)
-for key, value in updates.items():
-    if key not in seen:
-        out.append(f'{key}={value}')
-path.write_text('\n'.join(out) + '\n')
-PY2
-run_with_timeout 300 $COMPOSE_CORE up -d --force-recreate backend nginx
-wait_for_service_health backend 240
-wait_for_service_health nginx 180
+compose_exec_backend /app/.venv/bin/python manage.py collectstatic --noinput --verbosity 0
 
 log_step "Service status"
 $COMPOSE ps
 
 log_step "Health checks"
-run_with_timeout 60 curl -fsS --retry 5 --retry-delay 2 --retry-connrefused -H 'Host: potatofarm.ru' http://127.0.0.1/health/ >/dev/null
+run_with_timeout 60 curl -fsS http://localhost/health/ >/dev/null
 log_step "OK"
 
 if [ "$DEPLOY_INCLUDE_METRICS" = "1" ]; then

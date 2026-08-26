@@ -1,0 +1,1 @@
+"""Shopfront view package."""

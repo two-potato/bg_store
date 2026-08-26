@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from drf_spectacular.utils import OpenApiExample, extend_schema_serializer
 from django.db import transaction
 from django.db.models import Prefetch
 from .models import Order, OrderItem, OrderSellerSplit, SellerOrder, SellerOrderItem, Shipment, ShipmentItem
@@ -37,13 +38,21 @@ def _resolve_order_lines(items, products_map):
         )
     return lines
 
+@extend_schema_serializer(
+    examples=[OpenApiExample("Order line", value={"product_id": 101, "qty": 2}, request_only=True)]
+)
 class OrderItemInCreateSerializer(serializers.Serializer):
-    product_id = serializers.IntegerField()
-    qty = serializers.IntegerField(min_value=1)
+    product_id = serializers.IntegerField(help_text="ID товара из `/api/catalog/products/`")
+    qty = serializers.IntegerField(min_value=1, help_text="Количество товара")
 
 
 class OrderSellerSplitSerializer(serializers.ModelSerializer):
     seller = serializers.SlugRelatedField(read_only=True, slug_field="username")
+    status = serializers.ChoiceField(
+        choices=OrderSellerSplit.Status.choices,
+        read_only=True,
+        help_text="Статус распределения заказа по продавцу: planned, ready, sent",
+    )
 
     class Meta:
         model = OrderSellerSplit
@@ -58,6 +67,11 @@ class ShipmentItemSerializer(serializers.ModelSerializer):
 
 class ShipmentSerializer(serializers.ModelSerializer):
     items = ShipmentItemSerializer(many=True, read_only=True)
+    delivery_method = serializers.ChoiceField(
+        choices=Order.DeliveryMethod.choices,
+        read_only=True,
+        help_text="Способ доставки: courier или pickup",
+    )
 
     class Meta:
         model = Shipment
@@ -74,6 +88,11 @@ class SellerOrderSerializer(serializers.ModelSerializer):
     seller = serializers.SlugRelatedField(read_only=True, slug_field="username")
     items = SellerOrderItemSerializer(many=True, read_only=True)
     shipments = ShipmentSerializer(many=True, read_only=True)
+    status = serializers.ChoiceField(
+        choices=SellerOrder.Status.choices,
+        read_only=True,
+        help_text="Статус seller order: new, accepted, picking, shipped, delivered, canceled",
+    )
 
     class Meta:
         model = SellerOrder
@@ -88,10 +107,62 @@ class OrderItemSerializer(serializers.ModelSerializer):
         model = OrderItem
         fields = ["product","name","price","qty"]
 
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            "Order response",
+            value={
+                "id": 42,
+                "legal_entity": 7,
+                "placed_by": 3,
+                "delivery_address": 14,
+                "status": "new",
+                "split_status": "planned",
+                "approval_status": "pending",
+                "requested_by": 3,
+                "approved_by": None,
+                "approved_at": None,
+                "customer_comment": "Нужна утренняя доставка",
+                "coupon_code": "WELCOME10",
+                "source_channel": "api",
+                "subtotal": "2590.00",
+                "discount_amount": "259.00",
+                "total": "2331.00",
+                "created_at": "2026-03-11T14:00:00Z",
+                "updated_at": "2026-03-11T14:00:01Z",
+                "items": [{"product": 101, "name": "Бокал", "price": "790.00", "qty": 2}],
+                "seller_splits": [{"seller": "horeca_manager", "seller_store_name": "Complaex Store", "items_count": 2, "subtotal": "2331.00", "status": "planned"}],
+                "seller_orders": [],
+            },
+            response_only=True,
+        )
+    ]
+)
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     seller_splits = OrderSellerSplitSerializer(many=True, read_only=True)
     seller_orders = SellerOrderSerializer(many=True, read_only=True)
+    status = serializers.ChoiceField(
+        choices=Order.Status.choices,
+        read_only=True,
+        help_text="Жизненный цикл заказа: new, confirmed, paid, delivering, delivered, canceled, changed",
+    )
+    split_status = serializers.ChoiceField(
+        choices=Order.SplitStatus.choices,
+        read_only=True,
+        help_text="Стадия распределения заказа между продавцами: single, planned, ready, split",
+    )
+    approval_status = serializers.ChoiceField(
+        choices=Order.ApprovalStatus.choices,
+        read_only=True,
+        help_text="Стадия согласования заказа: not_required, pending, approved, rejected",
+    )
+    source_channel = serializers.ChoiceField(
+        choices=Order.SourceChannel.choices,
+        read_only=True,
+        help_text="Канал создания заказа: web, twa, api",
+    )
+
     class Meta:
         model = Order
         fields = [
@@ -102,12 +173,27 @@ class OrderSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["placed_by","status","split_status","approval_status","requested_by","approved_by","approved_at","subtotal","discount_amount","total","created_at","updated_at"]
 
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            "Create order",
+            value={
+                "legal_entity_id": 7,
+                "delivery_address_id": 14,
+                "items": [{"product_id": 101, "qty": 2}, {"product_id": 205, "qty": 1}],
+                "customer_comment": "Нужна утренняя доставка",
+                "coupon_code": "WELCOME10",
+            },
+            request_only=True,
+        )
+    ]
+)
 class OrderCreateSerializer(serializers.Serializer):
-    legal_entity_id = serializers.IntegerField()
-    delivery_address_id = serializers.IntegerField()
-    items = OrderItemInCreateSerializer(many=True)
-    customer_comment = serializers.CharField(required=False, allow_blank=True)
-    coupon_code = serializers.CharField(required=False, allow_blank=True, max_length=64)
+    legal_entity_id = serializers.IntegerField(help_text="ID юрлица, от имени которого создаётся заказ")
+    delivery_address_id = serializers.IntegerField(help_text="ID адреса доставки, принадлежащего юрлицу")
+    items = OrderItemInCreateSerializer(many=True, help_text="Позиции заказа")
+    customer_comment = serializers.CharField(required=False, allow_blank=True, help_text="Комментарий клиента к заказу")
+    coupon_code = serializers.CharField(required=False, allow_blank=True, max_length=64, help_text="Промокод или купон")
 
     def validate(self, attrs):
         user = self.context["request"].user

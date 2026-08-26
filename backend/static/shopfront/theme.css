@@ -6607,3 +6607,73 @@ body.app-theme {
     grid-template-columns: 1fr;
   }
 }
+
+/* Neutral cleanup: remove pink/red accents from tables, compare UI and form headers */
+:root {
+  --servio-table-divider: rgba(206, 214, 226, 0.92);
+  --servio-table-head: #f3f6fb;
+  --servio-table-zebra: #f8fafc;
+  --servio-compare-accent: #2f79e8;
+  --servio-compare-accent-soft: rgba(47, 121, 232, 0.1);
+  --servio-heading-neutral: #1f2937;
+  --servio-heading-muted: #475569;
+}
+
+.app-main .table th,
+.app-main .table td,
+.account-2026__table th,
+.account-2026__table td,
+.page-2026__card .table th,
+.page-2026__card .table td {
+  border-color: var(--servio-table-divider) !important;
+}
+
+.account-2026__table th,
+.page-2026__card .table th {
+  background: var(--servio-table-head) !important;
+  color: var(--servio-heading-neutral) !important;
+}
+
+.app-main .table-zebra tbody tr:nth-child(even),
+.account-2026__table tbody tr:nth-child(even) td,
+.page-2026__card .table-zebra tbody tr:nth-child(even) td {
+  background: var(--servio-table-zebra) !important;
+}
+
+.page-2026 [data-compare-toggle],
+.product-card__quick-action[data-compare-toggle],
+.product-lite-2026__fav-btn[data-compare-toggle] {
+  border-color: color-mix(in srgb, var(--servio-compare-accent) 24%, white) !important;
+  color: var(--servio-compare-accent) !important;
+  background: #ffffff !important;
+}
+
+.page-2026 [data-compare-toggle].is-active,
+.product-card__quick-action[data-compare-toggle].is-active,
+.product-lite-2026__fav-btn[data-compare-toggle].is-active,
+.page-2026 [data-compare-toggle][data-in-compare="1"],
+.product-card__quick-action[data-compare-toggle][data-in-compare="1"],
+.product-lite-2026__fav-btn[data-compare-toggle][data-in-compare="1"] {
+  border-color: var(--servio-compare-accent) !important;
+  color: var(--servio-compare-accent) !important;
+  background: var(--servio-compare-accent-soft) !important;
+}
+
+.page-2026__header h1,
+.page-2026__header h2,
+.page-2026__card h2,
+.account-2026__hero-title,
+.account-2026__panel-title,
+.account-2026__segment-title,
+.reviews-lite-2026__form-title,
+form legend {
+  color: var(--servio-heading-neutral) !important;
+}
+
+.page-2026__header p,
+.account-2026__hero-sub,
+.account-2026__panel-note,
+.reviews-lite-2026__form-title,
+form .label-text {
+  color: var(--servio-heading-muted) !important;
+}

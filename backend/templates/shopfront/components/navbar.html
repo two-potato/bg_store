@@ -48,7 +48,7 @@
                     <div class="site-catalog-menu__section-title">Категории</div>
                     <div class="site-catalog-menu__grid">
                       {% for c in header_categories %}
-                        <a href="/catalog/?category={{ c.slug }}" hx-boost="false" class="site-catalog-menu__item">
+                        <a href="/catalog/?category={{ c.full_slug_path|default:c.slug }}" hx-boost="false" class="site-catalog-menu__item">
                           <span class="site-catalog-menu__item-icon">{% include 'shopfront/icons/category.svg' %}</span>
                           <span>{{ c.name }}</span>
                         </a>
@@ -101,7 +101,7 @@
                hx-get="/search/live/"
                hx-trigger="input changed delay:220ms, search"
                hx-target="#live-search-results"
-               hx-select="*"
+               hx-select=".live-search-panel"
                hx-swap="innerHTML"
                hx-indicator="#htmx-indicator">
         <button class="btn btn-sm btn-primary site-header-v2__search-btn" type="submit">{% include 'shopfront/icons/search.svg' %}</button>
@@ -223,7 +223,7 @@
                  hx-get="/search/live/"
                  hx-trigger="input changed delay:220ms, search"
                  hx-target="#live-search-results-mobile"
-                 hx-select="*"
+                 hx-select=".live-search-panel"
                  hx-swap="innerHTML"
                  hx-indicator="#htmx-indicator">
           <button class="btn btn-sm btn-primary site-header-v2__search-btn" type="submit">{% include 'shopfront/icons/search.svg' %}</button>

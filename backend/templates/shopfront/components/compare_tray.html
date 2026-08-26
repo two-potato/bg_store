@@ -1,0 +1,18 @@
+<div class="compare-tray-2026{% if not compare_count %} is-hidden{% endif %}"
+     data-compare-tray
+     {% if not compare_count %}hidden aria-hidden="true"{% endif %}>
+  <div class="compare-tray-2026__copy">
+    <div class="compare-tray-2026__eyebrow">Compare tray</div>
+    <strong><span data-compare-count>{{ compare_count|default:0 }}</span> из 4 товаров в сравнении</strong>
+    <span data-compare-tray-hint>{% if compare_count|default:0 < 2 %}Добавьте ещё товары, чтобы увидеть отличия по ETA, MOQ и документам.{% else %}Откройте tray или переходите в полный compare для decision check.{% endif %}</span>
+  </div>
+  <div class="compare-tray-2026__items" data-compare-tray-items>
+    {% for item in compare_items %}
+      <a class="compare-tray-2026__item" href="/products/{{ item.slug }}/" hx-boost="false">
+        <strong>{{ item.name }}</strong>
+        {% if item.brand %}<span>{{ item.brand.name }}</span>{% endif %}
+      </a>
+    {% endfor %}
+  </div>
+  <a class="compare-tray-2026__cta" href="/compare/" hx-boost="false">Открыть сравнение</a>
+</div>

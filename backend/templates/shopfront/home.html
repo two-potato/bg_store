@@ -53,7 +53,7 @@
     <div class="servio-home__categories">
       {% for c in cats %}
         {% if forloop.counter <= 8 %}
-          <a class="servio-home__category" href="/catalog/?category={{ c.slug }}">
+          <a class="servio-home__category" href="/catalog/?category={{ c.full_slug_path|default:c.slug }}">
             <span class="servio-home__category-icon">{% include 'shopfront/icons/category.svg' %}</span>
             <strong>{{ c.name }}</strong>
             <span>Рабочий ассортимент для HoReCa</span>
@@ -172,6 +172,8 @@
   {% endif %}
 
   {% include "shopfront/components/recommendation_section.html" with products=recommended_for_you title="Подобрано для вас" subtitle="Собрали предложения по избранному, подпискам и недавним просмотрам." recommendation_source="home_for_you" tracking_payload=recommended_for_you_tracking_payload %}
+  {% include "shopfront/components/recommendation_section.html" with products=home_popular_products title="Популярное в Servio" subtitle="Ходовые позиции с сильным сигналом просмотров, интереса и покупок по маркетплейсу." recommendation_source="home_popular" tracking_payload=home_popular_products_tracking_payload %}
+  {% include "shopfront/components/recommendation_section.html" with products=home_replenishment_products title="Пора пополнить" subtitle="Товары, по которым у аккаунта подходит ожидаемый цикл повторной закупки." recommendation_source="home_replenishment" tracking_payload=home_replenishment_tracking_payload %}
   {% include "shopfront/components/recommendation_section.html" with products=home_recently_viewed title="Продолжить просмотр" subtitle="Вернитесь к товарам, которые уже были в фокусе закупки." recommendation_source="home_recently_viewed" tracking_payload=home_recently_viewed_tracking_payload %}
   {% include "shopfront/components/recommendation_section.html" with products=watchlist_products title="По вашим подпискам" subtitle="Новые и промо-позиции из брендов и категорий, за которыми вы следите." recommendation_source="home_watchlist" tracking_payload=watchlist_products_tracking_payload %}
 

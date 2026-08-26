@@ -42,6 +42,9 @@
                    hx-select="#account-main-content"
                    hx-swap="outerHTML"
                    hx-push-url="true">Открыть заказы</a>
+                {% if row.membership.role == 'owner' or row.membership.role == 'admin' %}
+                  <a class="account-2026__panel-link" href="/account/legal/company/{{ row.company.id }}/" hx-boost="false">Участники компании</a>
+                {% endif %}
               </div>
             </article>
           {% endfor %}

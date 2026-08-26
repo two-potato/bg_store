@@ -31,13 +31,28 @@ def sync_company_membership_from_legal_entity(membership: LegalEntityMembership)
         "admin": CompanyMembership.Role.ADMIN,
         "manager": CompanyMembership.Role.BUYER,
     }
+    role_weight = {
+        CompanyMembership.Role.BUYER: 1,
+        CompanyMembership.Role.FINANCE: 2,
+        CompanyMembership.Role.APPROVER: 3,
+        CompanyMembership.Role.ADMIN: 4,
+        CompanyMembership.Role.OWNER: 5,
+    }
     role_code = getattr(getattr(membership, "role", None), "code", "buyer")
     company_role = role_map.get(str(role_code), CompanyMembership.Role.BUYER)
-    company_membership, _ = CompanyMembership.objects.update_or_create(
-        user=membership.user,
-        company=company,
-        defaults={"role": company_role},
-    )
+    company_membership = CompanyMembership.objects.filter(user=membership.user, company=company).first()
+    if company_membership is None:
+        company_membership = CompanyMembership.objects.create(
+            user=membership.user,
+            company=company,
+            role=company_role,
+        )
+        return company_membership
+    current_weight = role_weight.get(company_membership.role, 0)
+    desired_weight = role_weight.get(company_role, 0)
+    if desired_weight > current_weight:
+        company_membership.role = company_role
+        company_membership.save(update_fields=["role", "updated_at"])
     return company_membership
 
 

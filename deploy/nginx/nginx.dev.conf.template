@@ -1,0 +1,115 @@
+events {}
+http {
+  include /etc/nginx/mime.types;
+  sendfile on;
+  server_tokens off;
+  resolver 127.0.0.11 ipv6=off valid=30s;
+  resolver_timeout 5s;
+
+  map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+  }
+
+  map "${STOREFRONT_NEXT_PUBLIC_ENABLED}:$uri" $shopfront_upstream {
+    default ${BACKEND_UPSTREAM};
+    ~^1:/$ ${FRONTEND_UPSTREAM};
+    ~^1:/(about|buyers|suppliers|delivery|payment|returns|contacts|faq|brands|collections|promotions|blog|search|categories)/?$ ${FRONTEND_UPSTREAM};
+    ~^1:/(catalog|products)/?$ ${FRONTEND_UPSTREAM};
+    ~^1:/catalog-(a|b|c|d)/?$ ${FRONTEND_UPSTREAM};
+    ~^1:/legacy(?:/.*)?$ ${FRONTEND_UPSTREAM};
+    ~^1:/cart/?$ ${FRONTEND_UPSTREAM};
+    ~^1:/account/?$ ${FRONTEND_UPSTREAM};
+    ~^1:/account/orders/?$ ${FRONTEND_UPSTREAM};
+    ~^1:/account/orders/[^/]+/?$ ${FRONTEND_UPSTREAM};
+    ~^1:/account/settings/?$ ${FRONTEND_UPSTREAM};
+    ~^1:/account/preferences/?$ ${FRONTEND_UPSTREAM};
+    ~^1:/account/addresses/?$ ${FRONTEND_UPSTREAM};
+    ~^1:/account/legal/?$ ${FRONTEND_UPSTREAM};
+    ~^1:/account/notifications/?$ ${FRONTEND_UPSTREAM};
+    ~^1:/account/favorites/?$ ${FRONTEND_UPSTREAM};
+    ~^1:/account/lists/?$ ${FRONTEND_UPSTREAM};
+    ~^1:/account/lists/[^/]+/?$ ${FRONTEND_UPSTREAM};
+    ~^1:/account/saved-searches/?$ ${FRONTEND_UPSTREAM};
+    ~^1:/brands/[^/]+/?$ ${FRONTEND_UPSTREAM};
+    ~^1:/collections/[^/]+/?$ ${FRONTEND_UPSTREAM};
+    ~^1:/categories/.+/?$ ${FRONTEND_UPSTREAM};
+    ~^1:/products/[^/]+/?$ ${FRONTEND_UPSTREAM};
+  }
+
+  gzip on;
+  gzip_types text/plain text/css application/javascript application/json application/xml image/svg+xml;
+  gzip_min_length 256;
+
+  server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _ localhost 127.0.0.1 potatofarm.ru www.potatofarm.ru;
+    client_max_body_size 64m;
+
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob: https:; font-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; connect-src 'self' https: http://localhost:18000 http://127.0.0.1:18000 ws: wss:;" always;
+    add_header Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()" always;
+    add_header Cross-Origin-Embedder-Policy "unsafe-none" always;
+    add_header Cross-Origin-Resource-Policy "cross-origin" always;
+
+    location = /health/ {
+      default_type application/json;
+      return 200 '{"ok": true}';
+    }
+
+    location = /__frontend/health {
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_pass ${FRONTEND_UPSTREAM}/api/health;
+    }
+
+    location /nginx_status {
+      stub_status;
+      allow 127.0.0.1;
+      allow 172.16.0.0/12;
+      allow 10.0.0.0/8;
+      allow 192.168.0.0/16;
+      allow ::1;
+      allow fc00::/7;
+      deny all;
+      access_log off;
+    }
+
+    location /static/ { alias /staticfiles/; access_log off; expires 7d; }
+    location /media/  { alias /media/;       access_log off; expires 7d; }
+
+    location /_next/static/ {
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_pass ${FRONTEND_UPSTREAM};
+      access_log off;
+      expires 30d;
+      add_header Cache-Control "public, max-age=2592000, immutable" always;
+    }
+
+    location /_next/ {
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection $connection_upgrade;
+      proxy_pass ${FRONTEND_UPSTREAM};
+    }
+
+    location / {
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection $connection_upgrade;
+      proxy_pass $shopfront_upstream;
+    }
+  }
+}

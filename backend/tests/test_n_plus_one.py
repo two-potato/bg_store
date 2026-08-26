@@ -19,7 +19,7 @@ from commerce.models import DeliveryAddress, LegalEntity, LegalEntityMembership,
 from orders.models import Order, OrderItem, SellerOrder, SellerOrderItem
 from users.models import UserProfile
 from users.views_html import _company_workspace_rows
-from shopfront.search_service import SearchBundle
+from shopfront.searching.service import SearchBundle
 
 
 pytestmark = pytest.mark.django_db
@@ -36,6 +36,13 @@ def _post_query_count(client, url: str, data, **headers) -> int:
     with CaptureQueriesContext(connection) as ctx:
         resp = client.post(url, data=data, content_type="application/json", **headers)
     assert resp.status_code == 201
+    return len(ctx.captured_queries)
+
+
+def _post_form_query_count(client, url: str, data, **headers) -> int:
+    with CaptureQueriesContext(connection) as ctx:
+        resp = client.post(url, data=data, **headers)
+    assert resp.status_code in {200, 302, 303}
     return len(ctx.captured_queries)
 
 
@@ -74,6 +81,13 @@ def test_catalog_page_query_growth_is_sublinear(client):
     large = _query_count(client, "/catalog/")
 
     assert large <= small + 4
+
+
+def test_catalog_page_query_budget_is_stable(client):
+    brand, category, series, tag = _catalog_entities()
+    _make_products(brand, category, series, tag, amount=12, offset=1200)
+    total_queries = _query_count(client, "/catalog/")
+    assert total_queries <= 35
 
 
 def test_order_api_list_query_growth_is_sublinear(api_client, user):
@@ -189,14 +203,14 @@ def test_product_detail_query_growth_is_sublinear(client):
         review = ProductReview.objects.create(product=product, user=u, rating=5 - idx, text=f"review {idx}")
         ProductReviewComment.objects.create(review=review, user=u, text=f"comment {idx}")
 
-    small = _query_count(client, f"/product/{product.slug}/")
+    small = _query_count(client, f"/products/{product.slug}/")
 
     extra_users = [User.objects.create_user(username=f"n1x{i}", password="pass") for i in range(8)]
     for idx, u in enumerate(extra_users):
         review = ProductReview.objects.create(product=product, user=u, rating=4, text=f"extra review {idx}")
         ProductReviewComment.objects.create(review=review, user=u, text=f"extra comment {idx}")
 
-    large = _query_count(client, f"/product/{product.slug}/")
+    large = _query_count(client, f"/products/{product.slug}/")
 
     assert large <= small + 5
 
@@ -221,7 +235,7 @@ def test_product_detail_query_growth_with_photos_and_questions_is_sublinear(clie
         ProductReviewPhoto.objects.create(review=review, image_url=f"https://example.com/review-{idx}.jpg", ordering=idx)
         ProductQuestion.objects.create(product=product, user=reviewer, question_text=f"question {idx}", is_public=True)
 
-    small = _query_count(client, f"/product/{product.slug}/")
+    small = _query_count(client, f"/products/{product.slug}/")
 
     more_reviewers = [get_user_model().objects.create_user(username=f"n1richx{i}", password="pass") for i in range(8)]
     for idx, reviewer in enumerate(more_reviewers):
@@ -230,7 +244,7 @@ def test_product_detail_query_growth_with_photos_and_questions_is_sublinear(clie
         ProductReviewPhoto.objects.create(review=review, image_url=f"https://example.com/review-extra-{idx}.jpg", ordering=idx)
         ProductQuestion.objects.create(product=product, user=reviewer, question_text=f"extra question {idx}", is_public=True)
 
-    large = _query_count(client, f"/product/{product.slug}/")
+    large = _query_count(client, f"/products/{product.slug}/")
 
     assert large <= small + 5
 
@@ -340,13 +354,15 @@ def test_account_seller_home_query_growth_is_sublinear(client_logged, user):
     seller_order = SellerOrder.objects.create(order=base_order, seller=user, seller_store_name=store.name)
     for product in products[:2]:
         order_item = OrderItem.objects.create(order=base_order, product=product, name=product.name, price=product.price, qty=1)
-        SellerOrderItem.objects.create(
-            seller_order=seller_order,
+        SellerOrderItem.objects.update_or_create(
             order_item=order_item,
-            product=product,
-            name=product.name,
-            price=product.price,
-            qty=1,
+            defaults={
+                "seller_order": seller_order,
+                "product": product,
+                "name": product.name,
+                "price": product.price,
+                "qty": 1,
+            },
         )
 
     small = _query_count(client_logged, "/account/seller/")
@@ -356,13 +372,15 @@ def test_account_seller_home_query_growth_is_sublinear(client_logged, user):
         seller_order = SellerOrder.objects.create(order=order, seller=user, seller_store_name=store.name)
         for product in products:
             order_item = OrderItem.objects.create(order=order, product=product, name=f"{product.name}-{i}", price=product.price, qty=2)
-            SellerOrderItem.objects.create(
-                seller_order=seller_order,
+            SellerOrderItem.objects.update_or_create(
                 order_item=order_item,
-                product=product,
-                name=f"{product.name}-{i}",
-                price=product.price,
-                qty=2,
+                defaults={
+                    "seller_order": seller_order,
+                    "product": product,
+                    "name": f"{product.name}-{i}",
+                    "price": product.price,
+                    "qty": 2,
+                },
             )
 
     large = _query_count(client_logged, "/account/seller/")
@@ -383,7 +401,7 @@ def test_live_search_query_growth_is_sublinear(client, monkeypatch):
                 provider="test",
             )
 
-    monkeypatch.setattr("shopfront.views.get_search_provider", lambda: _Provider())
+    monkeypatch.setattr("shopfront.views.discovery.get_search_provider", lambda: _Provider())
     small = _query_count(client, "/search/live/?q=N1%20Prod", HTTP_HX_REQUEST="true")
 
     products.extend(_make_products(brand, category, series, tag, amount=12, offset=950))
@@ -407,3 +425,32 @@ def test_cart_panel_query_growth_is_sublinear(client):
     large = _query_count(client, "/cart/panel/")
 
     assert large <= small + 3
+
+
+def test_checkout_submit_query_growth_is_sublinear(client_logged, user):
+    brand, category, series, tag = _catalog_entities()
+    products = _make_products(brand, category, series, tag, amount=3, offset=1300)
+
+    def _set_cart(product_list):
+        session = client_logged.session
+        session["cart"] = {str(product.id): {"qty": 1} for product in product_list}
+        session.save()
+
+    payload = {
+        "customer_type": "individual",
+        "payment_method": "cash",
+        "delivery_method": "courier",
+        "customer_name": "Buyer User",
+        "customer_phone": "+79990000000",
+        "address_text": "Test street 1",
+        "customer_email": user.email,
+    }
+
+    _set_cart(products[:2])
+    small = _post_form_query_count(client_logged, "/checkout/submit/", payload)
+
+    products.extend(_make_products(brand, category, series, tag, amount=8, offset=1330))
+    _set_cart(products)
+    large = _post_form_query_count(client_logged, "/checkout/submit/", payload)
+
+    assert large <= small + 12

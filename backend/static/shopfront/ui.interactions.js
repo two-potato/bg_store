@@ -3,6 +3,22 @@
     return window.ServioRuntime || null;
   }
 
+  function monitoring() {
+    return window.ServioMonitoring || null;
+  }
+
+  function captureInteractionIssue(message, extra, error) {
+    var monitor = monitoring();
+    if (!monitor) return;
+    if (error && typeof monitor.captureException === "function") {
+      monitor.captureException(error, Object.assign({ kind: "shopfront_interaction" }, extra || {}));
+      return;
+    }
+    if (typeof monitor.captureMessage === "function") {
+      monitor.captureMessage(message, "warning", Object.assign({ kind: "shopfront_interaction" }, extra || {}));
+    }
+  }
+
   function initFallbackImages() {
     if (document.body.getAttribute("data-image-fallback-bound") === "1") return;
     document.body.setAttribute("data-image-fallback-bound", "1");
@@ -49,6 +65,147 @@
       document.querySelectorAll("[data-filter-dropdown][open]").forEach(function (node) {
         node.removeAttribute("open");
       });
+    });
+  }
+
+  function initCatalogAutocomplete() {
+    if (document.body.getAttribute("data-catalog-autocomplete-bound") === "1") return;
+    document.body.setAttribute("data-catalog-autocomplete-bound", "1");
+
+    function closeMenu(widget) {
+      var menu = widget.querySelector("[data-autocomplete-menu]");
+      if (!menu) return;
+      menu.innerHTML = "";
+      menu.classList.add("hidden");
+    }
+
+    function closeAllMenus(exceptWidget) {
+      document.querySelectorAll("[data-catalog-autocomplete]").forEach(function (widget) {
+        if (exceptWidget && widget === exceptWidget) return;
+        closeMenu(widget);
+      });
+    }
+
+    function renderItems(widget, items) {
+      var menu = widget.querySelector("[data-autocomplete-menu]");
+      var input = widget.querySelector("[data-autocomplete-input]");
+      var hiddenInput = widget.querySelector("[data-autocomplete-value]");
+      if (!menu || !input || !hiddenInput) return;
+      if (!items.length) {
+        closeMenu(widget);
+        return;
+      }
+      menu.innerHTML = "";
+      items.forEach(function (item) {
+        var option = document.createElement("button");
+        option.type = "button";
+        option.className = "catalog-autocomplete__option flex w-full items-start justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-base-200";
+        option.setAttribute("data-autocomplete-option", "1");
+        option.setAttribute("data-value", item.value || "");
+        option.setAttribute("data-label", item.label || "");
+
+        var text = document.createElement("span");
+        text.textContent = item.label || "";
+        option.appendChild(text);
+
+        if (item.hint) {
+          var hint = document.createElement("span");
+          hint.className = "text-xs text-base-content/60";
+          hint.textContent = item.hint;
+          option.appendChild(hint);
+        }
+
+        menu.appendChild(option);
+      });
+      menu.classList.remove("hidden");
+    }
+
+    function bindWidget(widget) {
+      if (!widget || widget.getAttribute("data-autocomplete-bound") === "1") return;
+      widget.setAttribute("data-autocomplete-bound", "1");
+      var input = widget.querySelector("[data-autocomplete-input]");
+      var hiddenInput = widget.querySelector("[data-autocomplete-value]");
+      var endpoint = widget.getAttribute("data-endpoint") || "";
+      var kind = widget.getAttribute("data-kind") || "";
+      var debounceTimer = null;
+      if (!input || !hiddenInput || !endpoint || !kind) return;
+
+      input.addEventListener("input", function () {
+        hiddenInput.value = "";
+        closeMenu(widget);
+        var query = (input.value || "").trim();
+        if (query.length < 2) return;
+        window.clearTimeout(debounceTimer);
+        debounceTimer = window.setTimeout(function () {
+          var url = new URL(endpoint, window.location.origin);
+          url.searchParams.set("kind", kind);
+          url.searchParams.set("q", query);
+          fetch(url.toString(), {
+            headers: {
+              "Accept": "application/json",
+              "X-Requested-With": "XMLHttpRequest"
+            },
+            credentials: "same-origin"
+          })
+            .then(function (response) {
+              var contentType = String(response.headers.get("content-type") || "").toLowerCase();
+              if (!response.ok) throw new Error("catalog_filter_suggestions_http_" + response.status);
+              if (contentType.indexOf("application/json") < 0) throw new Error("catalog_filter_suggestions_content_type");
+              return response.json();
+            })
+            .then(function (payload) {
+              renderItems(widget, Array.isArray(payload.items) ? payload.items : []);
+            })
+            .catch(function (error) {
+              captureInteractionIssue("catalog_filter_suggestions_failed", {
+                kind: kind,
+                endpoint: endpoint,
+                query_length: query.length,
+              }, error);
+              closeMenu(widget);
+            });
+        }, 180);
+      });
+
+      input.addEventListener("focus", function () {
+        if ((input.value || "").trim().length >= 2) {
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+      });
+    }
+
+    function bindWidgets(root) {
+      var scope = root && root.querySelectorAll ? root : document;
+      scope.querySelectorAll("[data-catalog-autocomplete]").forEach(bindWidget);
+    }
+
+    bindWidgets(document);
+
+    document.addEventListener("click", function (event) {
+      var option = event.target && event.target.closest ? event.target.closest("[data-autocomplete-option]") : null;
+      if (option) {
+        var widget = option.closest("[data-catalog-autocomplete]");
+        if (!widget) return;
+        var input = widget.querySelector("[data-autocomplete-input]");
+        var hiddenInput = widget.querySelector("[data-autocomplete-value]");
+        if (!input || !hiddenInput) return;
+        hiddenInput.value = option.getAttribute("data-value") || "";
+        input.value = option.getAttribute("data-label") || "";
+        closeMenu(widget);
+        return;
+      }
+
+      var insideWidget = event.target && event.target.closest ? event.target.closest("[data-catalog-autocomplete]") : null;
+      closeAllMenus(insideWidget);
+    });
+
+    document.addEventListener("keydown", function (event) {
+      if (event.key !== "Escape") return;
+      closeAllMenus();
+    });
+
+    document.body.addEventListener("htmx:afterSettle", function (event) {
+      bindWidgets(event.target || document);
     });
   }
 
@@ -143,7 +300,7 @@
             runtime().showToast(copyBtn.getAttribute("data-copy-success") || "Ссылка скопирована", "success");
           })
           .catch(function () {
-            runtime().showToast("Не удалось скопировать ссылку", "danger");
+            runtime().showToast("Не удалось скопировать ссылку", "warning");
           });
         return;
       }
@@ -159,6 +316,7 @@
     initCopyActions();
     initLiveSearchDismiss();
     initFilterDropdown();
+    initCatalogAutocomplete();
     initDesktopHeaderMenus();
     initMobileHeaderMenu();
   });

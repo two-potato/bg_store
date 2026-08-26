@@ -1,4 +1,18 @@
 services:
+  frontend:
+    environment:
+      NODE_ENV: development
+      SITE_URL: "http://localhost:8080"
+    command:
+      [
+        "sh",
+        "-lc",
+        "npm ci && exec npm run dev -- --hostname 0.0.0.0 --port 3000",
+      ]
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
   backend:
     build:
       context: ./backend
@@ -6,7 +20,10 @@ services:
         INSTALL_DEV: 1
     environment:
       DEBUG: "1"
-      ES_ENABLED: "0"
+      OPENSEARCH_ENABLED: "1"
+      SENTRY_DSN: ""
+      PUBLIC_SENTRY_DSN: ""
+      SENTRY_BROWSER_SDK_URL: ""
     command:
       [
         "sh",
@@ -16,12 +33,24 @@ services:
   celery-worker:
     environment:
       DEBUG: "1"
-      ES_ENABLED: "0"
+      OPENSEARCH_ENABLED: "1"
+      SENTRY_DSN: ""
   celery-beat:
     environment:
       DEBUG: "1"
-      ES_ENABLED: "0"
+      OPENSEARCH_ENABLED: "1"
+      SENTRY_DSN: ""
   nginx:
     build:
       context: ./deploy/nginx
       dockerfile: Dockerfile.dev
+    environment:
+      STOREFRONT_NEXT_PUBLIC_ENABLED: "1"
+
+  search-api:
+    ports:
+      - "18110:8010"
+
+  recommendation-api:
+    ports:
+      - "18111:8011"

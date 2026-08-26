@@ -1,7 +1,12 @@
 import pytest
 from django.contrib.auth import get_user_model
 
-from commerce.company_service import ensure_company_workspace, ensure_approval_policy, resolve_order_approval_requirement
+from commerce.company_service import (
+    ensure_company_workspace,
+    ensure_approval_policy,
+    resolve_order_approval_requirement,
+    sync_company_membership_from_legal_entity,
+)
 from commerce.models import CompanyMembership, LegalEntity, LegalEntityMembership, MembershipRole
 from orders.models import Order
 
@@ -15,7 +20,8 @@ def test_company_workspace_syncs_from_legal_entity_membership():
     role = MembershipRole.objects.get_or_create(code="manager", defaults={"name": "Менеджер"})[0]
     legal_entity = LegalEntity.objects.create(name="B2B LE", inn="500100012101", bik="044525225", checking_account="40702810900000002101")
 
-    LegalEntityMembership.objects.create(user=user, legal_entity=legal_entity, role=role)
+    legal_membership = LegalEntityMembership.objects.create(user=user, legal_entity=legal_entity, role=role)
+    sync_company_membership_from_legal_entity(legal_membership)
 
     company = ensure_company_workspace(legal_entity)
     membership = CompanyMembership.objects.get(company=company, user=user)

@@ -7,6 +7,12 @@ from .models import (
     CategorySubscription,
     BrandSubscription,
     RecentlyViewedProduct,
+    RecommendationEvent,
+    RecommendationPopularitySnapshot,
+    RecommendationProductAffinity,
+    RecommendationReplenishmentProfile,
+    RecommendationSet,
+    RecommendationUserAffinity,
     SavedList,
     SavedListItem,
 )
@@ -60,3 +66,48 @@ class SavedListAdmin(admin.ModelAdmin):
     search_fields = ("user__username", "name", "description", "share_token")
     list_filter = ("source", "is_public")
     inlines = [SavedListItemInline]
+
+
+@admin.register(RecommendationEvent)
+class RecommendationEventAdmin(admin.ModelAdmin):
+    list_display = ("id", "event", "surface", "recommendation_source", "product", "user", "created_at")
+    list_filter = ("event", "surface", "recommendation_source")
+    search_fields = ("product__name", "product__sku", "user__username", "request_id", "session_key")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(RecommendationProductAffinity)
+class RecommendationProductAffinityAdmin(admin.ModelAdmin):
+    list_display = ("id", "source_product", "target_product", "affinity_type", "score", "orders_count", "updated_at")
+    list_filter = ("affinity_type",)
+    search_fields = ("source_product__name", "source_product__sku", "target_product__name", "target_product__sku")
+
+
+@admin.register(RecommendationPopularitySnapshot)
+class RecommendationPopularitySnapshotAdmin(admin.ModelAdmin):
+    list_display = ("id", "scope_type", "scope_id", "window", "product", "score", "updated_at")
+    list_filter = ("scope_type", "window")
+    search_fields = ("product__name", "product__sku")
+
+
+@admin.register(RecommendationSet)
+class RecommendationSetAdmin(admin.ModelAdmin):
+    list_display = ("id", "kind", "scope_type", "scope_id", "source", "generated_at", "expires_at")
+    list_filter = ("kind", "scope_type", "source")
+    search_fields = ("kind", "source")
+    readonly_fields = ("created_at", "updated_at", "generated_at")
+
+
+@admin.register(RecommendationUserAffinity)
+class RecommendationUserAffinityAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "dimension", "entity_id", "entity_key", "score", "event_count", "updated_at")
+    list_filter = ("dimension",)
+    search_fields = ("user__username", "entity_key")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(RecommendationReplenishmentProfile)
+class RecommendationReplenishmentProfileAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "product", "orders_count", "quantity_total", "expected_interval_days", "score", "last_ordered_at")
+    search_fields = ("user__username", "product__name", "product__sku")
+    readonly_fields = ("created_at", "updated_at")

@@ -1,0 +1,73 @@
+name: Production Swarm Diagnostics
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostics:
+    name: Collect Swarm production diagnostics
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Setup SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          SSH_PORT: ${{ secrets.PROD_SSH_PORT }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$SSH_HOST"
+          : "${SSH_PORT:=22}"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -T 10 -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Collect diagnostics
+        env:
+          SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          SSH_PORT: ${{ secrets.PROD_SSH_PORT }}
+          SSH_USER: ${{ secrets.PROD_SSH_USER }}
+          APP_DIR: ${{ secrets.PROD_APP_DIR }}
+        run: |
+          set -euo pipefail
+          : "${SSH_PORT:=22}"
+          : "${SSH_USER:=sergey}"
+          : "${APP_DIR:=/opt/servio/current}"
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "APP_DIR='$APP_DIR' bash -s" <<'EOSSH'
+          set -u
+          echo '=== TIMESTAMP ==='
+          date -u
+          echo '=== HOST ==='
+          hostnamectl 2>/dev/null || hostname
+          uptime
+          df -h
+          free -h
+          echo '=== DOCKER ==='
+          docker version --format '{{.Server.Version}}' || true
+          docker info --format 'Swarm={{.Swarm.LocalNodeState}} Control={{.Swarm.ControlAvailable}}' || true
+          echo '=== NODES ==='
+          docker node ls || true
+          echo '=== STACK SERVICES ==='
+          docker stack services servio || true
+          echo '=== STACK TASKS ==='
+          docker stack ps servio --no-trunc || true
+          echo '=== FAILED/REJECTED TASKS ==='
+          docker stack ps servio --no-trunc --filter desired-state=shutdown 2>/dev/null | tail -100 || true
+          echo '=== CORE CONTAINERS ==='
+          docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}' || true
+          for service in backend nginx db redis opensearch bot bot-notify; do
+            echo "=== LOGS: servio_${service} ==="
+            docker service logs --tail 100 --timestamps "servio_${service}" 2>&1 || true
+          done
+          echo '=== PUBLIC READINESS ==='
+          curl -vkfsS --max-time 15 https://24sparts.ru/health/ 2>&1 || true
+          echo '=== DEPLOY STATE ==='
+          if [ -d "$APP_DIR/.deploy" ]; then
+            find "$APP_DIR/.deploy" -maxdepth 1 -type f -print -exec sh -c 'printf "  "; cat "$1"' _ {} \; 2>/dev/null || true
+          fi
+          EOSSH

@@ -49,10 +49,13 @@
       <div><span class="text-base-content/60">Дата:</span> {{ order.created_at|timezone:"Europe/Moscow"|date:"d.m.Y H:i" }} (МСК)</div>
       <div><span class="text-base-content/60">Тип клиента:</span> {{ order.get_customer_type_display }}</div>
       <div><span class="text-base-content/60">Оплата:</span> {{ order.get_payment_method_display }}</div>
+      <div><span class="text-base-content/60">Доставка:</span> {{ order.get_delivery_method_display }}</div>
+      {% if order.delivery_slot %}<div><span class="text-base-content/60">Таймслот:</span> {{ order.delivery_slot }}</div>{% endif %}
       {% if order.customer_name %}<div><span class="text-base-content/60">Контакт:</span> {{ order.customer_name }}</div>{% endif %}
       {% if order.customer_email %}<div><span class="text-base-content/60">Email:</span> {{ order.customer_email }}</div>{% endif %}
       {% if order.customer_phone %}<div><span class="text-base-content/60">Телефон:</span> {{ order.customer_phone }}</div>{% endif %}
       <div><span class="text-base-content/60">Адрес:</span> {{ order.address_text|default:order.delivery_address|default:"-" }}</div>
+      {% if order.pickup_point %}<div><span class="text-base-content/60">Точка самовывоза:</span> {{ order.pickup_point }}</div>{% endif %}
       {% if order.customer_comment %}
         <div><span class="text-base-content/60">Комментарий:</span> {{ order.customer_comment }}</div>
       {% endif %}
@@ -78,7 +81,7 @@
       {% endif %}
       <div><span class="text-base-content/60">Итого:</span> <b>{{ order.total }} ₽</b></div>
       <div class="grid gap-2 mt-3">
-        {% if fake_payment %}
+        {% if fake_payment and payment_page_url %}
           <a class="btn btn-neutral" href="{{ payment_page_url }}" hx-boost="false">Открыть оплату</a>
         {% endif %}
         <a class="btn btn-outline" href="/catalog/">Вернуться в каталог</a>

@@ -1,4 +1,8 @@
 (function(){
+  function monitoring(){
+    return window.ServioMonitoring || null;
+  }
+
   function isActive(){
     return window.ServioRuntime && window.ServioRuntime.isPageType('checkout');
   }
@@ -37,6 +41,12 @@
         items: Array.isArray(summary.items) ? summary.items : [],
       },
     };
+  }
+
+  function captureCheckoutMessage(message, level, form, extra){
+    var monitor = monitoring();
+    if (!monitor || typeof monitor.captureMessage !== 'function') return;
+    monitor.captureMessage(message, level || 'error', Object.assign({}, buildBasePayload(form), extra || {}));
   }
 
   function syncCheckout(root){
@@ -89,6 +99,9 @@
           checkout_step: 'details',
           error_message: 'validation_failed',
         }));
+        captureCheckoutMessage('checkout_validation_failed', 'warning', form, {
+          kind: 'checkout_validation',
+        });
         return;
       }
       pushAnalytics(Object.assign({ event: 'checkout_step_view' }, buildBasePayload(form), { checkout_step: 'submit_attempt' }));
@@ -99,6 +112,11 @@
       if (!isActive()) return;
       if (evt.detail && evt.detail.requestConfig && evt.detail.requestConfig.elt === form) {
         setSubmitState(false);
+        captureCheckoutMessage('checkout_htmx_response_error', 'error', form, {
+          kind: 'checkout_htmx',
+          status: evt.detail.xhr && evt.detail.xhr.status || 0,
+          request_path: evt.detail.requestConfig.path || '',
+        });
       }
     });
 
@@ -106,6 +124,10 @@
       if (!isActive()) return;
       if (evt.detail && evt.detail.requestConfig && evt.detail.requestConfig.elt === form) {
         setSubmitState(false);
+        captureCheckoutMessage('checkout_htmx_send_error', 'error', form, {
+          kind: 'checkout_htmx',
+          request_path: evt.detail.requestConfig.path || '',
+        });
       }
     });
 
@@ -113,6 +135,11 @@
       if (!isActive()) return;
       if (evt.detail && evt.detail.requestConfig && evt.detail.requestConfig.elt === form && !evt.detail.successful) {
         setSubmitState(false);
+        captureCheckoutMessage('checkout_request_unsuccessful', 'warning', form, {
+          kind: 'checkout_request',
+          status: evt.detail.xhr && evt.detail.xhr.status || 0,
+          request_path: evt.detail.requestConfig.path || '',
+        });
       }
     });
 

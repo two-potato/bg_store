@@ -1,22 +1,33 @@
+"""Domain validators for company requisites used by commerce models."""
+
 from django.core.exceptions import ValidationError
 
-def _digits(v:str):
+
+def _digits(v: str) -> str:
+    """Return a digit-only string or raise a validation error."""
     if not v or not v.isdigit():
         raise ValidationError("Разрешены только цифры.")
     return v
 
-def validate_bik(v:str):
+
+def validate_bik(v: str) -> None:
+    """Validate a Russian BIK value."""
     v = _digits(v)
     if len(v) != 9:
         raise ValidationError("БИК должен содержать 9 цифр.")
 
-def validate_inn(v:str):
+
+def validate_inn(v: str) -> None:
+    """Validate a Russian INN for legal entities and individuals."""
     v = _digits(v)
-    if len(v) not in (10,12):
+    if len(v) not in (10, 12):
         raise ValidationError("ИНН должен содержать 10 или 12 цифр.")
-    def checksum(nums, coeffs):
-        s = sum(int(a)*b for a,b in zip(nums, coeffs))
+
+    def checksum(nums: str, coeffs: list[int]) -> str:
+        """Calculate the control digit for an INN fragment."""
+        s = sum(int(a) * b for a, b in zip(nums, coeffs))
         return str((s % 11) % 10)
+
     if len(v) == 10:
         k10 = checksum(v[:9], [2, 4, 10, 3, 5, 9, 4, 6, 8])
         if v[9] != k10:
@@ -27,13 +38,15 @@ def validate_inn(v:str):
         if v[10] != k11 or v[11] != k12:
             raise ValidationError("Некорректный ИНН.")
 
-def validate_rs_with_bik(rs:str, bik:str):
+
+def validate_rs_with_bik(rs: str, bik: str) -> None:
+    """Validate a settlement account against a BIK using the standard checksum."""
     rs = _digits(rs)
     if len(rs) != 20:
         raise ValidationError("Р/с должен содержать 20 цифр.")
     validate_bik(bik)
-    control_str = (bik[-3:] + rs)
+    control_str = bik[-3:] + rs
     weights = [7, 3, 1] * 8 + [7]
-    s = sum(int(d)*weights[i] for i,d in enumerate(control_str)) % 10
+    s = sum(int(d) * weights[i] for i, d in enumerate(control_str)) % 10
     if s != 0:
         raise ValidationError("Р/с не проходит контроль с данным БИК.")

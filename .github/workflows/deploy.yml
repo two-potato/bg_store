@@ -1,25 +1,233 @@
-name: Deploy Production
+name: Deploy Production Swarm
 
 on:
   push:
-    branches: [main]
+    tags:
+      - 'prod-*'
   workflow_dispatch:
 
 concurrency:
-  group: production-deploy
+  group: production-swarm
   cancel-in-progress: false
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
-  deploy:
-    name: Deploy to potatofarm.ru
+  verify:
+    name: Production verification gate
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: shop
+          POSTGRES_USER: shop
+          POSTGRES_PASSWORD: shop
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U shop" --health-interval=10s --health-timeout=5s --health-retries=5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping || exit 1" --health-interval=10s --health-timeout=5s --health-retries=5
+    env:
+      POSTGRES_DB: shop
+      POSTGRES_USER: shop
+      POSTGRES_PASSWORD: shop
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      REDIS_URL: redis://localhost:6379/0
+      DJANGO_SECRET_KEY: test-secret
+      ALLOWED_HOSTS: localhost,127.0.0.1
+      CSRF_TRUSTED_ORIGINS: http://localhost,http://127.0.0.1
+      DEBUG: 1
+      TELEGRAM_BOT_TOKEN: test-token
     steps:
-      - name: Checkout
+      - name: Checkout candidate
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require current dev ancestry
+        run: |
+          set -euo pipefail
+          git fetch origin dev
+          if ! git merge-base --is-ancestor origin/dev HEAD; then
+            echo "Refusing production deployment: candidate is behind dev." >&2
+            git log --oneline HEAD..origin/dev | head -50 >&2
+            exit 1
+          fi
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd backend && uv sync --no-cache && cd ..
+          npm ci
+          cd frontend && npm ci
+
+      - name: Build and typecheck storefronts
+        run: |
+          npm run tw:build
+          test -s backend/static/css/app.css
+          cd frontend
+          npm run typecheck
+          npm run build
+
+      - name: Backend tests
+        working-directory: backend
+        run: ./.venv/bin/python -m pytest
+
+      - name: Production settings preflight
+        working-directory: backend
+        env:
+          DEBUG: 0
+          DJANGO_SETTINGS_MODULE: config.settings.prod
+          DJANGO_SECRET_KEY: ci_prod_secret_key_2026_x7V4mK9pQ2nR8sT5uW1yZ6AaBbCcDdEe
+          INTERNAL_TOKEN: ci-internal-token
+          ORDER_APPROVE_SECRET: ci-order-approve-secret
+          METRICS_TOKEN: ci-metrics-token
+          TELEGRAM_BOT_TOKEN: ci-telegram-token
+          ALLOWED_HOSTS: 24sparts.ru,www.24sparts.ru
+          CSRF_TRUSTED_ORIGINS: https://24sparts.ru,https://www.24sparts.ru
+        run: ./.venv/bin/python manage.py check --deploy --fail-level WARNING
+
+      - name: Ruff
+        run: backend/.venv/bin/python -m ruff check .
+
+      - name: Deployment and migration safety checks
+        run: |
+          set -euo pipefail
+          for script in \
+            scripts/swarm_bootstrap_manager.sh \
+            scripts/swarm_bootstrap_worker.sh \
+            scripts/swarm_deploy.sh \
+            scripts/swarm_healthcheck.sh \
+            scripts/swarm_rollback.sh \
+            scripts/swarm_backup_postgres.sh \
+            scripts/install_swarm_backup_cron.sh \
+            scripts/check_migration_safety.sh; do
+            bash -n "$script"
+          done
+          BASE_REF=origin/dev scripts/check_migration_safety.sh
+          printf 'DJANGO_SECRET_KEY=ci\nPOSTGRES_DB=shop\nPOSTGRES_USER=shop\nPOSTGRES_PASSWORD=shop\nINTERNAL_TOKEN=ci\nORDER_APPROVE_SECRET=ci\nMETRICS_TOKEN=ci\nTELEGRAM_BOT_TOKEN=ci\nALLOWED_HOSTS=24sparts.ru\nCSRF_TRUSTED_ORIGINS=https://24sparts.ru\nGRAFANA_ADMIN_PASSWORD=ci\n' > "$RUNNER_TEMP/prod.env"
+          printf 'TELEGRAM_BOT_TOKEN=ci\nINTERNAL_TOKEN=ci\n' > "$RUNNER_TEMP/bot.env"
+          cp "$RUNNER_TEMP/bot.env" "$RUNNER_TEMP/bot-notify.env"
+          IMAGE_TAG=ci \
+          PROD_ENV_FILE="$RUNNER_TEMP/prod.env" \
+          PROD_BOT_ENV_FILE="$RUNNER_TEMP/bot.env" \
+          PROD_BOT_NOTIFY_ENV_FILE="$RUNNER_TEMP/bot-notify.env" \
+          GRAFANA_ADMIN_PASSWORD=ci \
+          docker stack config -c deploy/swarm/stack.yml >/dev/null
+
+      - name: Browser smoke
+        env:
+          OPENSEARCH_ENABLED: 0
+          SENTRY_DSN: ""
+          PUBLIC_SENTRY_DSN: ""
+          SENTRY_BROWSER_SDK_URL: ""
+          SMOKE_BASE_URL: http://127.0.0.1:8000
+          SMOKE_ARTIFACT_DIR: output/playwright
+        run: |
+          npx playwright install --with-deps chromium
+          mkdir -p output/playwright
+          cd backend
+          ./.venv/bin/python manage.py migrate --noinput
+          ./.venv/bin/python manage.py seed_smoke_data
+          nohup ./.venv/bin/python manage.py runserver 127.0.0.1:8000 > ../output/playwright/django-server.log 2>&1 &
+          cd ..
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/health/ >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8000/health/ >/dev/null
+          npm run smoke:browser
+
+      - name: Upload smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-gate-browser-smoke
+          path: output/playwright
+
+  build-and-deploy:
+    name: Build immutable images and deploy 24sparts.ru
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout verified candidate
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: ghcr.io/two-potato/servio-backend:${{ github.sha }}
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: ghcr.io/two-potato/servio-frontend:${{ github.sha }}
+
+      - name: Build and push bot
+        uses: docker/build-push-action@v6
+        with:
+          context: ./bot
+          push: true
+          tags: ghcr.io/two-potato/servio-bot:${{ github.sha }}
+
+      - name: Build and push search-api
+        uses: docker/build-push-action@v6
+        with:
+          context: ./services/search-api
+          push: true
+          tags: ghcr.io/two-potato/servio-search-api:${{ github.sha }}
+
+      - name: Build and push recommendation-api
+        uses: docker/build-push-action@v6
+        with:
+          context: ./services/recommendation-api
+          push: true
+          tags: ghcr.io/two-potato/servio-recommendation-api:${{ github.sha }}
 
       - name: Setup SSH
         env:
@@ -27,56 +235,45 @@ jobs:
           SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
           SSH_PORT: ${{ secrets.PROD_SSH_PORT }}
         run: |
-          set -eu
+          set -euo pipefail
           test -n "$SSH_PRIVATE_KEY"
           test -n "$SSH_HOST"
           : "${SSH_PORT:=22}"
           install -m 700 -d ~/.ssh
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          for attempt in 1 2 3; do
-            if ssh-keyscan -T 10 -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
-              break
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              echo "SSH keyscan did not return a host key, continuing with StrictHostKeyChecking=accept-new"
-            else
-              sleep 3
-            fi
-          done
+          ssh-keyscan -T 10 -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      - name: Run remote deploy
+      - name: Deploy verified SHA on manager
         env:
           SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
           SSH_PORT: ${{ secrets.PROD_SSH_PORT }}
           SSH_USER: ${{ secrets.PROD_SSH_USER }}
           APP_DIR: ${{ secrets.PROD_APP_DIR }}
           DEPLOY_REF: ${{ github.sha }}
-          POSTHOG_API_KEY: ${{ secrets.PROD_POSTHOG_API_KEY }}
-          POSTHOG_HOST: ${{ secrets.PROD_POSTHOG_HOST }}
-          CLARITY_PROJECT_ID: ${{ secrets.PROD_CLARITY_PROJECT_ID }}
-          ANALYTICS_REQUIRE_CONSENT: ${{ secrets.PROD_ANALYTICS_REQUIRE_CONSENT }}
-          DEPLOY_INCLUDE_METRICS: "1"
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LETSENCRYPT_EMAIL: ${{ secrets.LETSENCRYPT_EMAIL }}
         run: |
-          set -eu
+          set -euo pipefail
           : "${SSH_PORT:=22}"
-          : "${SSH_USER:=root}"
-          : "${APP_DIR:=/opt/servio}"
-          timeout --foreground 1800 ssh \
+          : "${SSH_USER:=sergey}"
+          : "${APP_DIR:=/opt/servio/current}"
+          printf '%s' "$GHCR_TOKEN" | ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
+          ssh \
             -o ServerAliveInterval=30 \
             -o ServerAliveCountMax=20 \
-            -o TCPKeepAlive=yes \
             -o StrictHostKeyChecking=accept-new \
             -p "$SSH_PORT" \
             "$SSH_USER@$SSH_HOST" \
-            "APP_DIR='$APP_DIR' DEPLOY_REF='$DEPLOY_REF' DEPLOY_INCLUDE_METRICS='$DEPLOY_INCLUDE_METRICS' ALLOWED_SSH_PORT='$SSH_PORT' POSTHOG_API_KEY='$POSTHOG_API_KEY' POSTHOG_HOST='$POSTHOG_HOST' CLARITY_PROJECT_ID='$CLARITY_PROJECT_ID' ANALYTICS_REQUIRE_CONSENT='$ANALYTICS_REQUIRE_CONSENT' bash -s" <<'EOSSH'
+            "APP_DIR='$APP_DIR' DEPLOY_REF='$DEPLOY_REF' IMAGE_TAG='$DEPLOY_REF' LETSENCRYPT_EMAIL='$LETSENCRYPT_EMAIL' bash -s" <<'EOSSH'
           set -euo pipefail
           cd "$APP_DIR"
           git fetch --all --prune
-          git reset --hard
-          git clean -fd
-          git checkout -f main
+          git checkout -f codex/all-local-changes-20260331-110158
           git reset --hard "$DEPLOY_REF"
           git clean -fd
-          bash ./scripts/deploy_prod.sh
+          chmod +x scripts/swarm_*.sh scripts/check_migration_safety.sh
+          IMAGE_TAG="$IMAGE_TAG" LETSENCRYPT_EMAIL="$LETSENCRYPT_EMAIL" ./scripts/swarm_deploy.sh
           EOSSH

@@ -1,8 +1,10 @@
 import random
 import os
+import re
 from urllib.parse import quote_plus
 
 from locust import HttpUser, LoadTestShape, between, task
+import requests
 
 FALLBACK_SLUGS = [
     "poetic-product-20002265",
@@ -19,6 +21,45 @@ SEARCH_TERMS = [
     "зерно",
     "молоко",
 ]
+
+PRODUCT_LOC_RE = re.compile(r"/product/([^/]+)/")
+
+
+def _discover_product_slugs(host: str, limit: int = 12) -> list[str]:
+    candidates = [
+        f"{host.rstrip('/')}/catalog/",
+        f"{host.rstrip('/')}/sitemap.xml",
+    ]
+    slugs: list[str] = []
+    seen: set[str] = set()
+    for url in candidates:
+        try:
+            resp = requests.get(url, timeout=10)
+            resp.raise_for_status()
+        except Exception:
+            continue
+        for slug in PRODUCT_LOC_RE.findall(resp.text):
+            if slug in seen:
+                continue
+            seen.add(slug)
+            slugs.append(slug)
+            if len(slugs) >= limit:
+                return slugs
+    try:
+        resp = requests.get(f"{host.rstrip('/')}/api/catalog/products/?page_size=12", timeout=10)
+        resp.raise_for_status()
+        payload = resp.json()
+    except Exception:
+        return slugs or FALLBACK_SLUGS
+    for item in payload.get("results", []) if isinstance(payload, dict) else []:
+        slug = str(item.get("slug") or "").strip()
+        if not slug or slug in seen:
+            continue
+        seen.add(slug)
+        slugs.append(slug)
+        if len(slugs) >= limit:
+            break
+    return slugs or FALLBACK_SLUGS
 
 
 def _parse_stages(raw: str) -> list[tuple[int, int]]:
@@ -48,6 +89,13 @@ def _parse_stages(raw: str) -> list[tuple[int, int]]:
 class ProdMarketplaceUser(HttpUser):
     wait_time = between(0.15, 0.8)
     product_slugs: list[str] = FALLBACK_SLUGS
+
+    def on_start(self):
+        env_slugs = [item.strip() for item in os.getenv("PRODUCT_SLUGS", "").split(",") if item.strip()]
+        if env_slugs:
+            self.__class__.product_slugs = env_slugs
+        elif self.__class__.product_slugs == FALLBACK_SLUGS:
+            self.__class__.product_slugs = _discover_product_slugs(self.host)
 
     @task(8)
     def homepage(self):

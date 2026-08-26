@@ -6,8 +6,8 @@
 <nav aria-label="breadcrumb" class="mb-3 text-sm text-base-content/60">
   <a class="link" href="/">Главная</a> /
   <a class="link" href="{{ order_detail_url }}">Заказ #{{ order.id }}</a> /
-  <span>Тестовый эквайринг</span>
+  <span>{{ payment_mode_title|default:"Тестовый эквайринг" }}</span>
 </nav>
 
-{% include "shopfront/partials/fake_payment_panel.html" with order=order payment=payment order_detail_url=order_detail_url payment_event_url=payment_event_url %}
+{% include "shopfront/partials/fake_payment_panel.html" with order=order payment=payment order_detail_url=order_detail_url payment_event_url=payment_event_url payment_mode_title=payment_mode_title %}
 {% endblock %}

@@ -6,9 +6,9 @@ body.app-theme .toast-card {
   align-items: start;
   width: min(92vw, 360px);
   border-radius: 14px;
-  border: 1px solid #dbe4ff !important;
-  background: #ffffff !important;
-  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.14) !important;
+  border: 1px solid #dbe4ff;
+  background: #ffffff;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.14);
   padding: 0.75rem 0.78rem 0.7rem;
   color: #111827;
   animation: toast-slide-in-2026 0.24s ease-out forwards;
@@ -75,7 +75,7 @@ body.app-theme .toast-close:hover {
 }
 
 body.app-theme .toast-card.toast-card--success {
-  border-color: #ccefd9 !important;
+  border-color: #ccefd9;
 }
 
 body.app-theme .toast-card.toast-card--success .toast-card__icon {
@@ -88,18 +88,32 @@ body.app-theme .toast-card.toast-card--success .toast-card__progress {
   background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
 }
 
+body.app-theme .toast-card.toast-card--warning {
+  border-color: #f7d79a;
+}
+
+body.app-theme .toast-card.toast-card--warning .toast-card__icon {
+  border-color: #f3c969;
+  color: #9a6700;
+  background: #fff7e8;
+}
+
+body.app-theme .toast-card.toast-card--warning .toast-card__progress {
+  background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
+}
+
 body.app-theme .toast-card.toast-card--danger {
-  border-color: #ffd6de !important;
+  border-color: #f6c7cf;
 }
 
 body.app-theme .toast-card.toast-card--danger .toast-card__icon {
-  border-color: #ffc0cd;
-  color: #be123c;
-  background: #fff1f4;
+  border-color: #efb8c0;
+  color: #b45309;
+  background: #fff4ee;
 }
 
 body.app-theme .toast-card.toast-card--danger .toast-card__progress {
-  background: linear-gradient(90deg, #fb7185 0%, #e11d48 100%);
+  background: linear-gradient(90deg, #f97316 0%, #ea580c 100%);
 }
 
 body.app-theme .toast-card.toast-card--info .toast-card__icon {
@@ -153,9 +167,9 @@ body.app-theme #toast-stack.toast-stack .toast-card {
 
 @media (max-width: 767.98px) {
   body.app-theme #toast-stack.toast-stack {
-    right: 0.65rem !important;
-    left: 0.65rem !important;
-    bottom: 5.2rem !important;
+    right: 0.65rem;
+    left: 0.65rem;
+    bottom: 5.2rem;
     justify-items: stretch;
   }
 
@@ -167,7 +181,7 @@ body.app-theme #toast-stack.toast-stack .toast-card {
 body.app-theme .cookie-consent,
 body.app-theme .cookie-consent-banner,
 body.app-theme .cookie-banner {
-  background: #fff !important;
-  border-color: var(--pf-border) !important;
-  box-shadow: var(--pf-shadow-soft) !important;
+  background: #fff;
+  border-color: var(--pf-border);
+  box-shadow: var(--pf-shadow-soft);
 }

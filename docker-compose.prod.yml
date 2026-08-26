@@ -1,5 +1,19 @@
 services:
+  frontend:
+    environment:
+      NODE_ENV: production
+      SITE_URL: "${SITE_URL:-https://24sparts.ru}"
+
   backend:
+    env_file:
+      - path: ./backend/.env.example
+        required: true
+      - path: ./backend/.env.prod.example
+        required: true
+      - path: ./backend/.env
+        required: false
+      - path: ./backend/.env.prod
+        required: false
     environment:
       DEBUG: "0"
       DJANGO_SETTINGS_MODULE: config.settings.prod
@@ -9,8 +23,28 @@ services:
       LOG_CALLS_ENABLED: "0"
       REQUEST_LOG_LEVEL: WARNING
       ENABLE_CATALOG_RATING: "0"
-      GUNICORN_WORKERS: "8"
-      GUNICORN_TIMEOUT: "180"
+      SEARCH_SERVICE_MODE: "${SEARCH_SERVICE_MODE:-django-inline}"
+      SEARCH_SERVICE_URL: "${SEARCH_SERVICE_URL:-http://search-api:8010}"
+      SEARCH_SERVICE_TIMEOUT_SECONDS: "${SEARCH_SERVICE_TIMEOUT_SECONDS:-0.8}"
+      SEARCH_SERVICE_SHADOW_ENABLED: "${SEARCH_SERVICE_SHADOW_ENABLED:-0}"
+      SEARCH_SERVICE_SHADOW_SURFACES: "${SEARCH_SERVICE_SHADOW_SURFACES:-search-page,live-search}"
+      SEARCH_SERVICE_CANARY_ENABLED: "${SEARCH_SERVICE_CANARY_ENABLED:-0}"
+      SEARCH_SERVICE_CANARY_SURFACES: "${SEARCH_SERVICE_CANARY_SURFACES:-search-page}"
+      SEARCH_SERVICE_CANARY_PERCENT: "${SEARCH_SERVICE_CANARY_PERCENT:-0}"
+      SEARCH_SERVICE_ROLLOUT_LABEL: "${SEARCH_SERVICE_ROLLOUT_LABEL:-search-service}"
+      SEARCH_SERVICE_OBSERVABILITY_LABEL: "${SEARCH_SERVICE_OBSERVABILITY_LABEL:-search-service}"
+      RECOMMENDATION_SERVICE_MODE: "${RECOMMENDATION_SERVICE_MODE:-django-inline}"
+      RECOMMENDATION_SERVICE_URL: "${RECOMMENDATION_SERVICE_URL:-http://recommendation-api:8011}"
+      RECOMMENDATION_SERVICE_TIMEOUT_SECONDS: "${RECOMMENDATION_SERVICE_TIMEOUT_SECONDS:-0.8}"
+      RECOMMENDATION_SERVICE_SHADOW_ENABLED: "${RECOMMENDATION_SERVICE_SHADOW_ENABLED:-0}"
+      RECOMMENDATION_SERVICE_SHADOW_SURFACES: "${RECOMMENDATION_SERVICE_SHADOW_SURFACES:-home,pdp,cart,checkout,reorder}"
+      RECOMMENDATION_SERVICE_CANARY_ENABLED: "${RECOMMENDATION_SERVICE_CANARY_ENABLED:-0}"
+      RECOMMENDATION_SERVICE_CANARY_SURFACES: "${RECOMMENDATION_SERVICE_CANARY_SURFACES:-home,pdp}"
+      RECOMMENDATION_SERVICE_CANARY_PERCENT: "${RECOMMENDATION_SERVICE_CANARY_PERCENT:-0}"
+      RECOMMENDATION_SERVICE_ROLLOUT_LABEL: "${RECOMMENDATION_SERVICE_ROLLOUT_LABEL:-recommendation-service}"
+      RECOMMENDATION_SERVICE_OBSERVABILITY_LABEL: "${RECOMMENDATION_SERVICE_OBSERVABILITY_LABEL:-recommendation-service}"
+      GUNICORN_WORKERS: "${GUNICORN_WORKERS:-4}"
+      GUNICORN_TIMEOUT: "${GUNICORN_TIMEOUT:-180}"
     depends_on:
       - db
       - redis
@@ -25,6 +59,45 @@ services:
       - -c
       - python:config.gunicorn
       - config.asgi:application
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -H 'Host: 24sparts.ru' http://127.0.0.1:8000/ready/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  celery-worker:
+    env_file:
+      - path: ./backend/.env.example
+        required: true
+      - path: ./backend/.env.prod.example
+        required: true
+      - path: ./backend/.env
+        required: false
+      - path: ./backend/.env.prod
+        required: false
+
+  celery-beat:
+    env_file:
+      - path: ./backend/.env.example
+        required: true
+      - path: ./backend/.env.prod.example
+        required: true
+      - path: ./backend/.env
+        required: false
+      - path: ./backend/.env.prod
+        required: false
+
+  db:
+    env_file:
+      - path: ./backend/.env.example
+        required: true
+      - path: ./backend/.env.prod.example
+        required: true
+      - path: ./backend/.env
+        required: false
+      - path: ./backend/.env.prod
+        required: false
 
   nginx:
     build:
@@ -39,6 +112,12 @@ services:
       backend:
         condition: service_healthy
 
+  search-api:
+    profiles: ["platform-services", "platform-shadow", "platform-canary"]
+
+  recommendation-api:
+    profiles: ["platform-services", "platform-shadow", "platform-canary"]
+
   mailpit:
     profiles: ["dev-only"]
     ports: []
@@ -46,10 +125,4 @@ services:
 volumes:
   pgdata:
     external: true
-    name: bad-guys-shop_pgdata
-  esdata:
-    external: true
-    name: bad-guys-shop_esdata
-  staticfiles:
-    external: true
-    name: bad-guys-shop_staticfiles
+    name: servio_pgdata

@@ -1,6 +1,7 @@
 (function () {
   var firedKeys = new Set();
   var consentState = null;
+  var latestSearchContext = null;
   var providersReady = false;
   var posthogLoaded = false;
   var clarityLoaded = false;
@@ -24,6 +25,61 @@
 
   function hasValue(value) {
     return typeof value === "string" ? value.trim() !== "" : !!value;
+  }
+
+  function getCookie(name) {
+    var cookieName = name + "=";
+    var parts = (document.cookie || "").split(";");
+    for (var i = 0; i < parts.length; i += 1) {
+      var part = parts[i].trim();
+      if (part.indexOf(cookieName) === 0) {
+        return decodeURIComponent(part.slice(cookieName.length));
+      }
+    }
+    return "";
+  }
+
+  function backendFeedbackAllowed(payload) {
+    if (!payload || !payload.event) return false;
+    return (
+      payload.event === "search" ||
+      payload.event === "search_result_click" ||
+      payload.event === "recommendation_impression" ||
+      payload.event === "recommendation_click" ||
+      payload.event === "add_to_cart" ||
+      payload.event === "remove_from_cart" ||
+      payload.event === "purchase" ||
+      payload.event === "recommendation_dismiss" ||
+      payload.event === "favorite_add" ||
+      payload.event === "saved_list_add"
+    );
+  }
+
+  function feedbackEndpoint(payload) {
+    if (!payload || !payload.event) return "";
+    if (payload.event === "search" || payload.event === "search_result_click") {
+      return runtimeConfig.search_feedback_endpoint || "";
+    }
+    return runtimeConfig.recommendation_feedback_endpoint || "";
+  }
+
+  function sendBackendFeedback(payload) {
+    if (!backendFeedbackAllowed(payload)) return;
+    var endpoint = feedbackEndpoint(payload);
+    if (!endpoint) return;
+    var body = JSON.stringify(payload);
+    try {
+      var headers = { "Content-Type": "application/json" };
+      var csrfToken = getCookie("csrftoken");
+      if (csrfToken) headers["X-CSRFToken"] = csrfToken;
+      fetch(endpoint, {
+        method: "POST",
+        headers: headers,
+        body: body,
+        credentials: "same-origin",
+        keepalive: true,
+      }).catch(function () {});
+    } catch (_) {}
   }
 
   function sanitizeEventProperties(payload) {
@@ -305,6 +361,17 @@
 
     var enriched = enrich(payload);
 
+    if (enriched.event === "search") {
+      latestSearchContext = {
+        search_term: enriched.search_term || "",
+        search_origin: enriched.search_origin || enriched.item_list_name || "",
+        results_count: enriched.results_count || 0,
+        search_provider: enriched.search_provider || enriched.provider || "",
+        search_rewrite_kind: enriched.search_rewrite_kind || enriched.rewrite_kind || "",
+        page_type: enriched.page_type || runtimeConfig.page_type || "page",
+      };
+    }
+
     window.dataLayer = window.dataLayer || [];
     window.dataLayer.push(enriched);
 
@@ -323,6 +390,8 @@
     try {
       document.body.dispatchEvent(new CustomEvent("servio:analytics-pushed", { detail: enriched }));
     } catch (_) {}
+
+    sendBackendFeedback(enriched);
   }
 
   function hydrate(root) {
@@ -382,14 +451,25 @@
   document.body.addEventListener("click", function (e) {
     var target = e.target && e.target.closest ? e.target.closest("[data-search-click]") : null;
     if (!target) return;
-    push({
+    var payload = {
       event: "search_result_click",
       search_term: target.getAttribute("data-search-query") || "",
       search_origin: target.getAttribute("data-search-origin") || "catalog_grid",
       item_id: target.getAttribute("data-search-product-id") || "",
       item_name: target.getAttribute("data-search-product-name") || "",
       position: parseInt(target.getAttribute("data-search-position") || "0", 10) || 0,
-    });
+    };
+    if ((!payload.search_term || payload.search_origin === "catalog_grid") && latestSearchContext) {
+      if (!payload.search_term) payload.search_term = latestSearchContext.search_term || "";
+      payload.results_count = latestSearchContext.results_count || 0;
+      payload.search_provider = latestSearchContext.search_provider || "";
+      payload.search_rewrite_kind = latestSearchContext.search_rewrite_kind || "";
+      payload.page_type = latestSearchContext.page_type || payload.page_type || "";
+      if (payload.search_origin === "catalog_grid" && latestSearchContext.search_origin) {
+        payload.search_origin = latestSearchContext.search_origin;
+      }
+    }
+    push(payload);
   });
 
   document.body.addEventListener("click", function (e) {
@@ -398,10 +478,27 @@
     push({
       event: "recommendation_click",
       recommendation_source: target.getAttribute("data-recommendation-source") || "",
+      surface: target.getAttribute("data-recommendation-surface") || "",
       item_id: target.getAttribute("data-search-product-id") || "",
       item_name: target.getAttribute("data-search-product-name") || "",
       position: parseInt(target.getAttribute("data-search-position") || "0", 10) || 0,
     });
+  });
+
+  document.body.addEventListener("click", function (e) {
+    var target = e.target && e.target.closest ? e.target.closest("[data-recommendation-dismiss]") : null;
+    if (!target) return;
+    var card = target.closest ? target.closest(".product-card") : null;
+    push({
+      event: "recommendation_dismiss",
+      recommendation_source: target.getAttribute("data-recommendation-source") || "",
+      surface: target.getAttribute("data-recommendation-surface") || "",
+      item_id: target.getAttribute("data-search-product-id") || "",
+      item_name: target.getAttribute("data-search-product-name") || "",
+    });
+    if (card && card.parentNode) {
+      card.parentNode.removeChild(card);
+    }
   });
 
   window.ServioAnalytics = {

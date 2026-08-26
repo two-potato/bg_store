@@ -15,7 +15,7 @@
     {% endif %}
 
     {% if request.user.is_authenticated %}
-      <form hx-post="/product/{{ p.slug }}/review/"
+      <form hx-post="/products/{{ p.slug }}/review/"
             hx-target="#product-reviews"
             hx-select="#product-reviews"
             hx-swap="outerHTML"
@@ -39,7 +39,7 @@
           {% if user_review %}
             <button class="btn btn-outline btn-sm"
                     type="button"
-                    hx-post="/product/{{ p.slug }}/review/delete/"
+                    hx-post="/products/{{ p.slug }}/review/delete/"
                     hx-target="#product-reviews"
                     hx-select="#product-reviews"
                     hx-swap="outerHTML">
@@ -98,7 +98,7 @@
             {% if request.user.is_authenticated %}
               <button class="btn btn-outline btn-xs"
                       type="button"
-                      hx-post="/product/{{ p.slug }}/review/{{ r.id }}/vote/"
+                      hx-post="/products/{{ p.slug }}/review/{{ r.id }}/vote/"
                       hx-vals='{"value":"helpful"}'
                       hx-target="#product-reviews"
                       hx-select="#product-reviews"
@@ -107,7 +107,7 @@
               </button>
               <button class="btn btn-outline btn-xs"
                       type="button"
-                      hx-post="/product/{{ p.slug }}/review/{{ r.id }}/vote/"
+                      hx-post="/products/{{ p.slug }}/review/{{ r.id }}/vote/"
                       hx-vals='{"value":"unhelpful"}'
                       hx-target="#product-reviews"
                       hx-select="#product-reviews"
@@ -128,7 +128,7 @@
                 </div>
                 {% if request.user.is_authenticated and request.user.id == c.user_id %}
                   <form class="grid gap-2 mt-1"
-                        hx-post="/product/{{ p.slug }}/comment/{{ c.id }}/update/"
+                        hx-post="/products/{{ p.slug }}/comment/{{ c.id }}/update/"
                         hx-target="#product-reviews"
                         hx-select="#product-reviews"
                         hx-swap="outerHTML">
@@ -136,7 +136,7 @@
                     <div class="reviews-lite-2026__actions">
                       <button class="btn btn-outline btn-xs"
                               type="button"
-                              hx-post="/product/{{ p.slug }}/comment/{{ c.id }}/delete/"
+                              hx-post="/products/{{ p.slug }}/comment/{{ c.id }}/delete/"
                               hx-target="#product-reviews"
                               hx-select="#product-reviews"
                               hx-swap="outerHTML">
@@ -154,7 +154,7 @@
             {% endfor %}
 
             {% if request.user.is_authenticated %}
-              <form hx-post="/product/{{ p.slug }}/review/{{ r.id }}/comment/"
+              <form hx-post="/products/{{ p.slug }}/review/{{ r.id }}/comment/"
                     hx-target="#product-reviews"
                     hx-select="#product-reviews"
                     hx-swap="outerHTML"
@@ -178,7 +178,7 @@
         <div class="reviews-lite-2026__summary"><span>{{ questions|length }}</span><span>публичных вопросов</span></div>
       </div>
       {% if request.user.is_authenticated %}
-        <form hx-post="/product/{{ p.slug }}/questions/"
+        <form hx-post="/products/{{ p.slug }}/questions/"
               hx-target="#product-reviews"
               hx-select="#product-reviews"
               hx-swap="outerHTML"

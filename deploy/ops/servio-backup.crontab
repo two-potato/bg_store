@@ -1,0 +1,7 @@
+# Install with:
+#   crontab deploy/ops/servio-backup.crontab
+#
+# Before install update /srv/servio path if needed.
+
+10 2 * * * BACKUP_DIR="/srv/servio/backups/postgres" RETENTION_DAYS="14" /srv/servio/scripts/backup_postgres.sh >> /srv/servio/logs/backup_postgres.log 2>&1
+15 * * * * BACKUP_DIR="/srv/servio/backups/postgres" MAX_AGE_HOURS="26" BACKUP_METRIC_FILE="/srv/servio/.artifacts/node_exporter_textfile/backup.prom" /srv/servio/scripts/check_backup_freshness.sh >> /srv/servio/logs/backup_freshness.log 2>&1

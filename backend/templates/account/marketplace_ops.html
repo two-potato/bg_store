@@ -1,0 +1,53 @@
+{% extends "account/layout.html" %}
+{% block account_main %}
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero compact">
+    <div class="account-2026__hero-title">Marketplace ops</div>
+    <div class="account-2026__hero-sub">Moderation queue для магазинов и карточек, плюс commission settings.</div>
+  </div>
+  <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
+    <section class="account-2026__panel">
+      <h2 class="account-2026__panel-title">Stores</h2>
+      <div class="space-y-3">
+        {% for store in stores %}
+          <form method="post" class="rounded-2xl border border-base-300 p-3 grid gap-2">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="update_store">
+            <input type="hidden" name="store_id" value="{{ store.id }}">
+            <div class="font-medium">{{ store.name }}</div>
+            <div class="text-xs text-base-content/60">{{ store.owner.username }} · {{ store.legal_entity.name }}</div>
+            <select class="select select-bordered w-full" name="moderation_status">
+              {% for value, label in store.ModerationStatus.choices %}
+                <option value="{{ value }}" {% if store.moderation_status == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <input type="number" min="0" step="0.01" class="input input-bordered w-full" name="commission_rate" value="{{ store.commission_rate }}">
+            <input type="text" class="input input-bordered w-full" name="moderation_note" value="{{ store.moderation_note }}" placeholder="Причина / комментарий">
+            <button class="btn btn-outline btn-sm" type="submit">Сохранить store</button>
+          </form>
+        {% endfor %}
+      </div>
+    </section>
+    <section class="account-2026__panel">
+      <h2 class="account-2026__panel-title">Products</h2>
+      <div class="space-y-3">
+        {% for product in products %}
+          <form method="post" class="rounded-2xl border border-base-300 p-3 grid gap-2">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="update_product">
+            <input type="hidden" name="product_id" value="{{ product.id }}">
+            <div class="font-medium">{{ product.name }}</div>
+            <div class="text-xs text-base-content/60">{{ product.sku }} · {{ product.seller.username|default:"-" }}</div>
+            <select class="select select-bordered w-full" name="publication_status">
+              {% for value, label in product.PublicationStatus.choices %}
+                <option value="{{ value }}" {% if product.publication_status == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <button class="btn btn-outline btn-sm" type="submit">Сохранить product</button>
+          </form>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+</section>
+{% endblock %}

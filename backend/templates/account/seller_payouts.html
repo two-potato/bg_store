@@ -1,0 +1,23 @@
+{% extends "account/layout.html" %}
+{% block account_main %}
+<section id="account-main-content" class="account-2026__main">
+  <div class="account-2026__hero compact">
+    <div class="account-2026__hero-title">Payouts</div>
+    <div class="account-2026__hero-sub">Расчёт gross, комиссии и net payout по seller orders.</div>
+  </div>
+  <section class="account-2026__panel">
+    <div class="text-sm text-base-content/70 mb-3">Текущая комиссия: {{ commission_rate }}%</div>
+    <div class="overflow-x-auto">
+      <table class="table table-sm account-2026__table">
+        <thead><tr><th>Seller order</th><th>Gross</th><th>Fee</th><th>Net</th></tr></thead>
+        <tbody>
+          {% for row in payout_rows %}
+            <tr><td>#{{ row.seller_order.id }}</td><td>{{ row.gross }}</td><td>{{ row.fee|floatformat:2 }}</td><td>{{ row.net|floatformat:2 }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="mt-4 text-sm"><b>Итого:</b> gross {{ totals.gross|floatformat:2 }} ₽ · fee {{ totals.fee|floatformat:2 }} ₽ · net {{ totals.net|floatformat:2 }} ₽</div>
+  </section>
+</section>
+{% endblock %}

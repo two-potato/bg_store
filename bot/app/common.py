@@ -21,6 +21,22 @@ REQUEST_TIME = Summary("bot_request_latency_seconds", "Time spent processing req
 _INTERNAL_TOKEN_WARNING_EMITTED = False
 
 
+def internal_token_auth_status() -> dict[str, bool | str]:
+    expected = (os.getenv("INTERNAL_TOKEN") or "").strip()
+    enabled_raw = os.getenv("BOT_REQUIRE_INTERNAL_TOKEN")
+    if enabled_raw is None:
+        auth_enabled = expected not in {"", "change-me", "dev", "dev-secret"}
+        mode = "auto"
+    else:
+        auth_enabled = enabled_raw.strip().lower() in {"1", "true", "yes", "on"}
+        mode = "forced"
+    return {
+        "enabled": auth_enabled,
+        "placeholder_secret": expected in {"", "change-me", "dev", "dev-secret"},
+        "mode": mode,
+    }
+
+
 def build_runtime() -> tuple[Bot, Dispatcher, logging.Logger]:
     token = os.getenv("TELEGRAM_BOT_TOKEN", "")
     bot_timeout = env_int("BOT_HTTP_TIMEOUT", 60)
@@ -53,20 +69,23 @@ def verify_sig(order_id: int, admin_tg_id: int, ts: int, sig: str, secret: str, 
 
 def require_internal_token(x_internal_token: str | None = Header(default=None, alias="X-Internal-Token")) -> None:
     expected = (os.getenv("INTERNAL_TOKEN") or "").strip()
-    enabled_raw = os.getenv("BOT_REQUIRE_INTERNAL_TOKEN")
-    if enabled_raw is None:
-        auth_enabled = expected not in {"", "change-me", "dev", "dev-secret"}
-    else:
-        auth_enabled = enabled_raw.strip().lower() in {"1", "true", "yes", "on"}
+    status_payload = internal_token_auth_status()
+    auth_enabled = bool(status_payload["enabled"])
 
     if not auth_enabled:
         global _INTERNAL_TOKEN_WARNING_EMITTED
         if not _INTERNAL_TOKEN_WARNING_EMITTED:
-            logging.getLogger("bot").warning("internal_token_auth_disabled")
+            logging.getLogger("bot").warning(
+                "internal_token_auth_disabled",
+                extra={
+                    "mode": status_payload["mode"],
+                    "placeholder_secret": status_payload["placeholder_secret"],
+                },
+            )
             _INTERNAL_TOKEN_WARNING_EMITTED = True
         return
 
-    if expected in {"", "change-me", "dev", "dev-secret"}:
+    if bool(status_payload["placeholder_secret"]):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Internal token is not configured",
@@ -83,7 +102,7 @@ def require_internal_token(x_internal_token: str | None = Header(default=None, a
 def register_common_http(app: FastAPI) -> None:
     @app.get("/health")
     async def health():
-        return {"ok": True}
+        return {"ok": True, "internal_token_auth": internal_token_auth_status()}
 
     @app.get("/metrics")
     def metrics():

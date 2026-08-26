@@ -31,7 +31,7 @@
             <div class="text-sm text-base-content/70">{{ item.product.brand.name|default:"Без бренда" }} · {{ item.quantity }} шт.</div>
           </div>
           <div class="flex gap-2">
-            <a class="btn btn-outline btn-sm" href="/product/{{ item.product.slug }}/" hx-boost="false">Открыть товар</a>
+            <a class="btn btn-outline btn-sm" href="/products/{{ item.product.slug }}/" hx-boost="false">Открыть товар</a>
             <form method="post" action="/lists/{{ saved_list.id }}/">
               {% csrf_token %}
               <input type="hidden" name="action" value="remove_item">

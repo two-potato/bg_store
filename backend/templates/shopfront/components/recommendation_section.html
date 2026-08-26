@@ -1,12 +1,16 @@
-{% if products %}
-  <section class="page-2026 product-reco-2026">
-    {% if tracking_payload %}
-      <script type="application/json" data-analytics-payload>{{ tracking_payload|safe }}</script>
-    {% endif %}
+<section class="page-2026 product-reco-2026">
+  {% if tracking_payload %}
+    <script type="application/json" data-analytics-payload>{{ tracking_payload|safe }}</script>
+  {% endif %}
+  {% if title or subtitle %}
     <header class="page-2026__header">
-      <h2>{{ title }}</h2>
+      {% if title %}<h2>{{ title }}</h2>{% endif %}
       {% if subtitle %}<p>{{ subtitle }}</p>{% endif %}
     </header>
-    {% include "shopfront/components/product_grid.html" with products=products recommendation_source=recommendation_source %}
-  </section>
-{% endif %}
+  {% endif %}
+  {% if products %}
+    {% include "shopfront/components/product_grid.html" with products=products recommendation_source=recommendation_source recommendation_surface=page_type %}
+  {% else %}
+    <div class="text-sm text-base-content/60">Рекомендации обновляются.</div>
+  {% endif %}
+</section>

@@ -6,8 +6,8 @@ from celery import shared_task
 
 from legacy_shopfront_state.models import RecommendationEvent
 from orders.models import Order
-from shopfront.recommendation.observability import observe_recommendation_order_attribution
-from shopfront.searching.observability import observe_search_feedback_event, observe_search_order_attribution
+from recommendation_api.observability import observe_recommendation_order_attribution
+from search_api.observability import observe_search_feedback_event, observe_search_order_attribution
 
 log = logging.getLogger("orders.attribution")
 

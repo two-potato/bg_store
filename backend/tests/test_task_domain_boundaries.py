@@ -4,8 +4,11 @@ from config.celery import app
 def test_migrated_background_tasks_have_domain_owners():
     from core.tasks import notify_contact_feedback
     from legacy_shopfront_state.tasks import refresh_recommendation_popularity
+    from orders.feedback_tasks import emit_checkout_recommendation_feedback, emit_checkout_search_feedback
 
     assert notify_contact_feedback.name == "core.tasks.notify_contact_feedback"
+    assert emit_checkout_search_feedback.name == "orders.feedback_tasks.emit_checkout_search_feedback"
+    assert emit_checkout_recommendation_feedback.name == "orders.feedback_tasks.emit_checkout_recommendation_feedback"
     assert refresh_recommendation_popularity.name == "legacy_shopfront_state.tasks.refresh_recommendation_popularity"
 
 

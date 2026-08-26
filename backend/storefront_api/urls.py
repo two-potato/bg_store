@@ -1,37 +1,10 @@
-from __future__ import annotations
-
 from django.urls import path
 
-from shopfront.views.storefront_bridge import (
-    StorefrontAccountAddressDeleteView,
-    StorefrontAccountAddressesView,
-    StorefrontAccountAddressSetDefaultView,
-    StorefrontAccountBootstrapView,
-    StorefrontAccountLegalEntitiesView,
-    StorefrontAccountNotificationsView,
-    StorefrontAccountPreferencesView,
-    StorefrontAccountSettingsView,
-    StorefrontCartAddView,
-    StorefrontCartClearView,
-    StorefrontCartRemoveView,
-    StorefrontCartUpdateView,
-    StorefrontCartView,
-    StorefrontFavoriteToggleView,
-    StorefrontFavoritesView,
-    StorefrontOrderDetailView,
-    StorefrontOrderReorderView,
-    StorefrontSavedListAddItemView,
-    StorefrontSavedListDeleteView,
-    StorefrontSavedListDetailView,
-    StorefrontSavedListMoveToCartView,
-    StorefrontSavedListRemoveItemView,
-    StorefrontSavedListsView,
-    StorefrontSavedListTogglePublicView,
-    StorefrontSavedSearchDeleteView,
-    StorefrontSavedSearchesView,
-    StorefrontSessionBootstrapView,
-    StorefrontWaveAnalyticsIngestView,
-)
+from .account_views import StorefrontAccountAddressDeleteView, StorefrontAccountAddressesView, StorefrontAccountAddressSetDefaultView, StorefrontAccountBootstrapView, StorefrontAccountLegalEntitiesView, StorefrontAccountNotificationsView, StorefrontAccountPreferencesView, StorefrontAccountSettingsView
+from .analytics_views import StorefrontWaveAnalyticsIngestView
+from .cart_views import StorefrontCartAddView, StorefrontCartClearView, StorefrontCartRemoveView, StorefrontCartUpdateView, StorefrontCartView, StorefrontSessionBootstrapView
+from .order_views import StorefrontOrderDetailView, StorefrontOrderReorderView
+from .tools_views import StorefrontFavoriteToggleView, StorefrontFavoritesView, StorefrontSavedListAddItemView, StorefrontSavedListDeleteView, StorefrontSavedListDetailView, StorefrontSavedListMoveToCartView, StorefrontSavedListRemoveItemView, StorefrontSavedListsView, StorefrontSavedListTogglePublicView, StorefrontSavedSearchDeleteView, StorefrontSavedSearchesView
 
 urlpatterns = [
     path("api/storefront/session/bootstrap/", StorefrontSessionBootstrapView.as_view(), name="storefront_session_bootstrap"),
